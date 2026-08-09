@@ -94,12 +94,27 @@ export type ProvenanceSourceType =
   | "agent_experience"
   | "llm_inference";
 
-/** Evidence hierarchy, highest trust first — spec.md §4. Lower index wins. */
+/**
+ * Evidence hierarchy, highest trust first — spec.md §4. Lower index wins.
+ * spec.md names 6 tiers (compiler/AST/LSP > tests > source code inference >
+ * documentation > git history > agent inference); `ProvenanceSourceType` has
+ * 7 values, so `pull_request` and `agent_experience` need a placement spec.md
+ * doesn't give directly:
+ * - `pull_request` sits just above `git_commit` — a reviewed diff carries
+ *   more corroborating context than a bare commit message, but it's still
+ *   git-history-adjacent, not code/test-derived.
+ * - `agent_experience` sits above `llm_inference` — an experience reflects
+ *   an agent actually acting and observing a real result, which is more
+ *   grounded than pure LLM speculation, but still task-context-bound and
+ *   thus less reliable than any code/history-derived evidence.
+ */
 export const EVIDENCE_HIERARCHY: readonly ProvenanceSourceType[] = [
   "source_code", // compiler/AST/LSP-derived facts are also tagged source_code with confidence 1.0
   "test",
   "documentation",
+  "pull_request",
   "git_commit",
+  "agent_experience",
   "llm_inference",
 ] as const;
 

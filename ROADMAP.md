@@ -17,7 +17,7 @@ This checklist is the source of truth for what's done — see
 - [x] M3 — Semantic Memory Pipeline
 - [x] M4 — Episodic Memory
 - [x] M5 — Reasoning-Guided Traversal
-- [ ] M6 — Context Construction
+- [x] M6 — Context Construction
 - [ ] M7 — Staleness, Events, GC, Full Eval Set
 
 Repo layout target:

@@ -52,6 +52,28 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)
 
+  packages/context:
+    dependencies:
+      '@cognitive-memory/core':
+        specifier: workspace:*
+        version: link:../core
+      '@cognitive-memory/episodic':
+        specifier: workspace:*
+        version: link:../episodic
+      '@cognitive-memory/graph-store':
+        specifier: workspace:*
+        version: link:../graph-store
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
   packages/core:
     devDependencies:
       '@types/node':

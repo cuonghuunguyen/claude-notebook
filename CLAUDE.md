@@ -24,13 +24,20 @@ the source of truth, not this file's memory of past sessions).
   manually exercise one realistic scenario outside the test fixtures and
   read the actual output. Both go in the PR description. See
   `.claude/skills/next-milestone/SKILL.md` steps 8-9 for the full protocol.
+- Merge is conditional, not manual-by-default: once CI is green and review
+  threads are resolved, a PR with no flagged spec deviation merges itself
+  (squash) — no human needed to press a button on a clean milestone. A PR
+  that *did* flag a deviation stays open for a human; that's the one case
+  where an automated judgment call should be seen before the next milestone
+  builds on top of it. See `.claude/skills/next-milestone/SKILL.md` step 14.
 
 ## Picking up work
 
 Run the `/next-milestone` skill — it finds the next unchecked milestone,
 implements it, tests it for real, self-reviews and sanity-checks it, opens
-a PR, and subscribes to that PR's activity so CI failures and review
-comments come back automatically.
+a PR, subscribes to that PR's activity so CI failures and review comments
+come back automatically, and merges it once green (unless it flagged a
+spec deviation, in which case it waits for a human).
 
 ## Repo/branch
 

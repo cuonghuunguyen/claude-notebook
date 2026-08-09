@@ -76,8 +76,22 @@ firing into a fresh session), this file is your task description.
 13. **Subscribe.** Call `subscribe_pr_activity` for the PR you just opened.
     This is what makes CI failures and review comments come back
     automatically later — don't skip it.
-14. **Stop.** Don't merge your own PR, don't start milestone N+1. Report
-    which milestone shipped and what's next.
+14. **Merge, conditionally.** Once CI is green and every review thread on
+    the PR is resolved (including any that arrived after you opened it —
+    see the next section):
+    - If your PR description's "Deviations from spec.md" section says
+      "None" — merge it yourself (`mcp__github__merge_pull_request`,
+      `merge_method: squash`). A clean milestone with no open judgment call
+      doesn't need a human in the loop just to press a button.
+    - If it lists a real deviation — do NOT merge. Leave the PR open. A
+      deviation means you made a judgment call spec.md didn't resolve;
+      that's exactly the case a human should see before it becomes
+      load-bearing for the next milestone. Say so plainly in your final
+      report.
+    Either way: don't start milestone N+1 in this run, whether you merged
+    or left it open for a human.
+15. **Stop.** Report which milestone shipped (merged or awaiting a human
+    on a flagged deviation) and what's next.
 
 ## If a subscribed PR gets a CI failure or review comment later
 

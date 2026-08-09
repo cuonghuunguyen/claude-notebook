@@ -142,6 +142,56 @@ export async function getNeighborEdgesByRelation(
   return rows.map(rowToEdge);
 }
 
+export interface FrontierEdge {
+  edge: Edge;
+  /** The endpoint of `edge` that is NOT in the queried node set — the candidate neighbor. */
+  neighborId: string;
+}
+
+/**
+ * One frontier's worth of active edges touching `nodeIds`, for reasoning-
+ * guided traversal (spec.md §10, §16): "the traversal loop fetches one full
+ * frontier per depth level via a single CTE query... not one query per
+ * neighbor." `excludeNeighborIds` (the full visited set, a superset of
+ * `nodeIds`) filters out edges whose neighbor has already been visited —
+ * both to avoid re-offering an already-included node as a "new" candidate
+ * and to drop edges that are entirely internal to the visited region (both
+ * endpoints already visited, so neither side is a fresh neighbor).
+ *
+ * `limit` is a safety cap on rows fetched from Postgres, not the final
+ * frontier size handed to the reasoning call — traversal (M5) ranks this
+ * raw set by spec.md §11's formula and caps it further (e.g. top 15) before
+ * it reaches the reasoner. Ordered by `weight DESC` here only so a query
+ * that hits the safety cap keeps the highest-weight rows rather than an
+ * arbitrary prefix.
+ */
+export async function getFrontierEdges(
+  nodeIds: string[],
+  excludeNeighborIds: string[],
+  limit = 500
+): Promise<FrontierEdge[]> {
+  if (nodeIds.length === 0) return [];
+  const pool = getPool();
+  const { rows } = await pool.query<EdgeRow & { neighbor_id: string }>(
+    `
+    WITH frontier AS (
+      SELECT id, from_id, to_id, relation, confidence, weight, provenance, status,
+             created_at, updated_at, last_verified_at,
+             CASE WHEN from_id = ANY($1) THEN to_id ELSE from_id END AS neighbor_id
+      FROM edges
+      WHERE (from_id = ANY($1) OR to_id = ANY($1)) AND status = 'active'
+    )
+    SELECT ${EDGE_COLUMNS}, neighbor_id
+    FROM frontier
+    WHERE neighbor_id != ALL($2)
+    ORDER BY weight DESC
+    LIMIT $3
+    `,
+    [nodeIds, excludeNeighborIds, limit]
+  );
+  return rows.map((row) => ({ edge: rowToEdge(row), neighborId: row.neighbor_id }));
+}
+
 /**
  * spec.md §5 step 6 / §12: when a structural node changes, edges touching
  * it that aren't plain structural facts need re-verification before being

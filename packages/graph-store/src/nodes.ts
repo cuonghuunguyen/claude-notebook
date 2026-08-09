@@ -88,6 +88,24 @@ export async function getNodeById(id: string): Promise<Node | undefined> {
 }
 
 /**
+ * Batch node fetch by id, used by traversal (M5) to hydrate a whole
+ * frontier's neighbor nodes in one round trip instead of N `getNodeById`
+ * calls — the same batching principle spec.md §10/§16 apply to the
+ * reasoning call and the frontier query applies here too. `deleted` nodes
+ * are excluded: a frontier edge pointing at a node deleted since the edge
+ * was last touched shouldn't be offered to the reasoner as a candidate.
+ */
+export async function getNodesByIds(ids: string[]): Promise<Node[]> {
+  if (ids.length === 0) return [];
+  const pool = getPool();
+  const { rows } = await pool.query<NodeRow>(
+    `SELECT ${NODE_COLUMNS} FROM nodes WHERE id = ANY($1) AND status != 'deleted'`,
+    [ids]
+  );
+  return rows.map(rowToNode);
+}
+
+/**
  * Soft-delete: status -> "deleted". Row (and its edges) is retained for the
  * 90-day window from spec.md §18 GC policy; a batch job hard-deletes later.
  */

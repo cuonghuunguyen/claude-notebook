@@ -16,7 +16,7 @@ This checklist is the source of truth for what's done — see
 - [x] M2 — Hybrid Retrieval
 - [x] M3 — Semantic Memory Pipeline
 - [x] M4 — Episodic Memory
-- [ ] M5 — Reasoning-Guided Traversal
+- [x] M5 — Reasoning-Guided Traversal
 - [ ] M6 — Context Construction
 - [ ] M7 — Staleness, Events, GC, Full Eval Set
 

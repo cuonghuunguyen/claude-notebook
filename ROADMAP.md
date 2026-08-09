@@ -14,7 +14,7 @@ This checklist is the source of truth for what's done — see
 - [x] M0 — Scaffolding (pnpm monorepo, Postgres+pgvector+pg_trgm schema, graph-store)
 - [x] M1 — Structural Graph (ts-morph extractor, node identity, incremental updates)
 - [x] M2 — Hybrid Retrieval
-- [ ] M3 — Semantic Memory Pipeline
+- [x] M3 — Semantic Memory Pipeline
 - [ ] M4 — Episodic Memory
 - [ ] M5 — Reasoning-Guided Traversal
 - [ ] M6 — Context Construction

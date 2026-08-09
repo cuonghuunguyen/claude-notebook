@@ -19,10 +19,22 @@ export interface MemoryEvent<TPayload = unknown> {
   occurredAt?: string;
 }
 
+// `events.id` is `bigserial` (bigint); node-postgres returns bigint columns
+// as strings (it can't safely widen them to JS `number` without risking
+// precision loss), but `MemoryEvent.id` is declared `number` and callers
+// compare ids with `>`. Converting explicitly here is safe: event ids won't
+// approach Number.MAX_SAFE_INTEGER in this system's lifetime, and without
+// the conversion `id > $1` on the un-widened string would silently do
+// lexicographic comparison (`"10" > "9"` is false) once ids cross a digit
+// boundary.
+function toEventId(id: string): number {
+  return Number(id);
+}
+
 export async function appendEvent(event: MemoryEvent): Promise<MemoryEvent> {
   const pool = getPool();
   const { rows } = await pool.query<{
-    id: number;
+    id: string;
     event_type: EventType;
     payload: unknown;
     occurred_at: Date;
@@ -34,7 +46,7 @@ export async function appendEvent(event: MemoryEvent): Promise<MemoryEvent> {
   const row = rows[0];
   if (!row) throw new Error("appendEvent: no row returned");
   return {
-    id: row.id,
+    id: toEventId(row.id),
     eventType: row.event_type,
     payload: row.payload,
     occurredAt: row.occurred_at.toISOString(),
@@ -44,7 +56,7 @@ export async function appendEvent(event: MemoryEvent): Promise<MemoryEvent> {
 export async function listEventsSince(id: number): Promise<MemoryEvent[]> {
   const pool = getPool();
   const { rows } = await pool.query<{
-    id: number;
+    id: string;
     event_type: EventType;
     payload: unknown;
     occurred_at: Date;
@@ -52,7 +64,7 @@ export async function listEventsSince(id: number): Promise<MemoryEvent[]> {
     id,
   ]);
   return rows.map((row) => ({
-    id: row.id,
+    id: toEventId(row.id),
     eventType: row.event_type,
     payload: row.payload,
     occurredAt: row.occurred_at.toISOString(),

@@ -1,5 +1,5 @@
 import type { Edge, EdgeStatus, Provenance, RelationType } from "@cognitive-memory/core";
-import { getPool } from "./db.js";
+import { getPool, type Queryable } from "./db.js";
 
 interface EdgeRow {
   id: string;
@@ -42,19 +42,24 @@ const EDGE_COLUMNS = `id, from_id, to_id, relation, confidence, weight, provenan
  *
  * Confidence/weight/status recomputation from the merged provenance list is
  * the caller's responsibility (packages/semantic, M3) — this function only
- * persists whatever the caller already decided.
+ * persists whatever the caller already decided, including `lastVerifiedAt`
+ * (spec.md §7's durable-via-verification path / §12's lazy re-verification).
+ *
+ * `db` defaults to the shared pool but accepts a checked-out `PoolClient` so
+ * a caller running this inside its own transaction (e.g. an advisory-lock-
+ * guarded read-modify-write) doesn't borrow a second pool connection for it.
  */
-export async function upsertEdgeByTriple(edge: Edge): Promise<Edge> {
-  const pool = getPool();
-  const { rows } = await pool.query<EdgeRow>(
+export async function upsertEdgeByTriple(edge: Edge, db: Queryable = getPool()): Promise<Edge> {
+  const { rows } = await db.query<EdgeRow>(
     `
-    INSERT INTO edges (id, from_id, to_id, relation, confidence, weight, provenance, status)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    INSERT INTO edges (id, from_id, to_id, relation, confidence, weight, provenance, status, last_verified_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     ON CONFLICT (from_id, to_id, relation) DO UPDATE SET
       confidence = EXCLUDED.confidence,
       weight = EXCLUDED.weight,
       provenance = EXCLUDED.provenance,
       status = EXCLUDED.status,
+      last_verified_at = EXCLUDED.last_verified_at,
       updated_at = now()
     RETURNING ${EDGE_COLUMNS}
     `,
@@ -67,11 +72,33 @@ export async function upsertEdgeByTriple(edge: Edge): Promise<Edge> {
       edge.weight,
       JSON.stringify(edge.provenance),
       edge.status,
+      edge.lastVerifiedAt ?? null,
     ]
   );
   const row = rows[0];
   if (!row) throw new Error(`upsertEdgeByTriple: no row returned for ${edge.id}`);
   return rowToEdge(row);
+}
+
+/**
+ * Fetches the single edge for a (from, to, relation) triple, if one exists.
+ * Callers merging a new observation into an existing fact's provenance
+ * (packages/semantic, M3) need this to read the current provenance array
+ * before appending — `upsertEdgeByTriple` only persists what it's given, it
+ * doesn't read-then-merge itself. `db` — see `upsertEdgeByTriple`'s note.
+ */
+export async function getEdgeByTriple(
+  from: string,
+  to: string,
+  relation: RelationType,
+  db: Queryable = getPool()
+): Promise<Edge | undefined> {
+  const { rows } = await db.query<EdgeRow>(
+    `SELECT ${EDGE_COLUMNS} FROM edges WHERE from_id = $1 AND to_id = $2 AND relation = $3`,
+    [from, to, relation]
+  );
+  const row = rows[0];
+  return row ? rowToEdge(row) : undefined;
 }
 
 export async function getEdgesFrom(fromId: string): Promise<Edge[]> {

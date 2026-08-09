@@ -18,12 +18,19 @@ the source of truth, not this file's memory of past sessions).
   vs weight, §7 promotion thresholds, §10 traversal batching) are final —
   extend them, don't relitigate them. If one genuinely blocks a milestone,
   say so in the commit/PR description instead of silently overriding it.
+- Passing your own tests isn't done. Before opening a PR: run an independent
+  review pass on the diff (the assertions and the implementation came from
+  the same blind spots — a review pass exists to catch what they can't), and
+  manually exercise one realistic scenario outside the test fixtures and
+  read the actual output. Both go in the PR description. See
+  `.claude/skills/next-milestone/SKILL.md` steps 8-9 for the full protocol.
 
 ## Picking up work
 
 Run the `/next-milestone` skill — it finds the next unchecked milestone,
-implements it, tests it for real, opens a PR, and subscribes to that PR's
-activity so CI failures and review comments come back automatically.
+implements it, tests it for real, self-reviews and sanity-checks it, opens
+a PR, and subscribes to that PR's activity so CI failures and review
+comments come back automatically.
 
 ## Repo/branch
 

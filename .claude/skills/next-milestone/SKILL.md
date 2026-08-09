@@ -45,16 +45,38 @@ firing into a fresh session), this file is your task description.
    `DATABASE_URL` set — they self-skip without it; if yours skip when they
    shouldn't, your env is misconfigured, fix that before continuing. Never
    check a box on a skipped or failing test.
-8. **Update ROADMAP.md.** Check this milestone's box on your branch.
-9. **Commit and push** the branch (`git push -u origin milestone/M<N>-...`).
-10. **Open a PR** into `claude/codebase-cognitive-memory-spec-t7nnx0` via
-    `mcp__github__create_pull_request`. Describe what was built and how it
-    was verified (real Postgres, which tests, etc.) — enough that a human
-    skimming the PR doesn't need this skill's context to review it.
-11. **Subscribe.** Call `subscribe_pr_activity` for the PR you just opened.
+8. **Self-review — don't grade your own homework.** Run the `code-review`
+   skill against your diff (or, if unavailable, spawn a fresh review
+   sub-agent with no memory of *why* you made each choice — it should judge
+   the diff cold, the way a human reviewer would). The assertions in step 7
+   were written by the same pass that wrote the implementation, so they
+   share its blind spots; this step exists specifically to catch what that
+   can't. Fix every CONFIRMED finding and re-run step 7's tests before
+   moving on. Note in the PR description (step 11) that a review pass ran
+   and what it found/fixed — "self-review: found and fixed X" or
+   "self-review: no findings," not silence.
+9. **Manual sanity check — don't just trust assertions.** Pick ONE realistic
+   scenario for this milestone that isn't already one of the unit/eval
+   fixtures verbatim, run it for real (a throwaway script, a REPL call,
+   whatever fits), and read the actual output yourself. The goal is to
+   catch "technically passes its own tests but the behavior is nonsense"
+   bugs — e.g. for M2, actually run a hybrid-search query no eval case used
+   verbatim and eyeball whether the ranked results make sense, not just
+   that some assertion matched. Put what you ran and what you saw in the
+   PR description under a "Manual sanity check" heading. If nothing
+   realistic to hand-check exists yet for this milestone's slice, say so
+   explicitly rather than skipping the heading.
+10. **Update ROADMAP.md.** Check this milestone's box on your branch.
+11. **Commit and push** the branch (`git push -u origin milestone/M<N>-...`).
+12. **Open a PR** into `claude/codebase-cognitive-memory-spec-t7nnx0` via
+    `mcp__github__create_pull_request`. Describe what was built, how it was
+    verified (real Postgres, which tests), the self-review outcome (step 8),
+    and the manual sanity check (step 9) — enough that a human skimming the
+    PR doesn't need this skill's context to trust it.
+13. **Subscribe.** Call `subscribe_pr_activity` for the PR you just opened.
     This is what makes CI failures and review comments come back
     automatically later — don't skip it.
-12. **Stop.** Don't merge your own PR, don't start milestone N+1. Report
+14. **Stop.** Don't merge your own PR, don't start milestone N+1. Report
     which milestone shipped and what's next.
 
 ## If a subscribed PR gets a CI failure or review comment later

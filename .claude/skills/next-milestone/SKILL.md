@@ -1,6 +1,6 @@
 ---
 name: next-milestone
-description: Pick up and ship the next unchecked milestone from ROADMAP.md for the Codebase Cognitive Memory project (cuonghuunguyen/claude-notebook) — implements it, tests it for real against Postgres, self-reviews and sanity-checks it, opens a PR, subscribes to that PR's activity, and merges it once green (chaining straight into the next milestone rather than stopping, unless it flagged a spec deviation, in which case it stops and waits for a human). Use whenever asked to continue building this project, or when this repo's milestone-runner Routine fires.
+description: Pick up and ship the next unchecked milestone from ROADMAP.md for the Codebase Cognitive Memory project (cuonghuunguyen/claude-notebook) — implements it, tests it for real against Postgres, self-reviews and sanity-checks it, opens a PR, subscribes to that PR's activity, and merges it once green. On a clean merge it spawns a fresh session to pick up the next milestone immediately (keeping each session's context — and cost — flat instead of accumulating across the whole project) rather than looping in place or waiting for the next scheduled trigger; it stops without spawning a successor if it flagged a spec deviation (a human needs to look) or the roadmap is exhausted. Use whenever asked to continue building this project, or when this repo's milestone-runner Routine fires.
 ---
 
 # next-milestone
@@ -94,23 +94,34 @@ firing into a fresh session), this file is your task description.
       that's exactly the case a human should see before it becomes
       load-bearing for the next milestone. Say so plainly in your final
       report.
-15. **Continue or stop.**
-    - If you just merged cleanly in step 14: go back to **step 1** for the
-      next milestone, in this same run — don't wait for the next scheduled
-      trigger. This is safe specifically because merging already required
-      "no flagged deviation" (step 14); chaining onto a clean, merged
-      milestone isn't chaining onto an open judgment call. If ROADMAP.md
-      now shows every box checked, stop and report the project is
-      complete instead of looping.
-    - If step 14 left a PR open on a flagged deviation: STOP now, in this
-      run, full stop. Do not start another milestone while one is sitting
-      unmerged on a human decision — building on top of your own
-      unreviewed judgment call is exactly the risk step 14 exists to avoid.
-      Report clearly that a human decision is needed before anything else
-      continues.
-    Either way, report what happened this run: every milestone shipped
-    (merged) if you looped through more than one, or the one left open and
-    why.
+15. **Continue or stop — by spawning a fresh session, not by looping in
+    this one.** Don't go back to step 1 in this same conversation even
+    after a clean merge: this conversation's context already holds this
+    milestone's full implementation, review, and fix history, and looping
+    in place would stack every future milestone's context on top of that,
+    growing token cost per milestone instead of keeping it flat. Instead:
+    - If you just merged cleanly in step 14 AND `ROADMAP.md` still has an
+      unchecked box: call `mcp__Claude_Code_Remote__create_session` to
+      spawn a **new** session for the next milestone — pass `source_url:
+      "https://github.com/cuonghuunguyen/claude-notebook"`,
+      `source_revision: "claude/codebase-cognitive-memory-spec-t7nnx0"`,
+      and a `prompt` telling it to run this same `/next-milestone` skill
+      (a fresh session starts with none of this one's context, so the
+      prompt needs to be a complete standalone instruction, not "continue
+      what you were doing"). Then STOP your own turn — you're done; the
+      spawned session picks up from a clean base, and its own step 15
+      spawns the one after that, and so on. This is what gets the next
+      milestone started immediately without waiting for the next
+      scheduled trigger, without accumulating context across milestones.
+    - If `ROADMAP.md` now shows every box checked: stop, don't spawn
+      anything, report the project complete.
+    - If step 14 left a PR open on a flagged deviation: STOP now, full
+      stop, and do NOT spawn a next session. Building on top of your own
+      unreviewed judgment call is exactly the risk step 14 exists to
+      avoid — a human needs to resolve the open PR before any further
+      milestone starts, automated or not.
+    Either way, report what happened this run: the milestone you shipped
+    (merged, or left open and why) and whether you spawned a successor.
 
 ## If a subscribed PR gets a CI failure or review comment later
 

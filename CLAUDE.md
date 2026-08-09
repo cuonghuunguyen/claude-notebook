@@ -41,9 +41,11 @@ implements it, tests it for real, self-reviews and sanity-checks it, opens
 a PR, subscribes to that PR's activity so CI failures and review comments
 come back automatically, and merges it once green (unless it flagged a
 spec deviation, in which case it waits for a human). On a clean merge it
-loops straight into the next milestone in the same run instead of waiting
-for the next scheduled trigger — it only stops on its own when the
-roadmap is exhausted or a deviation needs a human.
+spawns a **fresh session** to start the next milestone immediately — not
+a loop in the same conversation, so context (and cost) per milestone stays
+flat instead of compounding across the whole project. It stops without
+spawning a successor when the roadmap is exhausted or a deviation needs a
+human.
 
 ## Repo/branch
 

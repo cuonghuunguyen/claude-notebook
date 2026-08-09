@@ -21,14 +21,27 @@ firing into a fresh session), this file is your task description.
 
 ## Steps
 
-1. **Sync.** `git fetch origin claude/codebase-cognitive-memory-spec-t7nnx0`,
-   then `git checkout claude/codebase-cognitive-memory-spec-t7nnx0 && git
-   reset --hard origin/claude/codebase-cognitive-memory-spec-t7nnx0` —
-   fetch alone updates remote-tracking refs but not your working tree; if
-   you're re-running in a persistent session that was last sitting on a
-   milestone branch, skipping the checkout means `ROADMAP.md`, `CLAUDE.md`,
-   and this very file could all be stale copies from whenever that branch
-   was cut. Read `ROADMAP.md` and `CLAUDE.md` only after this step.
+1. **Sync — but first check there's actually a checkout to sync.** A
+   persistent session's container can be reclaimed after idle time (the 3h
+   gap between backstop cron fires is long enough for this to happen) and
+   come back with an empty working directory — no `.git`, nothing. Don't
+   treat that as "nothing to do" or a reason to give up; it's a setup step
+   this skill owns:
+   - If `git rev-parse --git-dir` fails (no repo at all): `git clone
+     https://github.com/cuonghuunguyen/claude-notebook . && git checkout
+     claude/codebase-cognitive-memory-spec-t7nnx0`. If `add_repo` /
+     `register_repo_root` tools are available, that path works too — either
+     way, end this step with a real working checkout, don't stop and
+     report "no repository" as if that were a terminal state.
+   - If a checkout already exists: `git fetch origin
+     claude/codebase-cognitive-memory-spec-t7nnx0`, then `git checkout
+     claude/codebase-cognitive-memory-spec-t7nnx0 && git reset --hard
+     origin/claude/codebase-cognitive-memory-spec-t7nnx0` — fetch alone
+     updates remote-tracking refs but not your working tree; skipping the
+     checkout means `ROADMAP.md`, `CLAUDE.md`, and this very file could be
+     stale copies from whenever you last synced.
+   Read `ROADMAP.md` and `CLAUDE.md` only after this step, whichever branch
+   you took to get a real checkout.
 2. **Find the work.** Open `ROADMAP.md`, take the first `- [ ]` milestone in
    the status checklist. If every box is checked, stop and say so — there
    is nothing to do.

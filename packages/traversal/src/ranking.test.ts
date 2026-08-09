@@ -52,7 +52,13 @@ describe("scoreCandidate", () => {
     // not confidence+weight (which would make the two 1.1 vs 1.1 too, so the
     // real discriminator below is against a case additive combination would
     // conflate but multiplication would not).
-    expect(highImportanceLowConfidence).toBeCloseTo(highConfidenceLowImportance, 10);
+    // Precision 6 (tolerance 5e-7), not the default or something tighter:
+    // the two scores are built by summing several independently-computed
+    // terms (lookup-table lengths, string ops, etc.), so bit-identical
+    // floating-point equality isn't guaranteed even when the two paths are
+    // mathematically equal — 10 was tight enough to flake on ~3.9e-10 of
+    // float noise while proving nothing an engineering tolerance doesn't.
+    expect(highImportanceLowConfidence).toBeCloseTo(highConfidenceLowImportance, 6);
 
     const bothMid = scoreCandidate({
       edge: makeEdge({ confidence: 0.5, weight: 0.5 }),

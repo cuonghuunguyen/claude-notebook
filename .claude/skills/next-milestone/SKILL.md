@@ -21,8 +21,14 @@ firing into a fresh session), this file is your task description.
 
 ## Steps
 
-1. **Sync.** `git fetch origin claude/codebase-cognitive-memory-spec-t7nnx0`
-   and make sure your checkout is current before reading ROADMAP.md.
+1. **Sync.** `git fetch origin claude/codebase-cognitive-memory-spec-t7nnx0`,
+   then `git checkout claude/codebase-cognitive-memory-spec-t7nnx0 && git
+   reset --hard origin/claude/codebase-cognitive-memory-spec-t7nnx0` —
+   fetch alone updates remote-tracking refs but not your working tree; if
+   you're re-running in a persistent session that was last sitting on a
+   milestone branch, skipping the checkout means `ROADMAP.md`, `CLAUDE.md`,
+   and this very file could all be stale copies from whenever that branch
+   was cut. Read `ROADMAP.md` and `CLAUDE.md` only after this step.
 2. **Find the work.** Open `ROADMAP.md`, take the first `- [ ]` milestone in
    the status checklist. If every box is checked, stop and say so — there
    is nothing to do.

@@ -93,6 +93,29 @@ export async function getEdgesTouchingNode(nodeId: string): Promise<Edge[]> {
 }
 
 /**
+ * Edges touching `nodeId` whose relation is one of `relations`, highest
+ * `weight` first. Used by seed expansion (spec.md §9): 1-hop structural
+ * neighbors of top search hits, and highest-weight semantic neighbors of a
+ * matched concept/invariant node — same query shape, different relation set.
+ */
+export async function getNeighborEdgesByRelation(
+  nodeId: string,
+  relations: readonly RelationType[],
+  limit = 10
+): Promise<Edge[]> {
+  if (relations.length === 0) return [];
+  const pool = getPool();
+  const { rows } = await pool.query<EdgeRow>(
+    `SELECT ${EDGE_COLUMNS} FROM edges
+     WHERE (from_id = $1 OR to_id = $1) AND relation = ANY($2) AND status = 'active'
+     ORDER BY weight DESC
+     LIMIT $3`,
+    [nodeId, relations, limit]
+  );
+  return rows.map(rowToEdge);
+}
+
+/**
  * spec.md §5 step 6 / §12: when a structural node changes, edges touching
  * it that aren't plain structural facts need re-verification before being
  * trusted again.

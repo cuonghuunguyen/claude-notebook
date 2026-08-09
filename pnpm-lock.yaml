@@ -27,6 +27,31 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)
 
+  eval/retrieval:
+    dependencies:
+      '@cognitive-memory/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@cognitive-memory/graph-store':
+        specifier: workspace:*
+        version: link:../../packages/graph-store
+      '@cognitive-memory/retrieval':
+        specifier: workspace:*
+        version: link:../../packages/retrieval
+      '@cognitive-memory/structural':
+        specifier: workspace:*
+        version: link:../../packages/structural
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
   packages/core:
     devDependencies:
       '@types/node':
@@ -54,6 +79,25 @@ importers:
       '@types/pg':
         specifier: ^8.11.10
         version: 8.21.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
+  packages/retrieval:
+    dependencies:
+      '@cognitive-memory/core':
+        specifier: workspace:*
+        version: link:../core
+      '@cognitive-memory/graph-store':
+        specifier: workspace:*
+        version: link:../graph-store
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

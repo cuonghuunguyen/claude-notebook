@@ -117,3 +117,104 @@ export async function listNodesByType(type: NodeType): Promise<Node[]> {
   );
   return rows.map(rowToNode);
 }
+
+/** pgvector expects `'[0.1,0.2,...]'` text input, not a JS array — `pg` has no native vector type support. */
+function toVectorLiteral(embedding: number[]): string {
+  return `[${embedding.join(",")}]`;
+}
+
+/**
+ * Writes the embedding used by the vector leg of hybrid retrieval (spec.md
+ * §9). Separate from `upsertNode` because embedding computation is the
+ * caller's responsibility (packages/retrieval, via an injected provider) —
+ * this function only persists a vector someone else already computed.
+ */
+export async function upsertNodeEmbedding(id: string, embedding: number[]): Promise<void> {
+  const pool = getPool();
+  await pool.query(`UPDATE nodes SET embedding = $2, updated_at = now() WHERE id = $1`, [
+    id,
+    toVectorLiteral(embedding),
+  ]);
+}
+
+export interface NodeSearchHit {
+  node: Node;
+  score: number;
+}
+
+/**
+ * Lexical leg of hybrid retrieval (spec.md §9): `pg_trgm` trigram similarity
+ * over name/path, not `tsvector` — degrades gracefully on partial/typo'd
+ * identifiers the way full-text search does not.
+ *
+ * The WHERE filter uses the `%` operator (not `similarity(...) >= threshold`)
+ * specifically because `%` is the operator `nodes_name_trgm_idx`/
+ * `nodes_path_trgm_idx`'s GIN indexes support — `similarity()` used as a
+ * plain boolean comparison is not indexable at all and forces a full table
+ * scan regardless of planner settings (verified via `EXPLAIN ANALYZE` with
+ * `enable_seqscan=off`: the `similarity() >= x` shape has no alternative
+ * plan, while `%` produces a `BitmapOr` over both trgm indexes). `%`'s
+ * threshold is controlled by the session-scoped `pg_trgm.similarity_limit`
+ * GUC (via `set_limit()`), so it's set on the same client that runs the
+ * search — a pooled connection must not carry a stale threshold into
+ * whichever query borrows it next.
+ *
+ * `repoId`, like `getNodesByPath`'s, is an optional scope: a retrieval
+ * session operates against one repo's graph at a time, and without this a
+ * fixture/eval node can't be distinguished from same-named nodes another
+ * repo (or another test run sharing the same Postgres instance) inserted.
+ */
+export async function searchNodesByTrigram(
+  query: string,
+  limit = 10,
+  threshold = 0.1,
+  repoId?: string
+): Promise<NodeSearchHit[]> {
+  const pool = getPool();
+  const client = await pool.connect();
+  try {
+    await client.query("SELECT set_limit($1)", [threshold]);
+    const { rows } = await client.query<NodeRow & { score: number }>(
+      `
+      SELECT ${NODE_COLUMNS},
+        GREATEST(similarity(coalesce(name, ''), $1), similarity(coalesce(path, ''), $1)) AS score
+      FROM nodes
+      WHERE status != 'deleted'
+        AND (name % $1 OR path % $1)
+        AND ($3::text IS NULL OR repo_id = $3)
+      ORDER BY score DESC
+      LIMIT $2
+      `,
+      [query, limit, repoId ?? null]
+    );
+    return rows.map((row) => ({ node: rowToNode(row), score: row.score }));
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Vector leg of hybrid retrieval (spec.md §9). `<=>` is pgvector's cosine
+ * distance operator (paired with the `vector_cosine_ops` HNSW index in
+ * migrations/0001_init.sql) — similarity is `1 - distance`. `repoId` scopes
+ * the same way as `searchNodesByTrigram`.
+ */
+export async function searchNodesByEmbedding(
+  embedding: number[],
+  limit = 10,
+  repoId?: string
+): Promise<NodeSearchHit[]> {
+  const pool = getPool();
+  const { rows } = await pool.query<NodeRow & { score: number }>(
+    `
+    SELECT ${NODE_COLUMNS}, 1 - (embedding <=> $1) AS score
+    FROM nodes
+    WHERE status != 'deleted' AND embedding IS NOT NULL
+      AND ($3::text IS NULL OR repo_id = $3)
+    ORDER BY embedding <=> $1
+    LIMIT $2
+    `,
+    [toVectorLiteral(embedding), limit, repoId ?? null]
+  );
+  return rows.map((row) => ({ node: rowToNode(row), score: row.score }));
+}

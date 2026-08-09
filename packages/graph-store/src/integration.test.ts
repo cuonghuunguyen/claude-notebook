@@ -3,7 +3,13 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { nodeId } from "@cognitive-memory/core";
 import { closePool, getPool } from "./db.js";
 import { runMigrations } from "./migrate.js";
-import { getNodeById, getNodesByPath, markNodeDeleted, upsertNode } from "./nodes.js";
+import {
+  getNodeById,
+  getNodesByPath,
+  markNodeDeleted,
+  searchNodesByTrigram,
+  upsertNode,
+} from "./nodes.js";
 import { getEdgesTouchingNode, markEdgesStaleForNode, upsertEdgeByTriple } from "./edges.js";
 import { queryExperiencesByNode, recordExperience } from "./experiences.js";
 import { appendEvent, listEventsSince } from "./events.js";
@@ -229,6 +235,51 @@ d("graph-store integration", () => {
     const inRepoB = await getNodesByPath(repoB, sharedPath);
     expect(inRepoB).toHaveLength(1);
     expect(inRepoB[0]?.name).toBe("B");
+  });
+
+  it("searchNodesByTrigram is scoped by repoId — a same-named node in another repo doesn't leak in", async () => {
+    const repoA = `test-repo-${randomUUID()}`;
+    const repoB = `test-repo-${randomUUID()}`;
+    const now = new Date().toISOString();
+    const sharedName = `UniqueSearchName${randomUUID().slice(0, 8)}`;
+
+    await upsertNode(
+      {
+        id: nodeId(repoA, `${sharedName}#A`),
+        type: "class",
+        name: sharedName,
+        metadata: {},
+        provenance: [],
+        status: "active",
+        createdAt: now,
+        updatedAt: now,
+      },
+      repoA
+    );
+    await upsertNode(
+      {
+        id: nodeId(repoB, `${sharedName}#B`),
+        type: "class",
+        name: sharedName,
+        metadata: {},
+        provenance: [],
+        status: "active",
+        createdAt: now,
+        updatedAt: now,
+      },
+      repoB
+    );
+
+    const inRepoA = await searchNodesByTrigram(sharedName, 10, 0.1, repoA);
+    expect(inRepoA).toHaveLength(1);
+    expect(inRepoA[0]?.node.name).toBe(sharedName);
+
+    const inRepoB = await searchNodesByTrigram(sharedName, 10, 0.1, repoB);
+    expect(inRepoB).toHaveLength(1);
+    expect(inRepoB[0]?.node.name).toBe(sharedName);
+
+    const unscoped = await searchNodesByTrigram(sharedName, 10, 0.1);
+    expect(unscoped.length).toBeGreaterThanOrEqual(2);
   });
 
   it("records an append-only experience and queries it back by related node", async () => {

@@ -33,6 +33,19 @@ export type StructuralRelationType =
   | "uses"
   | "tested_by";
 
+/** Runtime enumeration of StructuralRelationType — spec.md §9 seed expansion filters edges by this set. */
+export const STRUCTURAL_RELATIONS: readonly StructuralRelationType[] = [
+  "contains",
+  "imports",
+  "exports",
+  "calls",
+  "references",
+  "extends",
+  "implements",
+  "uses",
+  "tested_by",
+] as const;
+
 export type SemanticRelationType =
   | "depends_on"
   | "owns"
@@ -44,6 +57,20 @@ export type SemanticRelationType =
   | "must_follow"
   | "alternative_to"
   | "related_to";
+
+/** Runtime enumeration of SemanticRelationType — spec.md §9 seed expansion filters edges by this set. */
+export const SEMANTIC_RELATIONS: readonly SemanticRelationType[] = [
+  "depends_on",
+  "owns",
+  "constrained_by",
+  "violates",
+  "caused_by",
+  "prevents",
+  "requires",
+  "must_follow",
+  "alternative_to",
+  "related_to",
+] as const;
 
 export type ExperienceRelationType =
   | "observed_in"

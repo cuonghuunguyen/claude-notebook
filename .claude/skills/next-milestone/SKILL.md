@@ -35,9 +35,15 @@ firing into a fresh session), this file is your task description.
 3. **Concurrency guard.** List open pull requests against
    `claude/codebase-cognitive-memory-spec-t7nnx0` (`mcp__github__list_pull_requests`
    or `search_pull_requests`). If one already has a head branch named
-   `milestone/M<N>-*` for the SAME milestone number you picked in step 2,
-   STOP — another run is already shipping it. Don't open a second PR for
-   the same milestone.
+   `milestone/M<N>-*` for the SAME milestone number you picked in step 2:
+   - If you don't recognize it (no memory of opening it — e.g. you're a
+     fresh session and this is a stale/leftover PR from an earlier one),
+     STOP — another run is already shipping it, don't open a second PR.
+   - If it's the PR **you yourself opened earlier in this same
+     conversation** (you were re-fired, or nudged, while that PR was still
+     open), this is not a concurrency conflict — it's you resuming your own
+     work. Skip ahead to check its CI/review status (step 14) instead of
+     aborting.
 4. **Branch.** Create `milestone/M<N>-<short-slug>` from the latest
    `claude/codebase-cognitive-memory-spec-t7nnx0`.
 5. **Environment.** `DATABASE_URL` should already be set by the
@@ -79,9 +85,21 @@ firing into a fresh session), this file is your task description.
     verified (real Postgres, which tests), the self-review outcome (step 8),
     and the manual sanity check (step 9) — enough that a human skimming the
     PR doesn't need this skill's context to trust it.
-13. **Subscribe.** Call `subscribe_pr_activity` for the PR you just opened.
-    This is what makes CI failures and review comments come back
-    automatically later — don't skip it.
+13. **Subscribe, then schedule your own short check-in — don't just wait.**
+    Call `subscribe_pr_activity` for the PR you just opened. This delivers
+    CI **failures** and review comments back automatically — but a **green**
+    CI run does not generate a webhook event (there's nothing to act on
+    from GitHub's side), so nothing will wake you when CI passes. If you
+    just sit idle waiting for an event, a clean PR with nothing wrong looks
+    indistinguishable from an abandoned one. This repo's CI finishes in
+    under 2 minutes (see recent runs on the Actions tab if you want to
+    confirm) — schedule your own check-in around **3-5 minutes** out
+    (`send_later` if available, or just poll `pull_request_read
+    get_check_runs` directly since you're already active) rather than the
+    hour-scale interval the general PR-babysitting instructions mention;
+    that interval is sized for slow human-reviewed PRs, not this repo's
+    fast CI. Only fall back to a longer interval if that first check finds
+    CI still running.
 14. **Merge, conditionally.** Once CI is green and every review thread on
     the PR is resolved (including any that arrived after you opened it —
     see the next section):

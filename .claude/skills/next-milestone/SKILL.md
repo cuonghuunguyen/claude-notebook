@@ -1,6 +1,6 @@
 ---
 name: next-milestone
-description: Pick up and ship the next unchecked milestone from ROADMAP.md for the Codebase Cognitive Memory project (cuonghuunguyen/claude-notebook) — implements it, tests it for real against Postgres, self-reviews and sanity-checks it, opens a PR, subscribes to that PR's activity, and merges it once green. On a clean merge it spawns a fresh session to pick up the next milestone immediately (keeping each session's context — and cost — flat instead of accumulating across the whole project) rather than looping in place or waiting for the next scheduled trigger; it stops without spawning a successor if it flagged a spec deviation (a human needs to look) or the roadmap is exhausted. Use whenever asked to continue building this project, or when this repo's milestone-runner Routine fires.
+description: Pick up and ship the next unchecked milestone from ROADMAP.md for the Codebase Cognitive Memory project (cuonghuunguyen/claude-notebook) — implements it, tests it for real against Postgres, self-reviews and sanity-checks it, opens a PR, subscribes to that PR's activity, and merges it once green. On a clean merge it spawns a fresh session to pick up the next milestone immediately (keeping each session's context — and cost — flat instead of accumulating across the whole project) rather than looping in place or waiting for the next scheduled trigger. It stops without spawning a successor if it flagged a spec deviation (a human needs to look). Once ROADMAP.md is fully checked (no milestone work left, whether found at the start or reached by this run's own merge), it hands off directly to `.claude/skills/propose-milestone/SKILL.md` in the same session instead of just stopping. Use whenever asked to continue building this project, or when this repo's milestone-runner Routine fires.
 ---
 
 # next-milestone
@@ -43,8 +43,14 @@ firing into a fresh session), this file is your task description.
    Read `ROADMAP.md` and `CLAUDE.md` only after this step, whichever branch
    you took to get a real checkout.
 2. **Find the work.** Open `ROADMAP.md`, take the first `- [ ]` milestone in
-   the status checklist. If every box is checked, stop and say so — there
-   is nothing to do.
+   the status checklist. If every box is checked, this skill has nothing
+   left to build — invoke `.claude/skills/propose-milestone/SKILL.md` (via
+   `/propose-milestone`) in this same session rather than just stopping: a
+   fully shipped roadmap doesn't mean there's nothing worth doing, just
+   nothing *planned*. That skill researches whether there's a genuinely new
+   capability worth adding (falling through to `/self-improve` itself if
+   not). Let it run to completion and report its outcome; don't loop back
+   into this skill afterward.
 3. **Concurrency guard.** List open pull requests against
    `claude/codebase-cognitive-memory-spec-t7nnx0` (`mcp__github__list_pull_requests`
    or `search_pull_requests`). If one already has a head branch named
@@ -144,8 +150,10 @@ firing into a fresh session), this file is your task description.
       spawns the one after that, and so on. This is what gets the next
       milestone started immediately without waiting for the next
       scheduled trigger, without accumulating context across milestones.
-    - If `ROADMAP.md` now shows every box checked: stop, don't spawn
-      anything, report the project complete.
+    - If `ROADMAP.md` now shows every box checked: don't spawn a new
+      session — instead invoke `.claude/skills/propose-milestone/SKILL.md`
+      directly in this same session, same as step 2's hand-off, and report
+      its outcome as your final report.
     - If step 14 left a PR open on a flagged deviation: STOP now, full
       stop, and do NOT spawn a next session. Building on top of your own
       unreviewed judgment call is exactly the risk step 14 exists to

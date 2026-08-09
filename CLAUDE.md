@@ -33,6 +33,20 @@ the source of truth, not this file's memory of past sessions).
   that *did* flag a deviation stays open for a human; that's the one case
   where an automated judgment call should be seen before the next milestone
   builds on top of it. See `.claude/skills/next-milestone/SKILL.md` step 14.
+  The same conditional-merge rule applies to self-improve cycles (below) —
+  see `.claude/skills/self-improve/SKILL.md` step 14.
+- Never write a `BENCHMARKS.md` row for a self-improve cycle without a real
+  before/after re-measurement. A candidate that doesn't actually move the
+  number isn't an improvement — go find another one or report nothing
+  found, don't fabricate the row.
+- A `/propose-milestone` proposal (new scope, not in `spec.md` today) may
+  self-merge ONLY when its PR's "Evidence" section fills in all four points
+  of `.claude/skills/propose-milestone/SKILL.md` step 5 with specifics a
+  human could check — a concretely cited gap, a real demonstration of it,
+  an explicit consistency check against decided `spec.md` semantics, and
+  concrete acceptance criteria. Confidence that an idea is good is not
+  evidence; if any point is filler rather than specific, the PR stays open
+  for a human, same as a flagged deviation.
 
 ## Picking up work
 
@@ -46,6 +60,29 @@ a loop in the same conversation, so context (and cost) per milestone stays
 flat instead of compounding across the whole project. It stops without
 spawning a successor when the roadmap is exhausted or a deviation needs a
 human.
+
+Once `ROADMAP.md` is fully checked, `/next-milestone` step 2 hands off to a
+two-tier chain instead of just stopping:
+
+1. **`/propose-milestone`** researches whether there's a genuinely new
+   capability worth adding — not already decided in `spec.md` — and if it
+   finds one backed by real evidence (see the non-negotiable above), adds a
+   new `spec.md` section and `ROADMAP.md` milestone, merges under the
+   evidence-bar rule, and spawns a fresh `/next-milestone` session to build
+   it. A plausible-but-unproven idea stays open for a human instead of
+   merging. See `.claude/skills/propose-milestone/SKILL.md`.
+2. **`/self-improve`** — the fallback when `/propose-milestone` finds no new
+   candidate this cycle. Surveys the shipped system for one measurable
+   improvement (performance, correctness/robustness, or code quality — no
+   fixed lane, whichever has real headroom this cycle), proves it with a
+   before/after in `BENCHMARKS.md`, and merges under the same conditional
+   rule. See `.claude/skills/self-improve/SKILL.md`.
+
+Neither tier spawns a successor session after finishing on its own account
+(`/propose-milestone` only spawns one indirectly, by handing a newly-merged
+milestone to a fresh `/next-milestone`) — one cycle per Routine fire, so
+`ROADMAP.md` growing via `/propose-milestone` is a deliberate, evidenced
+event, not a side effect of a runaway loop.
 
 ## Repo/branch
 

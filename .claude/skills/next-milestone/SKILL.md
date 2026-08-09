@@ -1,6 +1,6 @@
 ---
 name: next-milestone
-description: Pick up and ship the next unchecked milestone from ROADMAP.md for the Codebase Cognitive Memory project (cuonghuunguyen/claude-notebook) — implements it, runs its tests for real against Postgres, opens a PR, and subscribes to that PR's activity so CI failures and review comments come back automatically. Use whenever asked to continue building this project, or when this repo's milestone-runner Routine fires.
+description: Pick up and ship the next unchecked milestone from ROADMAP.md for the Codebase Cognitive Memory project (cuonghuunguyen/claude-notebook) — implements it, tests it for real against Postgres, self-reviews and sanity-checks it, opens a PR, subscribes to that PR's activity, and merges it once green (chaining straight into the next milestone rather than stopping, unless it flagged a spec deviation, in which case it stops and waits for a human). Use whenever asked to continue building this project, or when this repo's milestone-runner Routine fires.
 ---
 
 # next-milestone
@@ -88,10 +88,23 @@ firing into a fresh session), this file is your task description.
       that's exactly the case a human should see before it becomes
       load-bearing for the next milestone. Say so plainly in your final
       report.
-    Either way: don't start milestone N+1 in this run, whether you merged
-    or left it open for a human.
-15. **Stop.** Report which milestone shipped (merged or awaiting a human
-    on a flagged deviation) and what's next.
+15. **Continue or stop.**
+    - If you just merged cleanly in step 14: go back to **step 1** for the
+      next milestone, in this same run — don't wait for the next scheduled
+      trigger. This is safe specifically because merging already required
+      "no flagged deviation" (step 14); chaining onto a clean, merged
+      milestone isn't chaining onto an open judgment call. If ROADMAP.md
+      now shows every box checked, stop and report the project is
+      complete instead of looping.
+    - If step 14 left a PR open on a flagged deviation: STOP now, in this
+      run, full stop. Do not start another milestone while one is sitting
+      unmerged on a human decision — building on top of your own
+      unreviewed judgment call is exactly the risk step 14 exists to avoid.
+      Report clearly that a human decision is needed before anything else
+      continues.
+    Either way, report what happened this run: every milestone shipped
+    (merged) if you looped through more than one, or the one left open and
+    why.
 
 ## If a subscribed PR gets a CI failure or review comment later
 

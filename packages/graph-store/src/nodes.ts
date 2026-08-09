@@ -92,6 +92,16 @@ export async function markNodeDeleted(id: string): Promise<void> {
   );
 }
 
+/** Used by incremental structural extraction (M1) to find what a changed file previously produced. */
+export async function getNodesByPath(path: string): Promise<Node[]> {
+  const pool = getPool();
+  const { rows } = await pool.query<NodeRow>(
+    `SELECT ${NODE_COLUMNS} FROM nodes WHERE path = $1 AND status != 'deleted'`,
+    [path]
+  );
+  return rows.map(rowToNode);
+}
+
 export async function listNodesByType(type: NodeType): Promise<Node[]> {
   const pool = getPool();
   const { rows } = await pool.query<NodeRow>(

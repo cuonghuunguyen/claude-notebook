@@ -6,6 +6,20 @@ criteria pass in CI, not just locally. Milestones are built in order; later
 ones depend on earlier package contracts, not on earlier milestones being
 feature-complete.
 
+## Status
+
+This checklist is the source of truth for what's done — see
+`AGENT_HARNESS.md` if you're a session picking this up cold.
+
+- [x] M0 — Scaffolding (pnpm monorepo, Postgres+pgvector+pg_trgm schema, graph-store)
+- [x] M1 — Structural Graph (ts-morph extractor, node identity, incremental updates)
+- [ ] M2 — Hybrid Retrieval
+- [ ] M3 — Semantic Memory Pipeline
+- [ ] M4 — Episodic Memory
+- [ ] M5 — Reasoning-Guided Traversal
+- [ ] M6 — Context Construction
+- [ ] M7 — Staleness, Events, GC, Full Eval Set
+
 Repo layout target:
 
 ```

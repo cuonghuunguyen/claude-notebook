@@ -41,7 +41,7 @@ export async function extractChangedFiles(
   const deletedNodes: string[] = [];
   let staleEdges = 0;
   for (const path of changedFilePaths) {
-    const previous = await getNodesByPath(path);
+    const previous = await getNodesByPath(repoId, path);
     for (const old of previous) {
       if (!newIds.has(old.id)) {
         await markNodeDeleted(old.id);
@@ -60,7 +60,10 @@ export async function extractChangedFiles(
     );
   });
 
-  await persistExtraction({ nodes: nodesInChangedFiles, edges: edgesTouchingChangedFiles });
+  await persistExtraction(
+    { nodes: nodesInChangedFiles, edges: edgesTouchingChangedFiles },
+    repoId
+  );
 
   return {
     upsertedNodes: nodesInChangedFiles.length,

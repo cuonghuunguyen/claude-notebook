@@ -36,14 +36,20 @@ const NODE_COLUMNS = `id, type, name, path, summary, metadata, provenance, statu
  * spec.md §3.2, a resolved rename updates the existing row rather than
  * creating a new one. embedding is intentionally omitted here; retrieval
  * (M2) writes it separately once an embedding provider is wired up.
+ *
+ * `repoId` is not part of the spec.md §3.1 Node type — it's already baked
+ * into `node.id`'s hash — but is stored alongside it so path-scoped lookups
+ * (getNodesByPath) don't collide across repos that happen to share a
+ * relative file path.
  */
-export async function upsertNode(node: Node): Promise<Node> {
+export async function upsertNode(node: Node, repoId: string): Promise<Node> {
   const pool = getPool();
   const { rows } = await pool.query<NodeRow>(
     `
-    INSERT INTO nodes (id, type, name, path, summary, metadata, provenance, status)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    INSERT INTO nodes (id, repo_id, type, name, path, summary, metadata, provenance, status)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     ON CONFLICT (id) DO UPDATE SET
+      repo_id = EXCLUDED.repo_id,
       type = EXCLUDED.type,
       name = EXCLUDED.name,
       path = EXCLUDED.path,
@@ -56,6 +62,7 @@ export async function upsertNode(node: Node): Promise<Node> {
     `,
     [
       node.id,
+      repoId,
       node.type,
       node.name ?? null,
       node.path ?? null,
@@ -93,11 +100,11 @@ export async function markNodeDeleted(id: string): Promise<void> {
 }
 
 /** Used by incremental structural extraction (M1) to find what a changed file previously produced. */
-export async function getNodesByPath(path: string): Promise<Node[]> {
+export async function getNodesByPath(repoId: string, path: string): Promise<Node[]> {
   const pool = getPool();
   const { rows } = await pool.query<NodeRow>(
-    `SELECT ${NODE_COLUMNS} FROM nodes WHERE path = $1 AND status != 'deleted'`,
-    [path]
+    `SELECT ${NODE_COLUMNS} FROM nodes WHERE repo_id = $1 AND path = $2 AND status != 'deleted'`,
+    [repoId, path]
   );
   return rows.map(rowToNode);
 }

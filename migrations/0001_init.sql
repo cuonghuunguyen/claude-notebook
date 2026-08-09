@@ -17,6 +17,12 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 CREATE TABLE nodes (
   id            text PRIMARY KEY, -- hash(repoId, stableSymbolPath) — spec.md §3.2, never reused
+  -- Not part of the spec.md §3.1 Node type (repoId is baked into id's hash,
+  -- not surfaced as its own field) — but path is only unique WITHIN a repo,
+  -- so path-based lookups (incremental extraction diffing a changed file's
+  -- previous symbols) need explicit repo scoping or they collide across
+  -- repos. Internal-only column; rowToNode in graph-store never returns it.
+  repo_id       text NOT NULL,
   type          text NOT NULL,
   name          text,
   path          text,
@@ -36,6 +42,7 @@ CREATE TABLE nodes (
 
 CREATE INDEX nodes_type_idx ON nodes (type);
 CREATE INDEX nodes_status_idx ON nodes (status);
+CREATE INDEX nodes_repo_path_idx ON nodes (repo_id, path);
 -- Lexical leg of hybrid retrieval (spec.md §9) — trigram, not tsvector,
 -- because it degrades gracefully on partial/typo'd code identifiers.
 CREATE INDEX nodes_name_trgm_idx ON nodes USING gin (name gin_trgm_ops);

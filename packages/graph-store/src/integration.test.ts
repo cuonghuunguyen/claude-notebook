@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { nodeId } from "@cognitive-memory/core";
 import { closePool, getPool } from "./db.js";
 import { runMigrations } from "./migrate.js";
-import { getNodeById, markNodeDeleted, upsertNode } from "./nodes.js";
+import { getNodeById, getNodesByPath, markNodeDeleted, upsertNode } from "./nodes.js";
 import { getEdgesTouchingNode, markEdgesStaleForNode, upsertEdgeByTriple } from "./edges.js";
 import { queryExperiencesByNode, recordExperience } from "./experiences.js";
 import { appendEvent, listEventsSince } from "./events.js";
@@ -33,40 +33,46 @@ d("graph-store integration", () => {
     const id = nodeId(repoId, "src/foo.ts#FooService");
     const now = new Date().toISOString();
 
-    await upsertNode({
-      id,
-      type: "class",
-      name: "FooService",
-      path: "src/foo.ts",
-      metadata: {},
-      provenance: [
-        {
-          sourceType: "source_code",
-          sourceId: "src/foo.ts",
-          confidence: 1,
-          observedAt: now,
-        },
-      ],
-      status: "active",
-      createdAt: now,
-      updatedAt: now,
-    });
+    await upsertNode(
+      {
+        id,
+        type: "class",
+        name: "FooService",
+        path: "src/foo.ts",
+        metadata: {},
+        provenance: [
+          {
+            sourceType: "source_code",
+            sourceId: "src/foo.ts",
+            confidence: 1,
+            observedAt: now,
+          },
+        ],
+        status: "active",
+        createdAt: now,
+        updatedAt: now,
+      },
+      repoId
+    );
 
     const fetched = await getNodeById(id);
     expect(fetched?.name).toBe("FooService");
 
     // Simulate a resolved rename: same id (spec.md §3.2), new path/name.
-    await upsertNode({
-      id,
-      type: "class",
-      name: "FooServiceRenamed",
-      path: "src/foo-renamed.ts",
-      metadata: {},
-      provenance: fetched!.provenance,
-      status: "active",
-      createdAt: now,
-      updatedAt: now,
-    });
+    await upsertNode(
+      {
+        id,
+        type: "class",
+        name: "FooServiceRenamed",
+        path: "src/foo-renamed.ts",
+        metadata: {},
+        provenance: fetched!.provenance,
+        status: "active",
+        createdAt: now,
+        updatedAt: now,
+      },
+      repoId
+    );
 
     const renamed = await getNodeById(id);
     expect(renamed?.id).toBe(id); // identity preserved
@@ -83,16 +89,19 @@ d("graph-store integration", () => {
       [fromId, "FooService"],
       [toId, "BarService"],
     ] as const) {
-      await upsertNode({
-        id,
-        type: "class",
-        name,
-        metadata: {},
-        provenance: [],
-        status: "active",
-        createdAt: now,
-        updatedAt: now,
-      });
+      await upsertNode(
+        {
+          id,
+          type: "class",
+          name,
+          metadata: {},
+          provenance: [],
+          status: "active",
+          createdAt: now,
+          updatedAt: now,
+        },
+        repoId
+      );
     }
 
     await upsertEdgeByTriple({
@@ -126,15 +135,18 @@ d("graph-store integration", () => {
     const now = new Date().toISOString();
 
     for (const id of [fromId, toId]) {
-      await upsertNode({
-        id,
-        type: "class",
-        metadata: {},
-        provenance: [],
-        status: "active",
-        createdAt: now,
-        updatedAt: now,
-      });
+      await upsertNode(
+        {
+          id,
+          type: "class",
+          metadata: {},
+          provenance: [],
+          status: "active",
+          createdAt: now,
+          updatedAt: now,
+        },
+        repoId
+      );
     }
 
     const edgeId = randomUUID();
@@ -173,6 +185,50 @@ d("graph-store integration", () => {
     expect(edges).toHaveLength(1);
     expect(edges[0]?.provenance).toHaveLength(2);
     expect(edges[0]?.confidence).toBeCloseTo(0.75);
+  });
+
+  it("getNodesByPath is scoped by repoId — two repos sharing a relative path don't collide", async () => {
+    const repoA = `test-repo-${randomUUID()}`;
+    const repoB = `test-repo-${randomUUID()}`;
+    const now = new Date().toISOString();
+    const sharedPath = "src/foo.ts";
+
+    await upsertNode(
+      {
+        id: nodeId(repoA, `${sharedPath}#A`),
+        type: "class",
+        name: "A",
+        path: sharedPath,
+        metadata: {},
+        provenance: [],
+        status: "active",
+        createdAt: now,
+        updatedAt: now,
+      },
+      repoA
+    );
+    await upsertNode(
+      {
+        id: nodeId(repoB, `${sharedPath}#B`),
+        type: "class",
+        name: "B",
+        path: sharedPath,
+        metadata: {},
+        provenance: [],
+        status: "active",
+        createdAt: now,
+        updatedAt: now,
+      },
+      repoB
+    );
+
+    const inRepoA = await getNodesByPath(repoA, sharedPath);
+    expect(inRepoA).toHaveLength(1);
+    expect(inRepoA[0]?.name).toBe("A");
+
+    const inRepoB = await getNodesByPath(repoB, sharedPath);
+    expect(inRepoB).toHaveLength(1);
+    expect(inRepoB[0]?.name).toBe("B");
   });
 
   it("records an append-only experience and queries it back by related node", async () => {

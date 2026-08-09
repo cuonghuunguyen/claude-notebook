@@ -10,9 +10,16 @@ import {
   searchNodesByTrigram,
   upsertNode,
 } from "./nodes.js";
-import { getEdgesTouchingNode, markEdgesStaleForNode, upsertEdgeByTriple } from "./edges.js";
+import {
+  getEdgeByTriple,
+  getEdgesTouchingNode,
+  markEdgeInvalid,
+  markEdgesStaleForNode,
+  upsertEdgeByTriple,
+} from "./edges.js";
 import { queryExperiencesByNode, recordExperience } from "./experiences.js";
 import { appendEvent, listEventsSince } from "./events.js";
+import { replayEvents, wipeMaterializedGraph } from "./materializer.js";
 
 // Integration tests only run against a real Postgres — set DATABASE_URL to
 // enable them locally / in CI. They're skipped (not failed) otherwise, per
@@ -304,8 +311,21 @@ d("graph-store integration", () => {
   });
 
   it("appends events and lists them since a given id", async () => {
-    const before = await appendEvent({ eventType: "CodeChanged", payload: { file: "a.ts" } });
-    await appendEvent({ eventType: "SymbolAdded", payload: { id: "x" } });
+    const repoId = `event-test-${randomUUID()}`;
+    const id = nodeId(repoId, "src/a.ts#A");
+    const now = new Date().toISOString();
+    const node = {
+      id,
+      type: "function" as const,
+      metadata: {},
+      provenance: [],
+      status: "active" as const,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const before = await appendEvent({ eventType: "CodeChanged", payload: { node, repoId } });
+    await appendEvent({ eventType: "SymbolAdded", payload: { node, repoId } });
 
     const since = await listEventsSince(before.id!);
     expect(since.length).toBeGreaterThanOrEqual(1);
@@ -316,5 +336,140 @@ d("graph-store integration", () => {
     const pool = getPool();
     const { rows } = await pool.query("SELECT 1 as one");
     expect(rows[0]?.one).toBe(1);
+  });
+
+  // Last in the file deliberately: wipeMaterializedGraph/rebuildFromEvents
+  // TRUNCATEs nodes/edges/experiences for the whole database, not just this
+  // test's own rows. Every `it` above already ran and asserted before this
+  // one starts (vitest runs one file's `it`s in declaration order), so
+  // wiping here doesn't retroactively break them. Safe with respect to
+  // OTHER packages' test suites too: pnpm's topological script ordering
+  // (verified empirically — see this PR's description) means no package
+  // that depends on graph-store starts its own test script until this
+  // entire file has finished, so nothing else is touching the shared
+  // Postgres instance while this runs.
+  it("rebuild-from-events: wiping the materialized graph and replaying the event log reproduces the same state (spec.md §14)", async () => {
+    // Scoped to this test's OWN events (from this point forward), not
+    // `rebuildFromEvents()`'s full `listEventsSince(0)` — the events table
+    // is shared across every suite that has ever run against this
+    // database, and this test only controls the well-formedness of its own
+    // contribution to it, not every fixture any other package's tests have
+    // ever written. `wipeMaterializedGraph` + a scoped `replayEvents` still
+    // exercises the exact same wipe-then-replay mechanism
+    // `rebuildFromEvents` uses internally.
+    const replayFromId = (await listEventsSince(0)).at(-1)?.id ?? 0;
+
+    const repoId = `rebuild-test-${randomUUID()}`;
+    const now = new Date().toISOString();
+    const fromId = nodeId(repoId, "src/a.ts#A");
+    const toId = nodeId(repoId, "src/b.ts#B");
+
+    const nodeA = {
+      id: fromId,
+      type: "function" as const,
+      name: "a",
+      path: "src/a.ts",
+      metadata: { language: "typescript" },
+      provenance: [{ sourceType: "source_code" as const, sourceId: "src/a.ts", confidence: 1, observedAt: now }],
+      status: "active" as const,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const nodeB = {
+      id: toId,
+      type: "function" as const,
+      name: "b",
+      path: "src/b.ts",
+      metadata: { language: "typescript" },
+      provenance: [{ sourceType: "source_code" as const, sourceId: "src/b.ts", confidence: 1, observedAt: now }],
+      status: "active" as const,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    // SymbolAdded x2, then RelationAdded — mirrors packages/structural's
+    // persist.ts ordering (nodes before edges).
+    await upsertNode(nodeA, repoId);
+    await appendEvent({ eventType: "SymbolAdded", payload: { node: nodeA, repoId } });
+    await upsertNode(nodeB, repoId);
+    await appendEvent({ eventType: "SymbolAdded", payload: { node: nodeB, repoId } });
+
+    const edge = await upsertEdgeByTriple({
+      id: randomUUID(),
+      from: fromId,
+      to: toId,
+      relation: "calls",
+      confidence: 1,
+      weight: 0.5,
+      provenance: [{ sourceType: "source_code" as const, sourceId: "src/a.ts", confidence: 1, observedAt: now }],
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+    });
+    await appendEvent({ eventType: "RelationAdded", payload: { edge } });
+
+    // A content change to A (e.g. a rename) — CodeChanged, plus the
+    // dependent-edge staleness side effect it carries (spec.md §12).
+    const nodeARenamed = { ...nodeA, name: "aRenamed" };
+    await upsertNode(nodeARenamed, repoId);
+    await appendEvent({ eventType: "CodeChanged", payload: { node: nodeARenamed, repoId } });
+    await markEdgesStaleForNode(fromId);
+
+    // Lazy verification's invalidate outcome (spec.md §12) on that now-stale edge.
+    await markEdgeInvalid(edge.id);
+    await appendEvent({
+      eventType: "RelationInvalidated",
+      payload: { edgeId: edge.id, from: fromId, to: toId, relation: edge.relation },
+    });
+
+    // One episodic experience.
+    const experience = await recordExperience({
+      id: randomUUID(),
+      task: `rebuild-test-${randomUUID()}`,
+      observation: "A calls B and B's behavior changed",
+      relatedNodes: [fromId, toId],
+      confidence: 0.6,
+      timestamp: now,
+    });
+    await appendEvent({ eventType: "ExperienceRecorded", payload: { experience } });
+
+    // Omit fields the materializer can't reproduce byte-for-byte on
+    // replay: createdAt/updatedAt are server-generated via `now()` on
+    // every write (see nodes.ts/edges.ts — never taken from the caller's
+    // object), so a replayed write inevitably gets a fresh timestamp.
+    // What matters for "the graph is a genuine projection over events" is
+    // that every OTHER field — identity, content, status — matches.
+    function normalizeNode(n: Awaited<ReturnType<typeof getNodeById>>) {
+      return n && { ...n, createdAt: undefined, updatedAt: undefined };
+    }
+    function normalizeEdge(e: Awaited<ReturnType<typeof getEdgeByTriple>>) {
+      return e && { ...e, createdAt: undefined, updatedAt: undefined, lastVerifiedAt: undefined };
+    }
+
+    const preNodeA = normalizeNode(await getNodeById(fromId));
+    const preNodeB = normalizeNode(await getNodeById(toId));
+    const preEdge = normalizeEdge(await getEdgeByTriple(fromId, toId, "calls"));
+    const preExperiences = (await queryExperiencesByNode(fromId, { includeCold: true })).map((e) => ({
+      ...e,
+      timestamp: undefined,
+    }));
+
+    await wipeMaterializedGraph();
+    await replayEvents(await listEventsSince(replayFromId));
+
+    const postNodeA = normalizeNode(await getNodeById(fromId));
+    const postNodeB = normalizeNode(await getNodeById(toId));
+    const postEdge = normalizeEdge(await getEdgeByTriple(fromId, toId, "calls"));
+    const postExperiences = (await queryExperiencesByNode(fromId, { includeCold: true })).map((e) => ({
+      ...e,
+      timestamp: undefined,
+    }));
+
+    expect(postNodeA).toEqual(preNodeA);
+    expect(postNodeA?.name).toBe("aRenamed"); // the CodeChanged replay actually applied, not just the original SymbolAdded
+    expect(postNodeB).toEqual(preNodeB);
+    expect(postEdge).toEqual(preEdge);
+    expect(postEdge?.status).toBe("invalid"); // the RelationInvalidated replay actually applied
+    expect(postExperiences).toEqual(preExperiences);
   });
 });

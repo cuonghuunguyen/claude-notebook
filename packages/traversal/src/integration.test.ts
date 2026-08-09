@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Edge, Node } from "@cognitive-memory/core";
-import { closePool, runMigrations, upsertEdgeByTriple, upsertNode } from "@cognitive-memory/graph-store";
+import {
+  closePool,
+  getEdgeByTriple,
+  markNodeDeleted,
+  runMigrations,
+  upsertEdgeByTriple,
+  upsertNode,
+} from "@cognitive-memory/graph-store";
 import { createPostgresGraphProvider } from "./frontier.js";
 import { expandAllReasoner } from "./scriptedReasoner.js";
 import { traverse } from "./traverse.js";
@@ -108,5 +115,43 @@ d("traversal integration", () => {
     // Only the a->b edge should ever be offered — b->a's neighbor (a) is
     // already visited by the time b's frontier is fetched.
     expect(result.edges).toHaveLength(1);
+  });
+
+  it("lazily verifies stale edges (spec.md §12): a still-live one rejoins as active, a dead one drops from the frontier", async () => {
+    const repoId = `traversal-test-${randomUUID()}`;
+    const seedId = `${repoId}-seed`;
+    const liveNeighborId = `${repoId}-live-neighbor`;
+    const deadNeighborId = `${repoId}-dead-neighbor`;
+
+    await upsertNode(makeNode(seedId, { name: "Seed" }), repoId);
+    await upsertNode(makeNode(liveNeighborId, { name: "LiveNeighbor" }), repoId);
+    await upsertNode(makeNode(deadNeighborId, { name: "DeadNeighbor" }), repoId);
+    await markNodeDeleted(deadNeighborId);
+
+    const liveEdge = await upsertEdgeByTriple(
+      makeEdge(seedId, liveNeighborId, { relation: "depends_on", weight: 0.9, status: "stale" })
+    );
+    await upsertEdgeByTriple(
+      makeEdge(seedId, deadNeighborId, { relation: "depends_on", weight: 0.9, status: "stale" })
+    );
+
+    const result = await traverse([seedId], "task", {
+      graph: createPostgresGraphProvider(),
+      reasoner: expandAllReasoner(),
+      budget: { maxDepth: 2, maxNodes: 10, maxEdges: 10, maxReasoningSteps: 2, maxTokens: 8000 },
+    });
+
+    // Only the live neighbor's edge survives verification and gets offered
+    // to the reasoner; the dead one is dropped before ranking ever sees it.
+    expect(result.nodeIds).toContain(liveNeighborId);
+    expect(result.nodeIds).not.toContain(deadNeighborId);
+
+    const refreshed = await getEdgeByTriple(seedId, liveNeighborId, "depends_on");
+    expect(refreshed?.status).toBe("active");
+    expect(refreshed?.lastVerifiedAt).toBeTruthy();
+
+    const invalidated = await getEdgeByTriple(seedId, deadNeighborId, "depends_on");
+    expect(invalidated?.status).toBe("invalid");
+    expect(liveEdge.status).toBe("stale"); // sanity: the fixture really started stale
   });
 });

@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { Edge, Provenance, RelationType } from "@cognitive-memory/core";
-import { getEdgeByTriple, getPool, upsertEdgeByTriple } from "@cognitive-memory/graph-store";
+import {
+  appendEvent,
+  getEdgeByTriple,
+  getPool,
+  upsertEdgeByTriple,
+} from "@cognitive-memory/graph-store";
 import { computePromotion, type PromotionResult } from "./promotion.js";
 
 export interface RecordObservationOptions {
@@ -70,7 +75,28 @@ export async function recordObservation(
       taskReferenceCount: options.taskReferenceCount,
     });
 
+    // Was this triple already durable BEFORE this observation was merged in
+    // — via a prior explicit verification (existing.lastVerifiedAt, only
+    // ever set below when a write actually reached "durable" through the
+    // verified path) or via the taskReferenceCount path recomputed against
+    // the pre-merge provenance? Needed for two things below: (1) only a
+    // write that verifies AND actually lands on "durable" should update
+    // lastVerifiedAt — setting it on e.g. a lone `verified: true`
+    // observation that's nowhere near durable would make it a false
+    // "promoted" signal for anything reading it as a proxy (packages/gc's
+    // cold-storage marking); (2) ExperiencePromoted should fire on the
+    // transition INTO durable, not on every subsequent write to an
+    // already-durable triple.
+    const wasAlreadyDurable =
+      existing !== undefined &&
+      (existing.lastVerifiedAt != null ||
+        computePromotion({
+          provenance: existing.provenance,
+          taskReferenceCount: options.taskReferenceCount,
+        }).stage === "durable");
+
     const now = new Date().toISOString();
+    const reachedDurable = promotion.stage === "durable";
     const edge: Edge = {
       id: existing?.id ?? randomUUID(),
       from,
@@ -82,10 +108,28 @@ export async function recordObservation(
       status: promotion.status,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
-      lastVerifiedAt: options.verified ? now : existing?.lastVerifiedAt,
+      lastVerifiedAt: options.verified && reachedDurable ? now : existing?.lastVerifiedAt,
     };
 
     const saved = await upsertEdgeByTriple(edge, client);
+    // spec.md §14: every semantic edge write is a RelationAdded event.
+    // Appended on `client` (not the shared pool) so it commits/rolls back
+    // atomically with the edge write above, inside the same advisory-lock-
+    // guarded transaction.
+    await appendEvent({ eventType: "RelationAdded", payload: { edge: saved } }, client);
+    if (reachedDurable && !wasAlreadyDurable) {
+      // spec.md §7/§14: this write is what carried the fact into "durable"
+      // knowledge — distinct from RelationAdded (which fires on every write
+      // to this triple, promoted or not). Only fires on the transition, not
+      // on every later write to a triple that was already durable.
+      await appendEvent(
+        {
+          eventType: "ExperiencePromoted",
+          payload: { edgeId: saved.id, from, to, relation, stage: promotion.stage },
+        },
+        client
+      );
+    }
     await client.query("COMMIT");
     return { edge: saved, promotion };
   } catch (err) {

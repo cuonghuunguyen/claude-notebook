@@ -164,6 +164,13 @@ export interface FrontierEdge {
  * it reaches the reasoner. Ordered by `weight DESC` here only so a query
  * that hits the safety cap keeps the highest-weight rows rather than an
  * arbitrary prefix.
+ *
+ * Includes `stale` edges alongside `active` ones — spec.md §12's lazy
+ * verification model ("stale edge retrieved -> verify") only has something
+ * to retrieve if stale edges aren't already filtered out before reaching the
+ * caller. `createPostgresGraphProvider` (traversal, frontier.ts) is what
+ * actually verifies them; this query just stops silently discarding them.
+ * `invalid` edges are still excluded — nothing left to verify there.
  */
 export async function getFrontierEdges(
   nodeIds: string[],
@@ -179,7 +186,7 @@ export async function getFrontierEdges(
              created_at, updated_at, last_verified_at,
              CASE WHEN from_id = ANY($1) THEN to_id ELSE from_id END AS neighbor_id
       FROM edges
-      WHERE (from_id = ANY($1) OR to_id = ANY($1)) AND status = 'active'
+      WHERE (from_id = ANY($1) OR to_id = ANY($1)) AND status IN ('active', 'stale')
     )
     SELECT ${EDGE_COLUMNS}, neighbor_id
     FROM frontier
@@ -197,12 +204,43 @@ export async function getFrontierEdges(
  * it that aren't plain structural facts need re-verification before being
  * trusted again.
  */
-export async function markEdgesStaleForNode(nodeId: string): Promise<number> {
-  const pool = getPool();
-  const { rowCount } = await pool.query(
+export async function markEdgesStaleForNode(nodeId: string, db: Queryable = getPool()): Promise<number> {
+  const { rowCount } = await db.query(
     `UPDATE edges SET status = 'stale', updated_at = now()
      WHERE (from_id = $1 OR to_id = $1) AND status = 'active'`,
     [nodeId]
+  );
+  return rowCount ?? 0;
+}
+
+/**
+ * spec.md §12 lazy verification's "invalid" outcome: a stale edge that no
+ * longer checks out against current code. Kept separate from
+ * `upsertEdgeByTriple` (which packages/staleness could also use to write
+ * this) because invalidation never touches provenance/confidence/weight —
+ * it's a pure status transition, so a targeted UPDATE avoids a callers
+ * having to re-read-then-write the whole edge just to flip one column.
+ */
+export async function markEdgeInvalid(id: string, db: Queryable = getPool()): Promise<Edge | undefined> {
+  const { rows } = await db.query<EdgeRow>(
+    `UPDATE edges SET status = 'invalid', updated_at = now() WHERE id = $1 RETURNING ${EDGE_COLUMNS}`,
+    [id]
+  );
+  const row = rows[0];
+  return row ? rowToEdge(row) : undefined;
+}
+
+/**
+ * spec.md §18 GC batch job: edges invalidated more than 30 days ago are
+ * hard-deleted — unlike deleted nodes, an invalidated edge has no
+ * retrievable value once past the window. `cutoff` — see
+ * `hardDeleteNodesDeletedBefore`'s note in nodes.ts.
+ */
+export async function hardDeleteInvalidEdgesBefore(cutoff: Date): Promise<number> {
+  const pool = getPool();
+  const { rowCount } = await pool.query(
+    `DELETE FROM edges WHERE status = 'invalid' AND updated_at < $1`,
+    [cutoff]
   );
   return rowCount ?? 0;
 }

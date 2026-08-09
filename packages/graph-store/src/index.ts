@@ -4,3 +4,4 @@ export * from "./nodes.js";
 export * from "./edges.js";
 export * from "./experiences.js";
 export * from "./events.js";
+export * from "./materializer.js";

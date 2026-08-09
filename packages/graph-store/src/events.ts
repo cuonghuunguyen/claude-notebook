@@ -1,4 +1,4 @@
-import { getPool } from "./db.js";
+import { getPool, type Queryable } from "./db.js";
 
 /** Event types the materializer replays — spec.md §14. */
 export type EventType =
@@ -31,9 +31,16 @@ function toEventId(id: string): number {
   return Number(id);
 }
 
-export async function appendEvent(event: MemoryEvent): Promise<MemoryEvent> {
-  const pool = getPool();
-  const { rows } = await pool.query<{
+/**
+ * `db` defaults to the shared pool but accepts a checked-out `PoolClient` —
+ * same pattern as edges.ts's `upsertEdgeByTriple` — so a caller appending an
+ * event as part of its own transaction (e.g. semantic's advisory-lock-
+ * guarded recordObservation) gets the event committed/rolled back atomically
+ * with the mutation it describes, instead of the event surviving a rollback
+ * of the write it was supposed to describe.
+ */
+export async function appendEvent(event: MemoryEvent, db: Queryable = getPool()): Promise<MemoryEvent> {
+  const { rows } = await db.query<{
     id: string;
     event_type: EventType;
     payload: unknown;
@@ -53,9 +60,8 @@ export async function appendEvent(event: MemoryEvent): Promise<MemoryEvent> {
   };
 }
 
-export async function listEventsSince(id: number): Promise<MemoryEvent[]> {
-  const pool = getPool();
-  const { rows } = await pool.query<{
+export async function listEventsSince(id: number, db: Queryable = getPool()): Promise<MemoryEvent[]> {
+  const { rows } = await db.query<{
     id: string;
     event_type: EventType;
     payload: unknown;

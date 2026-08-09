@@ -1,5 +1,5 @@
 import type { Node, NodeStatus, NodeType, Provenance } from "@cognitive-memory/core";
-import { getPool } from "./db.js";
+import { getPool, type Queryable } from "./db.js";
 
 interface NodeRow {
   id: string;
@@ -42,9 +42,8 @@ const NODE_COLUMNS = `id, type, name, path, summary, metadata, provenance, statu
  * (getNodesByPath) don't collide across repos that happen to share a
  * relative file path.
  */
-export async function upsertNode(node: Node, repoId: string): Promise<Node> {
-  const pool = getPool();
-  const { rows } = await pool.query<NodeRow>(
+export async function upsertNode(node: Node, repoId: string, db: Queryable = getPool()): Promise<Node> {
+  const { rows } = await db.query<NodeRow>(
     `
     INSERT INTO nodes (id, repo_id, type, name, path, summary, metadata, provenance, status)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -77,9 +76,8 @@ export async function upsertNode(node: Node, repoId: string): Promise<Node> {
   return rowToNode(row);
 }
 
-export async function getNodeById(id: string): Promise<Node | undefined> {
-  const pool = getPool();
-  const { rows } = await pool.query<NodeRow>(
+export async function getNodeById(id: string, db: Queryable = getPool()): Promise<Node | undefined> {
+  const { rows } = await db.query<NodeRow>(
     `SELECT ${NODE_COLUMNS} FROM nodes WHERE id = $1`,
     [id]
   );
@@ -95,11 +93,14 @@ export async function getNodeById(id: string): Promise<Node | undefined> {
  * are excluded: a frontier edge pointing at a node deleted since the edge
  * was last touched shouldn't be offered to the reasoner as a candidate.
  */
-export async function getNodesByIds(ids: string[]): Promise<Node[]> {
+export async function getNodesByIds(
+  ids: string[],
+  options: { includeDeleted?: boolean; db?: Queryable } = {}
+): Promise<Node[]> {
   if (ids.length === 0) return [];
-  const pool = getPool();
-  const { rows } = await pool.query<NodeRow>(
-    `SELECT ${NODE_COLUMNS} FROM nodes WHERE id = ANY($1) AND status != 'deleted'`,
+  const db = options.db ?? getPool();
+  const { rows } = await db.query<NodeRow>(
+    `SELECT ${NODE_COLUMNS} FROM nodes WHERE id = ANY($1) ${options.includeDeleted ? "" : "AND status != 'deleted'"}`,
     [ids]
   );
   return rows.map(rowToNode);
@@ -109,12 +110,27 @@ export async function getNodesByIds(ids: string[]): Promise<Node[]> {
  * Soft-delete: status -> "deleted". Row (and its edges) is retained for the
  * 90-day window from spec.md §18 GC policy; a batch job hard-deletes later.
  */
-export async function markNodeDeleted(id: string): Promise<void> {
-  const pool = getPool();
-  await pool.query(
+export async function markNodeDeleted(id: string, db: Queryable = getPool()): Promise<void> {
+  await db.query(
     `UPDATE nodes SET status = 'deleted', updated_at = now() WHERE id = $1`,
     [id]
   );
+}
+
+/**
+ * spec.md §18 GC batch job: nodes soft-deleted more than 90 days ago are
+ * hard-deleted. `edges` cascades via `ON DELETE CASCADE` (migrations/
+ * 0001_init.sql) — no separate edge cleanup needed here. `cutoff` is passed
+ * in rather than computed as `now() - interval '90 days'` so tests can
+ * exercise the boundary without waiting 90 real days.
+ */
+export async function hardDeleteNodesDeletedBefore(cutoff: Date): Promise<number> {
+  const pool = getPool();
+  const { rowCount } = await pool.query(
+    `DELETE FROM nodes WHERE status = 'deleted' AND updated_at < $1`,
+    [cutoff]
+  );
+  return rowCount ?? 0;
 }
 
 /** Used by incremental structural extraction (M1) to find what a changed file previously produced. */

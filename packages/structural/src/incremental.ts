@@ -1,6 +1,8 @@
 import type { Project } from "ts-morph";
 import {
+  appendEvent,
   getNodesByPath,
+  getPool,
   markEdgesStaleForNode,
   markNodeDeleted,
 } from "@cognitive-memory/graph-store";
@@ -40,12 +42,28 @@ export async function extractChangedFiles(
 
   const deletedNodes: string[] = [];
   let staleEdges = 0;
+  // One transaction per deleted node: markNodeDeleted, its SymbolRemoved
+  // event, and the dependent-edge staleness side effect must all land
+  // together or not at all — a partial write here would desync the
+  // materialized graph from the event log (spec.md §14), same reasoning as
+  // persist.ts's transaction.
   for (const path of changedFilePaths) {
     const previous = await getNodesByPath(repoId, path);
     for (const old of previous) {
       if (!newIds.has(old.id)) {
-        await markNodeDeleted(old.id);
-        staleEdges += await markEdgesStaleForNode(old.id);
+        const client = await getPool().connect();
+        try {
+          await client.query("BEGIN");
+          await markNodeDeleted(old.id, client);
+          await appendEvent({ eventType: "SymbolRemoved", payload: { id: old.id } }, client);
+          staleEdges += await markEdgesStaleForNode(old.id, client);
+          await client.query("COMMIT");
+        } catch (err) {
+          await client.query("ROLLBACK");
+          throw err;
+        } finally {
+          client.release();
+        }
         deletedNodes.push(old.id);
       }
     }

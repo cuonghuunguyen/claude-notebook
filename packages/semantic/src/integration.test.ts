@@ -1,7 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { nodeId } from "@cognitive-memory/core";
-import { closePool, getEdgeByTriple, runMigrations, upsertNode } from "@cognitive-memory/graph-store";
+import {
+  closePool,
+  getEdgeByTriple,
+  listEventsSince,
+  runMigrations,
+  upsertNode,
+} from "@cognitive-memory/graph-store";
 import { recordObservation } from "./edge.js";
 
 // Same DATABASE_URL-gating convention as every other integration suite in
@@ -135,5 +141,85 @@ d("packages/semantic integration", () => {
 
     const persisted = await getEdgeByTriple(fromId, toId, "related_to");
     expect(persisted?.provenance).toHaveLength(sourceTypes.length);
+  });
+
+  it("verified:true on a lone observation does not set lastVerifiedAt or emit ExperiencePromoted — it's nowhere near durable (spec.md §14)", async () => {
+    const repoId = `semantic-test-${randomUUID()}`;
+    const fromId = nodeId(repoId, "src/lone.ts#Lone");
+    const toId = nodeId(repoId, "concept:lone-target");
+    const now = new Date().toISOString();
+
+    for (const id of [fromId, toId]) {
+      await upsertNode(
+        { id, type: "concept", metadata: {}, provenance: [], status: "active", createdAt: now, updatedAt: now },
+        repoId
+      );
+    }
+
+    const eventsBefore = await listEventsSince(0);
+    const { edge, promotion } = await recordObservation(
+      fromId,
+      toId,
+      "owns",
+      { sourceType: "source_code", sourceId: "src/lone.ts", confidence: 0.9, observedAt: now },
+      { verified: true }
+    );
+
+    expect(promotion.stage).toBe("observation");
+    expect(edge.lastVerifiedAt).toBeUndefined();
+
+    const newEvents = await listEventsSince(eventsBefore[eventsBefore.length - 1]?.id ?? 0);
+    expect(newEvents.some((e) => e.eventType === "ExperiencePromoted")).toBe(false);
+  });
+
+  it("ExperiencePromoted fires once on the transition into durable, not again on later writes to an already-durable triple", async () => {
+    const repoId = `semantic-test-${randomUUID()}`;
+    const fromId = nodeId(repoId, "src/repeat.ts#Repeat");
+    const toId = nodeId(repoId, "concept:repeat-target");
+    const now = new Date().toISOString();
+
+    for (const id of [fromId, toId]) {
+      await upsertNode(
+        { id, type: "concept", metadata: {}, provenance: [], status: "active", createdAt: now, updatedAt: now },
+        repoId
+      );
+    }
+
+    await recordObservation(fromId, toId, "owns", {
+      sourceType: "source_code",
+      sourceId: "src/repeat.ts",
+      confidence: 0.9,
+      observedAt: now,
+    });
+    const eventsBeforeDurable = await listEventsSince(0);
+    const durableWrite = await recordObservation(
+      fromId,
+      toId,
+      "owns",
+      { sourceType: "test", sourceId: "repeat.test.ts", confidence: 0.9, observedAt: now },
+      { verified: true }
+    );
+    expect(durableWrite.promotion.stage).toBe("durable");
+    const eventsAfterDurable = await listEventsSince(eventsBeforeDurable[eventsBeforeDurable.length - 1]?.id ?? 0);
+    expect(eventsAfterDurable.filter((e) => e.eventType === "ExperiencePromoted")).toHaveLength(1);
+
+    // A later write to the SAME already-durable triple that ALSO verifies
+    // (computePromotion's durable gate is evaluated per-call from the
+    // options passed that call, per spec.md §7 — it isn't a persisted
+    // ratchet, so this second call must pass `verified: true` again to
+    // land on "durable" a second time and actually exercise the
+    // already-durable de-dup path).
+    const eventsBeforeSecond = await listEventsSince(0);
+    const secondWrite = await recordObservation(
+      fromId,
+      toId,
+      "owns",
+      { sourceType: "documentation", sourceId: "README", confidence: 0.9, observedAt: now },
+      { verified: true }
+    );
+    expect(secondWrite.promotion.stage).toBe("durable");
+    const eventsAfterSecond = await listEventsSince(eventsBeforeSecond[eventsBeforeSecond.length - 1]?.id ?? 0);
+    expect(eventsAfterSecond.some((e) => e.eventType === "ExperiencePromoted")).toBe(false);
+    expect(eventsAfterSecond.some((e) => e.eventType === "RelationAdded")).toBe(true);
   });
 });

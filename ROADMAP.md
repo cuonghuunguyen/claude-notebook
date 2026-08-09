@@ -18,7 +18,7 @@ This checklist is the source of truth for what's done — see
 - [x] M4 — Episodic Memory
 - [x] M5 — Reasoning-Guided Traversal
 - [x] M6 — Context Construction
-- [ ] M7 — Staleness, Events, GC, Full Eval Set
+- [x] M7 — Staleness, Events, GC, Full Eval Set
 
 Repo layout target:
 

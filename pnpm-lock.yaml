@@ -52,6 +52,62 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)
 
+  eval/staleness:
+    dependencies:
+      '@cognitive-memory/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@cognitive-memory/graph-store':
+        specifier: workspace:*
+        version: link:../../packages/graph-store
+      '@cognitive-memory/semantic':
+        specifier: workspace:*
+        version: link:../../packages/semantic
+      '@cognitive-memory/staleness':
+        specifier: workspace:*
+        version: link:../../packages/staleness
+      '@cognitive-memory/structural':
+        specifier: workspace:*
+        version: link:../../packages/structural
+      ts-morph:
+        specifier: ^24.0.0
+        version: 24.0.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
+  eval/traversal-cost:
+    dependencies:
+      '@cognitive-memory/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@cognitive-memory/graph-store':
+        specifier: workspace:*
+        version: link:../../packages/graph-store
+      '@cognitive-memory/structural':
+        specifier: workspace:*
+        version: link:../../packages/structural
+      '@cognitive-memory/traversal':
+        specifier: workspace:*
+        version: link:../../packages/traversal
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
   packages/context:
     dependencies:
       '@cognitive-memory/core':
@@ -98,6 +154,25 @@ importers:
       '@cognitive-memory/semantic':
         specifier: workspace:*
         version: link:../semantic
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
+  packages/gc:
+    dependencies:
+      '@cognitive-memory/core':
+        specifier: workspace:*
+        version: link:../core
+      '@cognitive-memory/graph-store':
+        specifier: workspace:*
+        version: link:../graph-store
+    devDependencies:
       '@types/node':
         specifier: ^22.10.2
         version: 22.20.1
@@ -168,6 +243,25 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)
 
+  packages/staleness:
+    dependencies:
+      '@cognitive-memory/core':
+        specifier: workspace:*
+        version: link:../core
+      '@cognitive-memory/graph-store':
+        specifier: workspace:*
+        version: link:../graph-store
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
   packages/structural:
     dependencies:
       '@cognitive-memory/core':
@@ -198,6 +292,9 @@ importers:
       '@cognitive-memory/graph-store':
         specifier: workspace:*
         version: link:../graph-store
+      '@cognitive-memory/staleness':
+        specifier: workspace:*
+        version: link:../staleness
     devDependencies:
       '@types/node':
         specifier: ^22.10.2

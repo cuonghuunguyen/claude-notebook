@@ -69,3 +69,12 @@ export async function queryExperiencesByNode(nodeId: string): Promise<Experience
   );
   return rows.map(rowToExperience);
 }
+
+export async function queryExperiencesByTask(task: string): Promise<Experience[]> {
+  const pool = getPool();
+  const { rows } = await pool.query<ExperienceRow>(
+    `SELECT ${EXPERIENCE_COLUMNS} FROM experiences WHERE task = $1 ORDER BY "timestamp" DESC`,
+    [task]
+  );
+  return rows.map(rowToExperience);
+}

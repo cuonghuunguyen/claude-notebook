@@ -21,3 +21,4 @@ Never edit or delete a past line.
 ---
 
 2026-08-10T04:23:23Z | propose-milestone | shipped | proposal M8: Multi-Language Structural Extraction — PR #9 (merged by human review, not self-merged — evidence bar was cleanly met but building it requires a new stack dependency, so it was left open per the skill's own non-negotiable; the human approved and merged it)
+2026-08-10T04:51:33Z | next-milestone | shipped | M8: Multi-Language Structural Extraction (Python via tree-sitter) — PR #13

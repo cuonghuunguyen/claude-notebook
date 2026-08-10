@@ -284,6 +284,34 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)
 
+  packages/structural-python:
+    dependencies:
+      '@cognitive-memory/core':
+        specifier: workspace:*
+        version: link:../core
+      '@cognitive-memory/graph-store':
+        specifier: workspace:*
+        version: link:../graph-store
+      tree-sitter:
+        specifier: ^0.25.1
+        version: 0.25.1
+      tree-sitter-python:
+        specifier: ^0.25.0
+        version: 0.25.0(tree-sitter@0.25.1)
+    devDependencies:
+      '@cognitive-memory/structural':
+        specifier: workspace:*
+        version: link:../structural
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
   packages/traversal:
     dependencies:
       '@cognitive-memory/core':
@@ -1055,6 +1083,14 @@ packages:
   natural-compare@1.4.0:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
 
+  node-addon-api@8.9.1:
+    resolution: {integrity: sha512-4eUQWVPCUUUiBjLnHS3cXWeC6ryoPUc0U3rP7IuzapoGbzMqd/r6KKO0clr0b+snQhsrueFEhCZDdK+LK7hxKg==}
+    engines: {node: ^18 || ^20 || >= 21}
+
+  node-gyp-build@4.8.4:
+    resolution: {integrity: sha512-LA4ZjwlnUblHVgq0oBF3Jl/6h/Nvs5fzBLwdEF4nuxnFdsfajde4WfxtJr3CaiH+F6ewcIB/q4jQ4UzPyid+CQ==}
+    hasBin: true
+
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
 
@@ -1255,6 +1291,17 @@ packages:
   tinyspy@3.0.2:
     resolution: {integrity: sha512-n1cw8k1k0x4pgA2+9XrOkFydTerNcJ1zWCO5Nn9scWHTD+5tp8dghT2x1uduQePZTZgd3Tupf+x9BxJjeJi77Q==}
     engines: {node: '>=14.0.0'}
+
+  tree-sitter-python@0.25.0:
+    resolution: {integrity: sha512-eCmJx6zQa35GxaCtQD+wXHOhYqBxEL+bp71W/s3fcDMu06MrtzkVXR437dRrCrbrDbyLuUDJpAgycs7ncngLXw==}
+    peerDependencies:
+      tree-sitter: ^0.25.0
+    peerDependenciesMeta:
+      tree-sitter:
+        optional: true
+
+  tree-sitter@0.25.1:
+    resolution: {integrity: sha512-mrcEdkYtHfrK1A6fs3O6FxkBo0Qig5XUXqHhxUOQu0bmPo00QF4XaSx4edpazdHwxnSCjlGKGgIqWdaN4dvTLA==}
 
   ts-api-utils@2.5.0:
     resolution: {integrity: sha512-OJ/ibxhPlqrMM0UiNHJ/0CKQkoKF243/AEmplt3qpRgkW8VG7IfOS41h7V8TjITqdByHzrjcS/2si+y4lIh8NA==}
@@ -2046,6 +2093,10 @@ snapshots:
 
   natural-compare@1.4.0: {}
 
+  node-addon-api@8.9.1: {}
+
+  node-gyp-build@4.8.4: {}
+
   once@1.4.0:
     dependencies:
       wrappy: 1.0.2
@@ -2232,6 +2283,18 @@ snapshots:
   tinyrainbow@1.2.0: {}
 
   tinyspy@3.0.2: {}
+
+  tree-sitter-python@0.25.0(tree-sitter@0.25.1):
+    dependencies:
+      node-addon-api: 8.9.1
+      node-gyp-build: 4.8.4
+    optionalDependencies:
+      tree-sitter: 0.25.1
+
+  tree-sitter@0.25.1:
+    dependencies:
+      node-addon-api: 8.9.1
+      node-gyp-build: 4.8.4
 
   ts-api-utils@2.5.0(typescript@5.9.3):
     dependencies:

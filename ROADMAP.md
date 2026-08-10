@@ -19,7 +19,7 @@ This checklist is the source of truth for what's done — see
 - [x] M5 — Reasoning-Guided Traversal
 - [x] M6 — Context Construction
 - [x] M7 — Staleness, Events, GC, Full Eval Set
-- [ ] M8 — Multi-Language Structural Extraction (Python via `tree-sitter`, approved — see CLAUDE.md)
+- [x] M8 — Multi-Language Structural Extraction (Python via `tree-sitter`, approved — see CLAUDE.md)
 
 Repo layout target:
 

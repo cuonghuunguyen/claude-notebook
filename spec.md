@@ -660,3 +660,56 @@ Relevant Subgraph        ──compression────────> Agent Contex
 Invariant: **the graph stores relationships; retrieval discovers where to
 look; reasoning decides what relationships matter; evidence determines
 whether the relationship can be trusted.**
+
+---
+
+## 21. Multi-Language Structural Extraction (extends §2.1 — proposed via `/propose-milestone`)
+
+§2.1's MVP scoping decision named TypeScript/JavaScript via `ts-morph` as
+the first structural extractor and explicitly deferred multi-language
+support until "a single-language extractor proves the rest of the
+pipeline" — not rejected, deferred pending that condition. `ROADMAP.md`'s
+M1–M7 have since shipped and validated that full pipeline end-to-end
+(structural graph, semantic promotion, episodic memory, hybrid retrieval,
+reasoning-guided traversal, context construction, staleness/GC) against
+the TS/JS extractor. §2.1's stated condition for lifting the deferral has
+been met.
+
+**What this section decides:** additional per-language structural
+extractors are a legitimate extension of §2.1, not a new subsystem —
+each one MUST conform to the SAME contract §2.1 already committed to
+("added as additional extractors behind the same Node/Edge output
+contract — not a rewrite"):
+
+- Emit `sourceType: "source_code"` provenance at `confidence: 1.0`, same as
+  the TS/JS extractor (§4) — structural facts from any language's own
+  AST/type-checker tooling are equally deterministic and equally trusted.
+- Compute node identity as `hash(repoId, stableSymbolPath)` per §3.2, where
+  `stableSymbolPath` is resolved by that language's own AST/symbol-
+  resolution tool (not file path + line number) — the same stability
+  requirement §3.2 already states, just resolved by a different tool per
+  language.
+- Support the same incremental-update contract as §5: given a changed-files
+  list, only that language's affected files are reparsed, and only their
+  nodes/edges are written — identical shape to M1's incremental mode, not a
+  parallel mechanism.
+- Structural nodes/edges from every language extractor share one graph;
+  cross-language edges (e.g. a TS module calling into a Python service
+  boundary) are out of scope for a single additional-language extractor and
+  remain a `related_to`-style semantic fact (§6), not a structural one,
+  until a concrete cross-language linking mechanism is specified.
+
+**What this section deliberately does NOT decide:** which parsing/
+type-resolution library backs the first additional language extractor.
+§2.1 named `ts-morph` specifically because it is type-checker-backed, not
+just a parser; an equivalent choice for a second language is a new
+dependency this spec does not pre-commit to — the same posture §9 already
+takes with the embedding provider ("an injected interface, not
+hardcoded"). Picking that library is an implementation decision for
+whoever builds the milestone below, not a spec-level commitment, and per
+`CLAUDE.md`'s locked-stack rule it is a decision a human should confirm
+before it's added, not something a milestone build silently introduces.
+
+Multi-language structural extraction is a build milestone (see
+`ROADMAP.md`), not a someday-nice-to-have — the same posture §19 takes
+toward the eval plan.

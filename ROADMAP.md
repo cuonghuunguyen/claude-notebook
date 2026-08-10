@@ -19,6 +19,7 @@ This checklist is the source of truth for what's done — see
 - [x] M5 — Reasoning-Guided Traversal
 - [x] M6 — Context Construction
 - [x] M7 — Staleness, Events, GC, Full Eval Set
+- [ ] M8 — Multi-Language Structural Extraction (proposed — needs human sign-off on the new parser dependency before build)
 
 Repo layout target:
 
@@ -185,6 +186,61 @@ traversal-cost tracking specifically, the two pieces M2/M3 didn't cover).
 event log, diff against pre-wipe state — must match); injected-refactor
 staleness test per spec §19 point 2; GC batch job test confirming the 90/30
 day retention windows from §18.
+
+## M8 — Multi-Language Structural Extraction (spec §21)
+
+**Proposed via `/propose-milestone` — requires a human decision before
+`/next-milestone` builds it: see "Deviations" in the PR that added this
+section. Adding a second language extractor means picking a new
+parsing/type-resolution library, which is a stack addition `CLAUDE.md`'s
+locked-stack rule says a human must confirm, not something a milestone
+build should decide on its own.**
+
+**Goal:** prove spec §21's additional-language-extractor contract with one
+real second language (Python is the concrete target below; the choice of
+library is the open decision this milestone needs a human's sign-off on
+before implementation starts), producing the exact same `packages/core`
+Node/Edge shape M1 already defines, through the same incremental-update
+path as M1.
+
+- A per-language structural extractor for Python (new package, e.g.
+  `packages/structural-python`, or an extractor registry inside
+  `packages/structural` — implementer's call) using a real AST/symbol-
+  resolution tool for Python (e.g. `tree-sitter` with its Python grammar —
+  a candidate, not a spec-level commitment per §21). Emit `file`, `class`,
+  `function`, `method`, `import`, `call` nodes/edges conforming to
+  `packages/core` types, `sourceType: "source_code"` provenance at
+  `confidence: 1.0`, same as M1.
+- Node id via the same `hash(repoId, stableSymbolPath)` scheme (spec §3.2),
+  with `stableSymbolPath` resolved by the new tool's own symbol/qualified-
+  name resolution — implement and unit-test this in isolation first, same
+  discipline M1 used for the TS/JS hash, since it's the same stability
+  guarantee resolved by a different tool.
+- Incremental mode: same contract as M1 — given a changed-files list, only
+  reparse this language's affected files and update graph-store
+  accordingly; delete/update per §3.2 identity rules, not a full rebuild.
+
+**Acceptance:**
+- Fixture test (no DB): parse a small fixture Python module, assert an
+  expected node/edge set analogous to M1's TS/JS fixture test.
+- Rename test: rename a function in the fixture, rerun incremental extract,
+  assert the node's id is unchanged (only `path`/`updatedAt` changed).
+- Delete-and-recreate test: change a function's name AND move it to a
+  different file with no rename signal available from the new tool, assert
+  old node → `deleted`, new node created, old edges → `stale`.
+- Integration test (gated on `DATABASE_URL`): same fixture, written through
+  `graph-store` into real Postgres, read back matches — this is the actual
+  point of spec §21 (extractors are additive to the existing contract, not
+  a rewrite of it), so this test must pass against the SAME `graph-store`
+  code M1-M7 already use, unmodified.
+- Cross-language regression guard: run the existing TS/JS fixture and the
+  new Python fixture through the same repo/project extraction together and
+  assert neither extractor's output corrupts or mistypes the other's nodes
+  — this is the exact failure mode this milestone's own proposal
+  demonstrated pre-fix (a non-TS/JS file silently mis-parsed as TypeScript,
+  producing a wrong node type and, on deeper inspection, an unhandled
+  compiler exception): see the PR that added this section for the captured
+  repro.
 
 ---
 

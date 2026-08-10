@@ -1,3 +1,4 @@
+import type { Node } from "@cognitive-memory/core";
 import {
   appendEvent,
   getNodesByPath,
@@ -33,27 +34,36 @@ export async function extractChangedFiles(
   const nodesInChangedFiles = nodes.filter((n) => n.path && changedSet.has(n.path));
   const newIds = new Set(nodesInChangedFiles.map((n) => n.id));
 
-  const deletedNodes: string[] = [];
-  let staleEdges = 0;
+  const toDelete: Node[] = [];
   for (const path of changedFilePaths) {
     const previous = await getNodesByPath(repoId, path);
     for (const old of previous) {
-      if (!newIds.has(old.id)) {
-        const client = await getPool().connect();
-        try {
-          await client.query("BEGIN");
-          await markNodeDeleted(old.id, client);
-          await appendEvent({ eventType: "SymbolRemoved", payload: { id: old.id } }, client);
-          staleEdges += await markEdgesStaleForNode(old.id, client);
-          await client.query("COMMIT");
-        } catch (err) {
-          await client.query("ROLLBACK");
-          throw err;
-        } finally {
-          client.release();
-        }
+      if (!newIds.has(old.id)) toDelete.push(old);
+    }
+  }
+
+  const deletedNodes: string[] = [];
+  let staleEdges = 0;
+  // One transaction for ALL of this call's deletions, not one per node — see
+  // packages/structural's incremental.ts for the full rationale (this file is
+  // a deliberate parallel copy of it, per spec.md §21's additive-extractors
+  // design; the same fix applies identically here).
+  if (toDelete.length > 0) {
+    const client = await getPool().connect();
+    try {
+      await client.query("BEGIN");
+      for (const old of toDelete) {
+        await markNodeDeleted(old.id, client);
+        await appendEvent({ eventType: "SymbolRemoved", payload: { id: old.id } }, client);
+        staleEdges += await markEdgesStaleForNode(old.id, client);
         deletedNodes.push(old.id);
       }
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
     }
   }
 

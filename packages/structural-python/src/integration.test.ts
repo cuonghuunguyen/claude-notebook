@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { closePool, getEdgesTouchingNode, getNodeById, getPool, runMigrations } from "@cognitive-memory/graph-store";
 import { extractChangedFiles } from "./incremental.js";
 import { extractProject, projectFromSourceFiles } from "./extract.js";
@@ -90,5 +90,39 @@ class FooService:
     const pool = getPool();
     const { rows } = await pool.query("SELECT 1 as one");
     expect(rows[0]?.one).toBe(1);
+  });
+
+  it("batches all of one incremental call's deletions into a single transaction, not one per deleted node", async () => {
+    const repoId = `structural-python-batch-test-${randomUUID()}`;
+
+    const v1Files = {
+      "/src/multi.py": `
+def a():
+    return 1
+
+
+def b():
+    return 2
+
+
+def c():
+    return 3
+`,
+    };
+    await extractChangedFiles(projectFromSourceFiles(v1Files), Object.keys(v1Files), repoId);
+
+    const connectSpy = vi.spyOn(getPool(), "connect");
+
+    const v2Project = projectFromSourceFiles({ "/src/multi.py": `def unrelated():\n    pass\n` });
+    const result = await extractChangedFiles(v2Project, ["/src/multi.py"], repoId);
+
+    expect(result.deletedNodes).toHaveLength(3);
+    // 1 connect() from getNodesByPath's pool.query() (node-postgres's
+    // Pool.query checks out a connection internally) + 1 for the batched
+    // deletion transaction + 1 for persistExtraction's own transaction = 3,
+    // regardless of how many nodes get deleted.
+    expect(connectSpy).toHaveBeenCalledTimes(3);
+
+    connectSpy.mockRestore();
   });
 });

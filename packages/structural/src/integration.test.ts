@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { closePool, getEdgesTouchingNode, getNodeById, getPool, runMigrations } from "@cognitive-memory/graph-store";
 import { extractChangedFiles } from "./incremental.js";
 import { extractProject, projectFromSourceFiles } from "./extract.js";
@@ -92,5 +92,37 @@ d("structural extractor -> graph-store integration", () => {
     const pool = getPool();
     const { rows } = await pool.query("SELECT 1 as one");
     expect(rows[0]?.one).toBe(1);
+  });
+
+  it("batches all of one incremental call's deletions into a single transaction, not one per deleted node", async () => {
+    const repoId = `structural-batch-test-${randomUUID()}`;
+
+    const v1Files = {
+      "/src/multi.ts": `
+        export function a() { return 1; }
+        export function b() { return 2; }
+        export function c() { return 3; }
+      `,
+    };
+    await extractChangedFiles(projectFromSourceFiles(v1Files), Object.keys(v1Files), repoId);
+
+    const connectSpy = vi.spyOn(getPool(), "connect");
+
+    // Deleting all three functions in one incremental call — e.g. a commit
+    // that guts a file's exports — must not open one connection/transaction
+    // per deleted node; that scales badly and risks a partially-applied
+    // delete if the process dies mid-loop.
+    const v2Project = projectFromSourceFiles({ "/src/multi.ts": `export function unrelated() {}` });
+    const result = await extractChangedFiles(v2Project, ["/src/multi.ts"], repoId);
+
+    expect(result.deletedNodes).toHaveLength(3);
+    // 1 connect() from getNodesByPath's pool.query() (node-postgres's Pool.query
+    // checks out a connection internally) + 1 for the batched deletion
+    // transaction + 1 for persistExtraction's own transaction (writing the new
+    // "unrelated" node) = 3, regardless of how many nodes get deleted — not
+    // one extra connect() per deleted node.
+    expect(connectSpy).toHaveBeenCalledTimes(3);
+
+    connectSpy.mockRestore();
   });
 });

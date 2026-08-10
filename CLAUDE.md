@@ -47,6 +47,16 @@ the source of truth, not this file's memory of past sessions).
   concrete acceptance criteria. Confidence that an idea is good is not
   evidence; if any point is filler rather than specific, the PR stays open
   for a human, same as a flagged deviation.
+- Circuit breaker: every cycle of `/next-milestone`, `/propose-milestone`,
+  or `/self-improve` appends one outcome line to `CHAIN_LOG.md`.
+  `/next-milestone` step 2 reads the last 3 lines before handing off to
+  `/propose-milestone` — if all 3 are empty-cycle outcomes
+  (`nothing-found`/`nothing-to-propose`, nothing shipped in between), it
+  stops instead of handing off. This is what bounds continuous chaining:
+  without a scheduled Routine to naturally space out cycles anymore, an
+  unproductive survey loop could otherwise spawn sessions indefinitely at
+  zero marginal value. Never skip logging an outcome, and never spawn a
+  successor past a tripped breaker just because a cycle "felt" productive.
 
 ## Picking up work
 
@@ -78,11 +88,16 @@ two-tier chain instead of just stopping:
    before/after in `BENCHMARKS.md`, and merges under the same conditional
    rule. See `.claude/skills/self-improve/SKILL.md`.
 
-Neither tier spawns a successor session after finishing on its own account
-(`/propose-milestone` only spawns one indirectly, by handing a newly-merged
-milestone to a fresh `/next-milestone`) — one cycle per Routine fire, so
-`ROADMAP.md` growing via `/propose-milestone` is a deliberate, evidenced
-event, not a side effect of a runaway loop.
+There is no scheduled Routine driving this anymore — idle time between
+cycles was pure waste, so both tiers now chain continuously: every
+non-blocked outcome (a clean merge, or a "nothing found"/"nothing to
+propose" cycle) spawns a fresh `/next-milestone` session immediately,
+which re-enters this same hand-off if the roadmap is still fully checked.
+The chain only stops at a genuine human-decision point — a flagged
+deviation, or a `/propose-milestone` proposal whose evidence bar isn't
+cleanly met — never on a timer. `ROADMAP.md` growing via
+`/propose-milestone` stays a deliberate, evidenced event because of the
+evidence-bar rule itself, not because of how often a cycle gets to run.
 
 ## Repo/branch
 

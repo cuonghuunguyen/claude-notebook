@@ -22,11 +22,12 @@ firing into a fresh session), this file is your task description.
 ## Steps
 
 1. **Sync — but first check there's actually a checkout to sync.** A
-   persistent session's container can be reclaimed after idle time (the 3h
-   gap between backstop cron fires is long enough for this to happen) and
-   come back with an empty working directory — no `.git`, nothing. Don't
-   treat that as "nothing to do" or a reason to give up; it's a setup step
-   this skill owns:
+   persistent session's container can be reclaimed after idle time (there is
+   no fixed schedule anymore, but the gap between a session finishing one
+   cycle and its spawned successor actually starting can still be long
+   enough for this to happen) and come back with an empty working
+   directory — no `.git`, nothing. Don't treat that as "nothing to do" or a
+   reason to give up; it's a setup step this skill owns:
    - If `git rev-parse --git-dir` fails (no repo at all): `git clone
      https://github.com/cuonghuunguyen/claude-notebook . && git checkout
      claude/codebase-cognitive-memory-spec-t7nnx0`. If `add_repo` /
@@ -44,13 +45,27 @@ firing into a fresh session), this file is your task description.
    you took to get a real checkout.
 2. **Find the work.** Open `ROADMAP.md`, take the first `- [ ]` milestone in
    the status checklist. If every box is checked, this skill has nothing
-   left to build — invoke `.claude/skills/propose-milestone/SKILL.md` (via
-   `/propose-milestone`) in this same session rather than just stopping: a
-   fully shipped roadmap doesn't mean there's nothing worth doing, just
-   nothing *planned*. That skill researches whether there's a genuinely new
-   capability worth adding (falling through to `/self-improve` itself if
-   not). Let it run to completion and report its outcome; don't loop back
-   into this skill afterward.
+   left to build — but first, **circuit breaker**: read `CHAIN_LOG.md`'s
+   last 3 lines. If all 3 are empty-cycle outcomes (`nothing-found` and/or
+   `nothing-to-propose`, i.e. nothing shipped across the last 3 full cycles
+   of this chain), STOP here — do not hand off to `/propose-milestone`. A
+   report in this session's own transcript is not enough (nobody may ever
+   read it): search for an already-open issue titled `Circuit breaker
+   tripped: 3 consecutive empty cycles` on `cuonghuunguyen/claude-notebook`
+   first — if one exists (a human hasn't resolved the prior trip yet),
+   comment on it with this trip's 3 lines instead of opening a duplicate;
+   otherwise open a new issue with that exact title and the 3
+   `CHAIN_LOG.md` lines quoted in the body, so a human finds it the same
+   way they'd find a left-open PR, not by happening to check a session.
+   This is what keeps an unproductive survey loop from spawning sessions
+   forever at zero marginal value. Otherwise, invoke
+   `.claude/skills/propose-milestone/SKILL.md` (via `/propose-milestone`) in
+   this same session rather than just stopping: a fully shipped roadmap
+   doesn't mean there's nothing worth doing, just nothing *planned*. That
+   skill researches whether there's a genuinely new capability worth adding
+   (falling through to `/self-improve` itself if not). Let it run to
+   completion and report its outcome; don't loop back into this skill
+   afterward.
 3. **Concurrency guard.** List open pull requests against
    `claude/codebase-cognitive-memory-spec-t7nnx0` (`mcp__github__list_pull_requests`
    or `search_pull_requests`). If one already has a head branch named
@@ -97,7 +112,11 @@ firing into a fresh session), this file is your task description.
    PR description under a "Manual sanity check" heading. If nothing
    realistic to hand-check exists yet for this milestone's slice, say so
    explicitly rather than skipping the heading.
-10. **Update ROADMAP.md.** Check this milestone's box on your branch.
+10. **Update ROADMAP.md.** Check this milestone's box on your branch. Also
+    append one line to `CHAIN_LOG.md` (`shipped | milestone M<N>`, PR link
+    filled in once step 12 opens it, or in a small follow-up commit) — this
+    is what resets the circuit breaker's empty-cycle count for the next
+    time step 2 checks it.
 11. **Commit and push** the branch (`git push -u origin milestone/M<N>-...`).
 12. **Open a PR** into `claude/codebase-cognitive-memory-spec-t7nnx0` via
     `mcp__github__create_pull_request`. Describe what was built, how it was
@@ -130,7 +149,13 @@ firing into a fresh session), this file is your task description.
       deviation means you made a judgment call spec.md didn't resolve;
       that's exactly the case a human should see before it becomes
       load-bearing for the next milestone. Say so plainly in your final
-      report.
+      report. Log `left-open | PR #<n>: <deviation>` directly on
+      `claude/codebase-cognitive-memory-spec-t7nnx0` and **push it**
+      (`git push origin claude/codebase-cognitive-memory-spec-t7nnx0`) —
+      for the historical record in `CHAIN_LOG.md`, same as the other two
+      skills do for their own left-open case (this doesn't affect the
+      breaker's count either way, since step 15 already stops without
+      spawning here regardless of the log).
 15. **Continue or stop — by spawning a fresh session, not by looping in
     this one.** Don't go back to step 1 in this same conversation even
     after a clean merge: this conversation's context already holds this

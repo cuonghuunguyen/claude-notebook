@@ -6,10 +6,13 @@ and improving itself the same way. The actual, executable protocols live in
 three skills — **`.claude/skills/next-milestone/SKILL.md`** (`/next-milestone`),
 **`.claude/skills/propose-milestone/SKILL.md`** (`/propose-milestone`), and
 **`.claude/skills/self-improve/SKILL.md`** (`/self-improve`) — chained so
-that whichever one applies runs automatically when this repo's
-milestone-runner Routine fires a fresh session. This file explains *why*
-the harness is shaped the way it is; it is not itself the protocol, and
-shouldn't drift from any of the three skills.
+that whichever one applies runs, and each one spawns a fresh session running
+the next link in the chain immediately on any non-blocked outcome. There is
+no scheduled Routine anymore; the chain restarts itself the instant a cycle
+finishes, and only actually stops at a genuine human-decision point (a
+flagged deviation, or a proposal whose evidence bar isn't cleanly met). This
+file explains *why* the harness is shaped the way it is; it is not itself
+the protocol, and shouldn't drift from any of the three skills.
 
 ## The pieces, and what each one is for
 
@@ -45,6 +48,12 @@ shouldn't drift from any of the three skills.
   one row per shipped cycle, with the exact measurement method and the
   before/after numbers, so a claimed improvement is checkable by a human
   and by the next cycle, not just asserted.
+- **`CHAIN_LOG.md`** — the append-only log every cycle of all three skills
+  writes one outcome line to (`shipped`, `nothing-found`,
+  `nothing-to-propose`, or `left-open`). This is the circuit breaker's
+  memory: `/next-milestone` step 2 reads its last 3 lines before handing
+  off to `/propose-milestone`, and stops instead of chaining further if all
+  3 are empty-cycle outcomes with nothing shipped between them.
 - **`.claude/hooks/session-start.sh`** — runs `pnpm install` +
   `scripts/setup-dev-db.sh` and exports `DATABASE_URL` automatically, so no
   session (human or automated) starts without a working DB.
@@ -56,12 +65,16 @@ shouldn't drift from any of the three skills.
   `propose/*`, or `improve/*` head branch means "someone's already on
   this"), and `subscribe_pr_activity` turns CI failures / review comments
   into automatic follow-up work on the same PR instead of silent drift.
-- **The milestone-runner Routine** (a scheduled trigger firing a fresh
-  session every few hours) is what actually calls `/next-milestone`
-  unattended, which chains into `/propose-milestone` and then
-  `/self-improve` as each tier runs out of its own kind of work. It exists
-  so this project keeps shipping between conversations, not just while a
-  human is watching.
+- **Continuous self-chaining, not a scheduled Routine.** A milestone-runner
+  Routine used to fire a fresh session every few hours to call
+  `/next-milestone`, which chained into `/propose-milestone` and then
+  `/self-improve` as each tier ran out of its own kind of work. That Routine
+  was removed: idle time between fires was pure waste, since a cycle's
+  outcome doesn't get more useful by waiting a fixed interval before the
+  next one runs. Now every tier spawns the next session itself, immediately,
+  on any outcome that isn't a genuine human-decision point — see "Why this
+  shape" below for why that boundary (not a timer) is what should gate the
+  chain.
 
 ## Why this shape
 
@@ -95,6 +108,45 @@ step 5) is filled in with specifics a human could independently check, and
 stays open for a human otherwise. The fix for a missing skill was to build
 the skill, not patch the Routine's prompt; the fix for "should the system
 expand its own scope" was to ask before encoding a default, not to guess one.
+
+A third design mistake, caught after both fixes above: the milestone-runner
+Routine itself was still the thing restarting each cycle, on a fixed
+multi-hour cadence, even once `/self-improve` and `/propose-milestone` were
+real and every tier already knew how to spawn its own successor on a clean
+outcome. The Routine wasn't buying anything at that point except idle time
+between cycles — a "nothing found" survey isn't more likely to find
+something three hours later just because time passed, and a merged PR
+doesn't benefit from a cool-down before the next cycle starts. The fix was
+to delete the Routine and let every tier's own successor-spawning step
+(already built for the "clean merge" case) fire on every non-blocked
+outcome, "nothing found" included. What still stops the chain — a flagged
+deviation, an evidence bar that isn't cleanly met — was never the Routine's
+job to enforce anyway; it was always a property of the skills themselves,
+so removing the timer changes nothing about when a human actually needs to
+step in.
+
+Removing the Routine costs two things, taken on deliberately rather than
+missed:
+
+- **Rate.** Once nothing paces the chain, a run of unproductive
+  `nothing-found`/`nothing-to-propose` cycles could spawn sessions
+  back-to-back at real API cost for zero shipped value, with no one
+  watching. `CHAIN_LOG.md` plus the circuit breaker in `/next-milestone`
+  step 2 (3 consecutive empty outcomes trips it) bounds this: worst case is
+  3 wasted cycles, not an unbounded loop.
+- **A dead-man's switch.** The old Routine doubled as a backstop that would
+  eventually resume a stalled chain even if a session died mid-cycle before
+  opening anything reviewable — that's genuinely gone, and nothing in this
+  repo replaces it. If a spawned session crashes, hangs, or otherwise never
+  reaches a logged outcome, the chain silently stops and stays stopped until
+  a human notices and re-fires it by hand. This is an accepted tradeoff, not
+  an oversight: a periodic health-check would itself be a scheduled trigger,
+  which is exactly what removing the Routine was for. A human is expected to
+  glance at open PRs / `CHAIN_LOG.md`'s last entry occasionally rather than
+  the harness self-monitoring for silence. This is distinct from a *clean*
+  circuit-breaker trip (3 consecutive empty cycles, no crash) — that case
+  IS surfaced durably, via a GitHub issue `/next-milestone` step 2 opens,
+  rather than left to a session transcript nobody reads.
 
 ## Target repo/branch
 

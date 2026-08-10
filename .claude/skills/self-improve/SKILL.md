@@ -1,14 +1,14 @@
 ---
 name: self-improve
-description: For the Codebase Cognitive Memory project (cuonghuunguyen/claude-notebook) — surveys the built system for one measurable improvement (performance, correctness/robustness, or code quality/simplification; no fixed lane, pick whatever has the most real headroom this cycle), implements it, proves it with a real before/after in BENCHMARKS.md, self-reviews, opens a PR, and merges it once green under the same conditional-merge rule as /next-milestone. Reports "no improvement found this cycle" rather than manufacturing a change if nothing measurable turns up. Deliberately does not self-chain into another cycle — the next scheduled Routine fire starts the next one. Use when /propose-milestone's own research turns up no new-capability candidate this cycle (its usual caller), or whenever asked to run a self-improve cycle directly.
+description: For the Codebase Cognitive Memory project (cuonghuunguyen/claude-notebook) — surveys the built system for one measurable improvement (performance, correctness/robustness, or code quality/simplification; no fixed lane, pick whatever has the most real headroom this cycle), implements it, proves it with a real before/after in BENCHMARKS.md, self-reviews, opens a PR, and merges it once green under the same conditional-merge rule as /next-milestone. Reports "no improvement found this cycle" rather than manufacturing a change if nothing measurable turns up. Chains immediately into a fresh /next-milestone session after a clean merge OR a "nothing found" cycle — there is no scheduled Routine anymore, so this is what keeps the project moving; it only stops the chain when a cycle leaves a PR open for a human (a flagged deviation). Use when /propose-milestone's own research turns up no new-capability candidate this cycle (its usual caller), or whenever asked to run a self-improve cycle directly.
 ---
 
 # self-improve
 
 This is the actual protocol, not a summary of it. Follow it in order. If you
-were sent here with no prior conversation context (e.g. a Routine firing
-into a fresh session, or `/propose-milestone` falling through after finding
-no new-capability candidate), this file is your task description.
+were sent here with no prior conversation context (e.g. a freshly spawned
+session continuing the chain, or `/propose-milestone` falling through after
+finding no new-capability candidate), this file is your task description.
 
 ## Why this exists, and how it differs from /next-milestone and /propose-milestone
 
@@ -26,15 +26,20 @@ actually worth doing, not just "a diff that looks like an improvement."
 real, reproducible before/after number, appended there, never edited
 retroactively.
 
-The other deliberate difference is chaining. `/next-milestone` spawns a
-fresh session immediately after a clean merge, because the next milestone
-is known and waiting. Here, the next candidate is *not* known until a
-fresh survey finds it — chaining immediately would mean either re-surveying
-with zero cool-down (this codebase doesn't change fast enough between
-cycles to make that useful) or, worse, pressure to manufacture a finding
-just to have something to hand the next session. Instead this skill ends
-its own turn every time — found something or not — and leaves starting the
-next cycle to this repo's milestone-runner Routine's own schedule.
+Chaining used to be the other deliberate difference from `/next-milestone`:
+this skill ended its own turn every time, found something or not, and left
+starting the next cycle to a scheduled Routine. That Routine no longer
+exists — idle time between cycles was pure waste with nothing gained from
+the wait (this codebase doesn't need a cool-down between surveys; a "nothing
+found" report from one cycle doesn't get more useful by waiting three hours
+before the next). So this skill now chains exactly like `/next-milestone`
+does: spawn a fresh session immediately after step 14 unless that step left
+a PR open for a human. The one thing that must NOT change under continuous
+chaining is step 4's discipline — "nothing found" stays a legitimate,
+reportable outcome. Chaining faster must never become pressure to
+manufacture a finding just to have something to hand the next session; a
+"nothing found" cycle still chains immediately into the next one, it just
+does so having shipped nothing.
 
 ## Context you need first
 
@@ -135,23 +140,59 @@ next cycle to this repo's milestone-runner Routine's own schedule.
     (3-5 minutes — this repo's CI finishes in under 2) the same way
     `/next-milestone` step 13 does, since a green CI run alone generates no
     webhook event to wake you.
-14. **Merge, conditionally — or report nothing found.**
-    - **Improvement shipped:** once CI is green and every review thread is
-      resolved, merge it yourself (`merge_method: squash`) if the PR's
-      Deviations section says "None." If it lists a real deviation, leave
-      it open for a human — same rule as `/next-milestone` step 14.
+14. **Merge, conditionally — or report nothing found.** Whichever branch
+    applies, append one line to `CHAIN_LOG.md` recording the outcome — this
+    is what the circuit breaker in `/next-milestone` step 2 reads, and it
+    can only read what's actually on the remote branch:
+    - **Improvement shipped:** log `shipped | <area>: <what changed>` in a
+      commit ON THIS PR'S BRANCH, pushed (`git push`) before merging — the
+      squash-merge carries it to base atomically, no separate push to base
+      needed. That push is a new commit, so re-check CI on it
+      (`get_check_runs`) before merging — don't merge against the status of
+      a now-superseded commit. Once CI on the CHAIN_LOG.md commit itself is
+      green and every review thread is resolved, merge it yourself
+      (`merge_method: squash`) if the PR's Deviations section says "None."
+      If it lists a real deviation, do NOT merge — leave it
+      open for a human, same rule as `/next-milestone` step 14, and instead
+      log `left-open | PR #<n>: <deviation>` directly on
+      `claude/codebase-cognitive-memory-spec-t7nnx0` and **push it**
+      (`git push origin claude/codebase-cognitive-memory-spec-t7nnx0`) —
+      the open PR's own branch won't merge soon, so a commit there is
+      invisible to the next spawned session.
     - **Nothing found this cycle:** don't open a PR, don't force a change.
-      Report plainly that this cycle surveyed and found no candidate with a
-      real, measurable win, and say what you looked at so the next cycle
-      doesn't have to repeat the same ground from scratch.
-15. **Stop. Do not self-chain.** Unlike `/next-milestone`, do NOT spawn a
-    fresh session for another cycle after merging (or after finding
-    nothing) — report what happened this run and end your turn. The next
-    cycle starts at this repo's milestone-runner Routine's next scheduled
-    fire, which re-enters `/next-milestone` step 2, hands off to
-    `/propose-milestone`, and lands back here again if that cycle also
-    finds nothing new to propose. This bounded cadence is deliberate — see
-    "Why this exists" above.
+      Log `nothing-found | <one-line summary of what you looked at>`
+      directly on `claude/codebase-cognitive-memory-spec-t7nnx0` and
+      **push it** (`git push origin claude/codebase-cognitive-memory-spec-t7nnx0`) —
+      a commit that stays local is invisible to every other session,
+      silently defeating the breaker this exists to feed. Report plainly
+      that this cycle surveyed and found no candidate with a real,
+      measurable win, and say what you looked at so the next cycle doesn't
+      have to repeat the same ground from scratch.
+15. **Continue or stop — by spawning a fresh session, not by looping in
+    this one.** Same reasoning as `/next-milestone` step 15: this
+    conversation's context already holds this cycle's full survey and
+    implementation history, so looping in place would stack every future
+    cycle's context on top of that instead of keeping it flat.
+    - **Merged cleanly in step 14, or found nothing this cycle (step 14's
+      "nothing found" branch):** call `mcp__Claude_Code_Remote__create_session`
+      to spawn a **new** session — `source_url:
+      "https://github.com/cuonghuunguyen/claude-notebook"`, `source_revision:
+      "claude/codebase-cognitive-memory-spec-t7nnx0"`, and a `prompt` telling
+      it to run `/next-milestone` (the universal re-entry point — it will
+      re-check `ROADMAP.md`, hand off to `/propose-milestone` if it's still
+      fully checked, which falls through to this skill again if it finds
+      nothing new). Then STOP your own turn immediately — there is no
+      scheduled Routine behind this anymore, so a cycle that doesn't chain
+      is a cycle that ends the whole loop, not one that waits for the next
+      tick.
+    - **Step 14 left a PR open on a flagged deviation:** STOP, full stop, do
+      NOT spawn a next session — identical to `/next-milestone` step 15's
+      same case. A human needs to resolve the open PR before any further
+      cycle builds on top of it; this is the one outcome that should
+      actually end the chain, not just this session's turn.
+    Either way, report what happened this run: what you surveyed, what you
+    shipped (or why nothing qualified), and whether you spawned a
+    successor.
 
 ## If a subscribed PR gets a CI failure or review comment later
 

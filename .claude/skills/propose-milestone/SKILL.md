@@ -1,6 +1,6 @@
 ---
 name: propose-milestone
-description: For the Codebase Cognitive Memory project (cuonghuunguyen/claude-notebook), once ROADMAP.md is fully checked — researches and proposes a genuinely NEW capability (not already decided in spec.md), extending spec.md with a new section and ROADMAP.md with a new milestone, then hands off to /next-milestone to build it. Self-merges the proposal ONLY when it clears a strict evidence bar (a concretely demonstrated gap, not a speculative idea); anything weaker stays open for human review. Falls through to /self-improve in the same session if this cycle's research turns up no candidate worth proposing. Never self-chains into another proposal cycle. Use when /next-milestone's own step 2/15 finds every ROADMAP.md box checked, or whenever asked to look for new capabilities directly.
+description: For the Codebase Cognitive Memory project (cuonghuunguyen/claude-notebook), once ROADMAP.md is fully checked — researches and proposes a genuinely NEW capability (not already decided in spec.md), extending spec.md with a new section and ROADMAP.md with a new milestone, then hands off to /next-milestone to build it. Self-merges the proposal ONLY when it clears a strict evidence bar (a concretely demonstrated gap, not a speculative idea); anything weaker stays open for human review. Falls through to /self-improve in the same session if this cycle's research turns up no candidate worth proposing. Doesn't spawn another proposal cycle directly — a merged proposal hands off to /next-milestone instead, and a "nothing found" cycle hands off to /self-improve, which itself chains back into /next-milestone (there is no scheduled Routine anymore, so this relay is what keeps the project moving continuously). Only stops the whole chain when a proposal is left open for a human. Use when /next-milestone's own step 2/15 finds every ROADMAP.md box checked, or whenever asked to look for new capabilities directly.
 ---
 
 # propose-milestone
@@ -113,7 +113,14 @@ independently check. When in doubt, it isn't in doubt: leave the PR open.
    criteria concrete enough for `/next-milestone` to build against without
    this skill's research context. Add the unchecked `- [ ] M<N> — <title>`
    row to the status checklist.
-8. **Branch, commit, push.** `propose/<short-slug>` from the latest
+8. **Verify, then branch, commit, push.** This skill's diff is normally
+   `spec.md`/`ROADMAP.md` only, but confirm that for real rather than
+   assuming it — run `pnpm -r build && pnpm -r typecheck && pnpm lint &&
+   pnpm test` before committing. A docs-only change that somehow breaks
+   something (a stray edit, a merge artifact) is exactly the kind of
+   surprise this catches; this is this skill's equivalent of
+   `/next-milestone`'s self-review step, sized to what there actually is to
+   review here. Branch as `propose/<short-slug>` from the latest
    `claude/codebase-cognitive-memory-spec-t7nnx0`.
 9. **Open a PR** into `claude/codebase-cognitive-memory-spec-t7nnx0`. The
    description MUST include, explicitly and by name, an "Evidence" section
@@ -122,22 +129,41 @@ independently check. When in doubt, it isn't in doubt: leave the PR open.
    framing. Subscribe to the PR's activity, then schedule a short check-in
    (3-5 minutes; this repo's CI finishes in under 2) the same way
    `/next-milestone` step 13 does.
-10. **Merge, conditionally — or report nothing found.**
-    - **Evidence bar cleared, CI green, threads resolved:** merge it
-      yourself (`merge_method: squash`). Re-read your own step 5 answers
-      one more time before merging — if any of the four reads as filler
-      rather than a specific, checkable claim, do NOT merge; downgrade to
-      the next bullet instead.
+10. **Merge, conditionally — or report nothing found.** Whichever branch
+    below applies, append one line to `CHAIN_LOG.md` recording the outcome —
+    this is what the circuit breaker in `/next-milestone` step 2 reads, and
+    it can only read what's actually on the remote branch:
+    - **Evidence bar cleared, CI green, threads resolved:** log
+      `shipped | proposal M<N>: <title>` in a commit ON THIS PR'S BRANCH,
+      pushed (`git push`) before merging — the squash-merge carries it to
+      base atomically with the rest of the change, so no separate push to
+      base is needed. That push is a new commit, so re-check CI on it
+      (`get_check_runs`) before merging — don't merge against the status of
+      a now-superseded commit. Merge it yourself (`merge_method: squash`)
+      once CI on the CHAIN_LOG.md commit itself is green. Re-read your own
+      step 5 answers one more time before merging — if any of the
+      four reads as filler rather than a specific, checkable claim, do NOT
+      merge; downgrade to the next bullet instead.
     - **A real idea, but evidence is thin, or you're not confident all four
       points hold up:** leave the PR open for a human, same as
-      `/next-milestone` treats a flagged spec deviation. Say plainly in
-      your report which of step 5's four points is weak and why you didn't
-      force it.
+      `/next-milestone` treats a flagged spec deviation. Log
+      `left-open | PR #<n>: <why>` — commit this directly on
+      `claude/codebase-cognitive-memory-spec-t7nnx0` (NOT the open PR's
+      branch, which may not merge soon) and **`git push origin
+      claude/codebase-cognitive-memory-spec-t7nnx0`** — a commit that stays
+      local is invisible to every other session, silently defeating the
+      breaker. Say plainly in your report which of step 5's four points is
+      weak and why you didn't force it.
     - **Nothing found this cycle (step 4's legitimate outcome):** don't open
-      a PR. Fall through to `.claude/skills/self-improve/SKILL.md` directly
-      in this same session — there's still a cycle's worth of work to do,
-      just not new-scope work. Report both outcomes (nothing new found; here's
-      what self-improve did instead) together.
+      a PR. Log `nothing-to-propose | <one-line summary of what you looked
+      at>` directly on `claude/codebase-cognitive-memory-spec-t7nnx0` and
+      **push it** (`git push origin claude/codebase-cognitive-memory-spec-t7nnx0`) —
+      same reasoning as above, this is the outcome the breaker exists to
+      count, so it must actually be visible to the next session. Fall
+      through to `.claude/skills/self-improve/SKILL.md` directly in this
+      same session — there's still a cycle's worth of work to do, just not
+      new-scope work. Report both outcomes (nothing new found; here's what
+      self-improve did instead) together.
 11. **Continue or stop.**
     - **Merged cleanly in step 10:** spawn a fresh session (same mechanism
       as `/next-milestone` step 15 — `mcp__Claude_Code_Remote__create_session`
@@ -150,8 +176,10 @@ independently check. When in doubt, it isn't in doubt: leave the PR open.
       NOT spawn anything. Building on top of your own unreviewed proposal is
       exactly the risk this branch exists to avoid.
     - **Fell through to `/self-improve` (step 10's last case):** follow that
-      skill's own step 15 — it does not self-chain either, so this is where
-      the cycle ends regardless of what `/self-improve` found.
+      skill's own step 15 — it now chains immediately into a fresh
+      `/next-milestone` session on a clean merge or a "nothing found"
+      result (only stopping if it leaves its own PR open for a human), so
+      the loop continues from there rather than ending here.
 
 ## If a subscribed PR gets a CI failure or review comment later
 

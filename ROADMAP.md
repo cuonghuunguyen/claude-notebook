@@ -19,7 +19,7 @@ This checklist is the source of truth for what's done — see
 - [x] M5 — Reasoning-Guided Traversal
 - [x] M6 — Context Construction
 - [x] M7 — Staleness, Events, GC, Full Eval Set
-- [ ] M8 — Multi-Language Structural Extraction (proposed — needs human sign-off on the new parser dependency before build)
+- [ ] M8 — Multi-Language Structural Extraction (Python via `tree-sitter`, approved — see CLAUDE.md)
 
 Repo layout target:
 
@@ -189,25 +189,26 @@ day retention windows from §18.
 
 ## M8 — Multi-Language Structural Extraction (spec §21)
 
-**Proposed via `/propose-milestone` — requires a human decision before
-`/next-milestone` builds it: see "Deviations" in the PR that added this
-section. Adding a second language extractor means picking a new
-parsing/type-resolution library, which is a stack addition `CLAUDE.md`'s
-locked-stack rule says a human must confirm, not something a milestone
-build should decide on its own.**
+**Proposed via `/propose-milestone`, approved by a human — see the
+"Approved" note below and `CLAUDE.md`'s locked-stack rule.** Adding a
+second language extractor meant picking a new parsing/type-resolution
+library; that stack addition (`tree-sitter`) has been confirmed, so
+`/next-milestone` can build this milestone without re-flagging the
+dependency as a new deviation.
+
+**Approved:** `tree-sitter` (with its Python grammar) is the
+parsing/symbol-resolution library for this milestone — no longer an open
+choice, confirmed per `CLAUDE.md`'s locked-stack rule.
 
 **Goal:** prove spec §21's additional-language-extractor contract with one
-real second language (Python is the concrete target below; the choice of
-library is the open decision this milestone needs a human's sign-off on
-before implementation starts), producing the exact same `packages/core`
-Node/Edge shape M1 already defines, through the same incremental-update
-path as M1.
+real second language (Python, via `tree-sitter`), producing the exact same
+`packages/core` Node/Edge shape M1 already defines, through the same
+incremental-update path as M1.
 
 - A per-language structural extractor for Python (new package, e.g.
   `packages/structural-python`, or an extractor registry inside
-  `packages/structural` — implementer's call) using a real AST/symbol-
-  resolution tool for Python (e.g. `tree-sitter` with its Python grammar —
-  a candidate, not a spec-level commitment per §21). Emit `file`, `class`,
+  `packages/structural` — implementer's call) using `tree-sitter` with its
+  Python grammar for AST/symbol resolution. Emit `file`, `class`,
   `function`, `method`, `import`, `call` nodes/edges conforming to
   `packages/core` types, `sourceType: "source_code"` provenance at
   `confidence: 1.0`, same as M1.

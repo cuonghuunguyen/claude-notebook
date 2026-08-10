@@ -8,7 +8,12 @@ the source of truth, not this file's memory of past sessions).
 
 - Stack is locked: pnpm + TypeScript workspaces, Postgres + pgvector +
   pg_trgm, ts-morph for TS/JS structural extraction. Don't introduce a
-  different one without flagging it explicitly first.
+  different one without flagging it explicitly first. One approved
+  addition: `tree-sitter` for the Python extractor (spec.md §21, ROADMAP.md
+  M8) — flagged in PR #9 and signed off by a human, so `/next-milestone`
+  building M8 does not need to re-flag this as a new deviation. Any
+  *other* new dependency still needs the same explicit flag-and-wait this
+  rule always required.
 - Never check a ROADMAP.md milestone box without having actually run its
   tests in this session and seen them pass (unit always; integration tests
   need `DATABASE_URL`, set automatically by the SessionStart hook —

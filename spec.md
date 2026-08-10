@@ -713,3 +713,105 @@ before it's added, not something a milestone build silently introduces.
 Multi-language structural extraction is a build milestone (see
 `ROADMAP.md`), not a someday-nice-to-have — the same posture §19 takes
 toward the eval plan.
+
+---
+
+## 22. Pipeline Orchestration (extends §1, §9, §10, §17 — proposed via `/propose-milestone`)
+
+§1's data-flow diagram (Task → Hybrid Retrieval → Seed Nodes → Reasoning →
+Selective Graph Traversal → Evidence/Experience Retrieval → Task-specific
+Subgraph → Agent Context) and §15's "Agent task" pipeline sketch describe
+the system's core value proposition as one continuous flow. M2 (retrieval),
+M5 (traversal), and M6 (context) each independently implement one stage of
+that flow, but **no code in the workspace composes them** — `retrieveSeeds`
+(§9), `traverse` (§10), and `buildContext` (§17) have zero dependency edges
+between their packages, and their types don't compose: `retrieveSeeds`
+returns `SeedNode[]` where `traverse` expects `seedNodeIds: string[]`, and
+`traverse` returns `TraversalResult` (`{ nodeIds: string[], edges }`) where
+`buildContext` expects a `Subgraph` (`{ nodes: Node[], edges }`) — there is
+no hydration step anywhere turning traversal's id list into the hydrated
+nodes context requires. A caller today can exercise any one stage but
+cannot go from a task string to an `AgentContext` without first writing the
+composition layer this section specifies. (§21's claim that M1–M7
+"validated th[e] full pipeline end-to-end" refers to each stage's own
+fixtures, not a cross-package integration path — no such path exists prior
+to this section.)
+
+**What this section decides:** a new package composes the existing M2/M5/M6
+contracts, unmodified, into one entry point:
+
+```ts
+interface PipelineOptions {
+  repoId?: string;
+  /** Shared with both retrieval's vector leg and traversal's ranking term —
+   *  computed at most once per call (see below), never independently by
+   *  each stage, so the two stages can't disagree about what "semantically
+   *  relevant to this task" means for the same call. */
+  embedder?: EmbeddingProvider;       // retrieval §9
+  graph: GraphProvider;               // traversal §10 — required, no default
+  reasoner: ReasoningProvider;        // traversal §10 — required, no default
+  retrieveOptions?: Omit<RetrieveOptions, "embedder" | "repoId">;
+  traverseOptions?: Omit<TraverseOptions, "graph" | "reasoner" | "taskEmbedding">;
+  contextOptions?: BuildContextOptions;
+  /** Flat cap on hydrated experiences across the whole subgraph, independent
+   *  of node count — keeps this bounded the same way §17's own
+   *  DEFAULT_MAX_* caps bound buildContext's output. Default 20. */
+  maxExperiences?: number;
+}
+
+interface PipelineResult {
+  context: AgentContext;   // §17
+  seeds: SeedNode[];       // §9 — surfaced for callers/eval harnesses that need to see *why*
+  traversal: TraversalResult; // §10 — ditto
+}
+
+function runPipeline(task: string, options: PipelineOptions): Promise<PipelineResult>;
+```
+
+Composition steps, in order:
+
+1. If `options.embedder` is set, call `embedder.embed(task)` once and reuse
+   the result for both retrieval's vector leg (via `retrieveOptions`
+   plumbing into §9's `RetrieveOptions.embedder`) and traversal's
+   `taskEmbedding` (§10's §11-ranking term) — one embedding call per
+   `runPipeline` invocation, not one per stage.
+2. Call `retrieveSeeds(task, { repoId, embedder, ...retrieveOptions })` →
+   `SeedNode[]`.
+3. **Empty-seed case (previously undefined):** if retrieval returns zero
+   seeds, skip traversal entirely and return `buildContext({ nodes: [],
+   edges: [], experiences: [] }, task, contextOptions)` — an empty but valid
+   `AgentContext`, never a thrown error. A task nothing in the graph matches
+   yet is a legitimate outcome (e.g. a brand-new codebase), not a failure.
+4. Otherwise call `traverse(seeds.map(s => s.nodeId), task, { graph,
+   reasoner, taskEmbedding, ...traverseOptions })` → `TraversalResult`.
+5. Hydrate nodes: `getNodesByIds(traversalResult.nodeIds)` (graph-store,
+   already exported) → `Node[]`.
+6. Hydrate experiences: `queryByNode(node.id)` (episodic, already exported)
+   for each hydrated node, de-duplicated by experience id, truncated to
+   `maxExperiences` most-recent — this is the §9/§17 "Evidence/Experience
+   Retrieval" stage, which nothing previously invoked outside test
+   scaffolding (`recordExperience` had no non-test caller; this section
+   doesn't change that write side, only exercises the existing read side).
+7. Assemble `Subgraph = { nodes, edges: traversalResult.edges, experiences
+   }` and call `buildContext(subgraph, task, contextOptions)` → `AgentContext`.
+
+**What this section deliberately does NOT decide:** §15's "after task"
+step (transcript → extract experiences → `recordExperience` → promote,
+§7/§8) stays out of `runPipeline`'s scope. That step necessarily happens
+*after* the agent has acted on the context this section produces —
+potentially in a different process entirely — so it remains the caller's
+own later call to the existing `recordExperience` API (§8), not something
+this orchestration entry point can perform synchronously. This section
+covers exactly §1's diagram from `Task` through `Agent Context`, not the
+loop back into episodic memory.
+
+No new external dependency is introduced — `runPipeline` composes
+already-exported functions from `retrieval`, `traversal`, `graph-store`,
+`episodic`, and `context` (§9/§10/§17/§8), using the same injected-provider
+pattern (`EmbeddingProvider`, `GraphProvider`, `ReasoningProvider`) those
+sections already established. Node/edge semantics (§3.2, §3.3), the
+promotion table (§7), and traversal batching (§10) are unmodified; this
+section only wires existing contracts together.
+
+Pipeline orchestration is a build milestone (see `ROADMAP.md`), not a
+someday-nice-to-have — the same posture §19 and §21 take.

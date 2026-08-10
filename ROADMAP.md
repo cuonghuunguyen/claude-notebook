@@ -20,6 +20,7 @@ This checklist is the source of truth for what's done — see
 - [x] M6 — Context Construction
 - [x] M7 — Staleness, Events, GC, Full Eval Set
 - [x] M8 — Multi-Language Structural Extraction (Python via `tree-sitter`, approved — see CLAUDE.md)
+- [ ] M9 — Pipeline Orchestration
 
 Repo layout target:
 
@@ -242,6 +243,61 @@ incremental-update path as M1.
   producing a wrong node type and, on deeper inspection, an unhandled
   compiler exception): see the PR that added this section for the captured
   repro.
+
+## M9 — Pipeline Orchestration (spec §22)
+
+**Proposed via `/propose-milestone`** — demonstrated gap: `packages/retrieval`,
+`packages/traversal`, and `packages/context` have zero dependency edges on
+each other (verified via `package.json`) and their exported types don't
+compose (`retrieveSeeds` returns `SeedNode[]` where `traverse` expects
+`seedNodeIds: string[]`; `traverse` returns `TraversalResult` where
+`buildContext` expects a `Subgraph`, with no node-hydration step anywhere
+bridging the two). A direct `tsc` of the naive composition
+`traverse(seeds, ...)` / `buildContext(traversalResult, ...)` fails with
+`Argument of type 'SeedNode[]' is not assignable to parameter of type
+'string[]'` and `Property 'nodes' is missing in type 'TraversalResult' but
+required in type 'Subgraph'` — see the PR that added this section for the
+captured repro. No caller in the workspace (test or otherwise) currently
+goes from a task string to an `AgentContext`.
+
+**Goal:** implement spec §22's `runPipeline(task, options)` composing the
+existing M2/M5/M6 contracts — no new external dependency, no change to any
+package's existing public API.
+
+- New package `packages/pipeline`: `runPipeline` per spec §22's steps 1-7 —
+  shared task-embedding computation, `retrieveSeeds` → `traverse` →
+  node/experience hydration (`getNodesByIds`, `queryByNode`, both already
+  exported by `graph-store`/`episodic`) → `buildContext`.
+- Empty-seed short-circuit per spec §22 point 3: zero retrieval hits returns
+  an empty `AgentContext`, not a thrown error.
+- `maxExperiences` cap per spec §22 — bounded regardless of subgraph size.
+- Depends only on already-existing workspace packages (`retrieval`,
+  `traversal`, `graph-store`, `episodic`, `context`, `core`) — adding these
+  as dependency edges in `packages/pipeline/package.json` is in scope;
+  modifying any of those five packages' existing exports is not.
+
+**Acceptance:**
+- Unit test with fixture `GraphProvider`/`ReasoningProvider`/`EmbeddingProvider`
+  fakes (same pattern M5/M2 already use): a task string that matches a
+  fixture node produces an `AgentContext` with the expected subsystems/
+  relationships/experiences, in one `runPipeline` call — no per-stage glue
+  in the test itself.
+- Empty-seed test: a task matching nothing in the fixture returns
+  `{ subsystems: [], relationships: [], invariants: [], experiences: [],
+  sourceFiles: [] }` (per spec §22 point 3), and asserts `traverse` was
+  never called (the short-circuit actually short-circuits, not just
+  produces an empty result via a wasted traversal call).
+- Shared-embedding test: with a spy `EmbeddingProvider`, assert `embed()` is
+  called exactly once per `runPipeline` invocation, not once per stage.
+- Integration test (gated on `DATABASE_URL`): real Postgres graph-store +
+  the M1 fixture project's nodes, a scripted (non-LLM) reasoner, asserting
+  the returned `AgentContext`'s `sourceFiles`/`relationships` match the
+  fixture's known structure — this is the actual point of spec §22 (the
+  stages compose for real, not just against in-memory fakes).
+- Experience-hydration test: seed the episodic store with a `recordExperience`
+  call for a node the traversal reaches, assert it surfaces in the returned
+  `AgentContext.experiences` — this is the first real (non-test-only)
+  exercise of episodic memory's read path from outside its own package.
 
 ---
 

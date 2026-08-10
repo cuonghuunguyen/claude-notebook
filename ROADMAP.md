@@ -20,7 +20,7 @@ This checklist is the source of truth for what's done — see
 - [x] M6 — Context Construction
 - [x] M7 — Staleness, Events, GC, Full Eval Set
 - [x] M8 — Multi-Language Structural Extraction (Python via `tree-sitter`, approved — see CLAUDE.md)
-- [ ] M9 — Pipeline Orchestration
+- [x] M9 — Pipeline Orchestration
 
 Repo layout target:
 

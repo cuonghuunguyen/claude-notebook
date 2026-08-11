@@ -1,0 +1,693 @@
+{
+  "variant": "system-claude",
+  "topK": 10,
+  "tasks": 12,
+  "sourceScope": [
+    "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/**/*.ts",
+    "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/**/*.ts",
+    "!/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/tests/**",
+    "!/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/tests/**"
+  ],
+  "reasonerStats": {
+    "calls": 21,
+    "totalLatencyMs": 419069,
+    "parseFailures": 0
+  },
+  "system": {
+    "aggregate": {
+      "meanRecallAtK": 0.7916666666666666,
+      "meanMrr": 0.3862103174603175,
+      "hitAt1Rate": 0.25,
+      "meanLatencyMs": 34987.666666666664,
+      "meanContextChars": 1702.8333333333333
+    },
+    "perTask": [
+      {
+        "taskId": "email-regex",
+        "question": "Where is the email validation regex defined and which check uses it?",
+        "expectedFiles": [
+          "v4/core/regexes.ts",
+          "v4/core/checks.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/api.ts"
+        ],
+        "recallAtK": 0,
+        "mrr": 0,
+        "hitAt1": false,
+        "latencyMs": 73806,
+        "seeds": 15,
+        "traversedNodes": 26,
+        "reasoningSteps": 3,
+        "stopReason": "budget_exhausted",
+        "contextChars": 2002,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "coerce",
+        "question": "How does z.coerce.number() coercion work and where is it implemented?",
+        "expectedFiles": [
+          "v4/classic/coerce.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/coerce.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/api.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 1,
+        "hitAt1": true,
+        "latencyMs": 20939,
+        "seeds": 15,
+        "traversedNodes": 16,
+        "reasoningSteps": 1,
+        "stopReason": "no_frontier",
+        "contextChars": 867,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "discriminated-union",
+        "question": "Where is the discriminated union schema implemented and how does it pick the matching branch?",
+        "expectedFiles": [
+          "v4/core/schemas.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-generator.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/standard-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/to-json-schema.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.14285714285714285,
+        "hitAt1": false,
+        "latencyMs": 40437,
+        "seeds": 22,
+        "traversedNodes": 25,
+        "reasoningSteps": 2,
+        "stopReason": "no_expansion",
+        "contextChars": 2297,
+        "experiencesSurfaced": 1
+      },
+      {
+        "taskId": "to-json-schema",
+        "question": "How does converting a zod schema to JSON Schema work?",
+        "expectedFiles": [
+          "v4/core/to-json-schema.ts",
+          "v4/core/json-schema-generator.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/index.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-generator.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/to-json-schema.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.25,
+        "hitAt1": false,
+        "latencyMs": 37032,
+        "seeds": 28,
+        "traversedNodes": 32,
+        "reasoningSteps": 2,
+        "stopReason": "no_frontier",
+        "contextChars": 2054,
+        "experiencesSurfaced": 1
+      },
+      {
+        "taskId": "safe-parse",
+        "question": "Where are parse and safeParse implemented, and how do sync and async parsing differ?",
+        "expectedFiles": [
+          "v4/core/parse.ts",
+          "v4/classic/parse.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/errors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/external.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/parse.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/core.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/index.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/parse.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/util.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.3333333333333333,
+        "hitAt1": false,
+        "latencyMs": 20181,
+        "seeds": 21,
+        "traversedNodes": 21,
+        "reasoningSteps": 1,
+        "stopReason": "no_expansion",
+        "contextChars": 1775,
+        "experiencesSurfaced": 1
+      },
+      {
+        "taskId": "error-map",
+        "question": "How are custom error maps resolved when a validation issue is created?",
+        "expectedFiles": [
+          "v4/core/errors.ts",
+          "v4/core/config.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/api.ts"
+        ],
+        "recallAtK": 0,
+        "mrr": 0,
+        "hitAt1": false,
+        "latencyMs": 24058,
+        "seeds": 16,
+        "traversedNodes": 17,
+        "reasoningSteps": 1,
+        "stopReason": "no_frontier",
+        "contextChars": 878,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "registry-meta",
+        "question": "Where is the schema registry implemented that .meta() and globalRegistry use?",
+        "expectedFiles": [
+          "v4/core/registries.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/registries.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/standard-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/to-json-schema.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.2,
+        "hitAt1": false,
+        "latencyMs": 58685,
+        "seeds": 18,
+        "traversedNodes": 31,
+        "reasoningSteps": 3,
+        "stopReason": "budget_exhausted",
+        "contextChars": 3181,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "string-checks",
+        "question": "Where are string checks like min length, max length and starts_with implemented?",
+        "expectedFiles": [
+          "v4/core/checks.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/checks.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/checks.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.25,
+        "hitAt1": false,
+        "latencyMs": 52332,
+        "seeds": 14,
+        "traversedNodes": 21,
+        "reasoningSteps": 3,
+        "stopReason": "budget_exhausted",
+        "contextChars": 2152,
+        "experiencesSurfaced": 1
+      },
+      {
+        "taskId": "iso-datetime",
+        "question": "Where is ISO 8601 datetime string validation implemented?",
+        "expectedFiles": [
+          "v4/classic/iso.ts",
+          "v4/core/regexes.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/iso.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/regexes.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 1,
+        "hitAt1": true,
+        "latencyMs": 26457,
+        "seeds": 20,
+        "traversedNodes": 23,
+        "reasoningSteps": 2,
+        "stopReason": "no_expansion",
+        "contextChars": 1208,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "standard-schema",
+        "question": "How does zod implement the Standard Schema interface spec?",
+        "expectedFiles": [
+          "v4/core/standard-schema.ts",
+          "v4/core/core.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-generator.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/standard-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/to-json-schema.ts"
+        ],
+        "recallAtK": 0.5,
+        "mrr": 0.125,
+        "hitAt1": false,
+        "latencyMs": 24161,
+        "seeds": 31,
+        "traversedNodes": 31,
+        "reasoningSteps": 1,
+        "stopReason": "no_expansion",
+        "contextChars": 1681,
+        "experiencesSurfaced": 1
+      },
+      {
+        "taskId": "pipe-transform",
+        "question": "Where are pipe and transform implemented for chaining schemas?",
+        "expectedFiles": [
+          "v4/core/schemas.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/to-json-schema.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.3333333333333333,
+        "hitAt1": false,
+        "latencyMs": 18327,
+        "seeds": 16,
+        "traversedNodes": 18,
+        "reasoningSteps": 1,
+        "stopReason": "no_frontier",
+        "contextChars": 1324,
+        "experiencesSurfaced": 1
+      },
+      {
+        "taskId": "from-json-schema",
+        "question": "How does building a zod schema from an existing JSON Schema document work?",
+        "expectedFiles": [
+          "v4/classic/from-json-schema.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-generator.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/to-json-schema.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 1,
+        "hitAt1": true,
+        "latencyMs": 23437,
+        "seeds": 23,
+        "traversedNodes": 23,
+        "reasoningSteps": 1,
+        "stopReason": "no_expansion",
+        "contextChars": 1015,
+        "experiencesSurfaced": 0
+      }
+    ]
+  },
+  "baseline": {
+    "aggregate": {
+      "meanRecallAtK": 0.8333333333333334,
+      "meanMrr": 0.33194444444444443,
+      "hitAt1Rate": 0.08333333333333333,
+      "meanLatencyMs": 3.3333333333333335,
+      "meanContextChars": 0
+    },
+    "perTask": [
+      {
+        "taskId": "email-regex",
+        "question": "Where is the email validation regex defined and which check uses it?",
+        "expectedFiles": [
+          "v4/core/regexes.ts",
+          "v4/core/checks.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/regexes.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/zsf.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/checks.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-processors.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 1,
+        "hitAt1": true,
+        "latencyMs": 4,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "coerce",
+        "question": "How does z.coerce.number() coercion work and where is it implemented?",
+        "expectedFiles": [
+          "v4/classic/coerce.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/coerce.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/zsf.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.2,
+        "hitAt1": false,
+        "latencyMs": 3,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "discriminated-union",
+        "question": "Where is the discriminated union schema implemented and how does it pick the matching branch?",
+        "expectedFiles": [
+          "v4/core/schemas.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-generator.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/standard-schema.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.16666666666666666,
+        "hitAt1": false,
+        "latencyMs": 3,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "to-json-schema",
+        "question": "How does converting a zod schema to JSON Schema work?",
+        "expectedFiles": [
+          "v4/core/to-json-schema.ts",
+          "v4/core/json-schema-generator.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/util.ts"
+        ],
+        "recallAtK": 0.5,
+        "mrr": 0.2,
+        "hitAt1": false,
+        "latencyMs": 3,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "safe-parse",
+        "question": "Where are parse and safeParse implemented, and how do sync and async parsing differ?",
+        "expectedFiles": [
+          "v4/core/parse.ts",
+          "v4/classic/parse.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/parse.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/parse.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/core.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/doc.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-processors.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.5,
+        "hitAt1": false,
+        "latencyMs": 4,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "error-map",
+        "question": "How are custom error maps resolved when a validation issue is created?",
+        "expectedFiles": [
+          "v4/core/errors.ts",
+          "v4/core/config.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/errors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/parse.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/parse.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-processors.ts"
+        ],
+        "recallAtK": 0.5,
+        "mrr": 0.5,
+        "hitAt1": false,
+        "latencyMs": 4,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "registry-meta",
+        "question": "Where is the schema registry implemented that .meta() and globalRegistry use?",
+        "expectedFiles": [
+          "v4/core/registries.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/registries.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-generator.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/standard-schema.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.16666666666666666,
+        "hitAt1": false,
+        "latencyMs": 3,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "string-checks",
+        "question": "Where are string checks like min length, max length and starts_with implemented?",
+        "expectedFiles": [
+          "v4/core/checks.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/to-json-schema.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.25,
+        "hitAt1": false,
+        "latencyMs": 3,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "iso-datetime",
+        "question": "Where is ISO 8601 datetime string validation implemented?",
+        "expectedFiles": [
+          "v4/classic/iso.ts",
+          "v4/core/regexes.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/iso.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-processors.ts"
+        ],
+        "recallAtK": 0.5,
+        "mrr": 0.125,
+        "hitAt1": false,
+        "latencyMs": 3,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "standard-schema",
+        "question": "How does zod implement the Standard Schema interface spec?",
+        "expectedFiles": [
+          "v4/core/standard-schema.ts",
+          "v4/core/core.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/standard-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/util.ts"
+        ],
+        "recallAtK": 0.5,
+        "mrr": 0.125,
+        "hitAt1": false,
+        "latencyMs": 4,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "pipe-transform",
+        "question": "Where are pipe and transform implemented for chaining schemas?",
+        "expectedFiles": [
+          "v4/core/schemas.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/parse.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/coerce.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.5,
+        "hitAt1": false,
+        "latencyMs": 3,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "from-json-schema",
+        "question": "How does building a zod schema from an existing JSON Schema document work?",
+        "expectedFiles": [
+          "v4/classic/from-json-schema.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/util.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.25,
+        "hitAt1": false,
+        "latencyMs": 3,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      }
+    ]
+  }
+}

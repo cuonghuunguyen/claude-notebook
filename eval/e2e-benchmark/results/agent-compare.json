@@ -1,0 +1,140 @@
+{
+  "model": "claude-haiku-4-5-20251001",
+  "contextsPath": "/home/user/claude-notebook/eval/e2e-benchmark/results/contexts-system-claude.json",
+  "bare": {
+    "meanFileScore": 0.8333333333333334,
+    "meanSymbolScore": 1,
+    "meanDurationMs": 28726,
+    "meanTurns": 10.333333333333334,
+    "totalCostUsd": 0.5853114
+  },
+  "memory": {
+    "meanFileScore": 0.8333333333333334,
+    "meanSymbolScore": 1,
+    "meanDurationMs": 21097.333333333332,
+    "meanTurns": 7.333333333333333,
+    "totalCostUsd": 0.4040579000000001
+  },
+  "runs": [
+    {
+      "taskId": "email-regex",
+      "condition": "bare",
+      "durationMs": 23285,
+      "numTurns": 7,
+      "costUsd": 0.11842749999999999,
+      "fileScore": 0.5,
+      "symbolScore": 1,
+      "answer": "**File path:** `packages/zod/src/v4/core/regexes.ts` (line 41-42)\n\n**Key symbols:**\n- `email` — the regex constant: `/^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$/`\n- `$ZodEmail` — the schema constructor in `packages/zod/src/v4/core/schemas.ts` (line 457-463) that uses it via `def.pattern ??= regexes.email`"
+    },
+    {
+      "taskId": "email-regex",
+      "condition": "memory",
+      "durationMs": 33549,
+      "numTurns": 11,
+      "costUsd": 0.10958160000000003,
+      "fileScore": 0.5,
+      "symbolScore": 1,
+      "answer": "**Email validation regex location and usage:**\n\n**Regex definition:**\n- **File:** `packages/zod/src/v4/core/regexes.ts` (line 41)\n- **Symbol:** `email` — the \"practical email validation\" regex: `/^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$/`\n\n**Used by:**\n- **File:** `packages/zod/src/v4/core/schemas.ts` (lines 457–462)\n- **Symbol:** `$ZodEmail` — the core constructor that assigns `regexes.email` to the pattern property\n- This is exposed publicly via `_email()` in `packages/zod/src/v4/core/api.ts` (line 96) and the `email()` function in `packages/zod/src/v4/classic/schemas.ts` (line 660)"
+    },
+    {
+      "taskId": "coerce",
+      "condition": "bare",
+      "durationMs": 35967,
+      "numTurns": 14,
+      "costUsd": 0.1352617,
+      "fileScore": 1,
+      "symbolScore": 1,
+      "answer": "The coercion for `z.coerce.number()` happens in three parts:\n\n1. **Entry point**: `packages/zod/src/v4/classic/coerce.ts:10-11` — The `number()` function calls `core._coercedNumber()`\n\n2. **Factory**: `packages/zod/src/v4/core/api.ts:593-603` — `_coercedNumber()` creates a ZodNumber instance with `coerce: true` flag\n\n3. **Actual coercion**: `packages/zod/src/v4/core/schemas.ts:1124-1128` — In the `$ZodNumber` schema's parse function:\n```typescript\nif (def.coerce)\n  try {\n    payload.value = Number(payload.value);\n  } catch (_) {}\n```\n\nThe coercion uses JavaScript's native `Number()` constructor to convert the input value. If the conversion fails, it silently catches the error and lets validation continue (which will then reject non-numbers). After coercion, the value is validated to ensure it's a finite number (line 1130).\n\n**Key symbols**: `coerce.number()`, `_coercedNumber()`, `$ZodNumber`"
+    },
+    {
+      "taskId": "coerce",
+      "condition": "memory",
+      "durationMs": 42926,
+      "numTurns": 19,
+      "costUsd": 0.1238765,
+      "fileScore": 1,
+      "symbolScore": 1,
+      "answer": "**Files and symbols:**\n\n1. **`packages/zod/src/v4/classic/coerce.ts:10`** — `number()` function (the public API)\n   - Delegates to `core._coercedNumber()`\n\n2. **`packages/zod/src/v4/core/api.ts:593`** — `_coercedNumber()` function  \n   - Creates a `ZodNumber` instance with `coerce: true` flag\n\n3. **`packages/zod/src/v4/core/schemas.ts:1120-1128`** — `$ZodNumber` constructor (where coercion happens)\n   - At line 1127: `payload.value = Number(payload.value)` — calls JavaScript's `Number()` constructor to coerce the input\n   - Then validates the result is a valid finite number (not NaN or Infinity)\n\nThe coercion works by attempting to convert the input using JavaScript's `Number()` function, then validating the result is a finite number."
+    },
+    {
+      "taskId": "discriminated-union",
+      "condition": "bare",
+      "durationMs": 42958,
+      "numTurns": 17,
+      "costUsd": 0.135918,
+      "fileScore": 1,
+      "symbolScore": 1,
+      "answer": "**File paths:**\n- **Core implementation:** `packages/zod/src/v4/core/schemas.ts:2354-2458`\n  - `$ZodDiscriminatedUnionDef` interface (def shape with discriminator field)\n  - `$ZodDiscriminatedUnion` constructor (parsing logic)\n  \n- **Factory function:** `packages/zod/src/v4/classic/schemas.ts:1684-1699`\n  - `discriminatedUnion()` function\n\n**Key symbols:**\n- `$ZodDiscriminatedUnionDef` – defines the schema structure with `discriminator: string` property\n- `$ZodDiscriminatedUnion` – constructor initializing the parse logic\n\n**How it picks the matching branch:**\n\n1. **Build phase** (lines 2401-2416): Creates a cached `Map<Primitive, ZodType>` where keys are discriminator values from each option's literal schema.\n\n2. **Parse phase** (lines 2431-2434): \n   - Extracts the discriminator value from input: `input[def.discriminator]`\n   - Looks it up in the map: `disc.value.get(input[def.discriminator])`\n   - If found, runs that option's validator immediately\n\n3. **Fallback** (lines 2440-2442): If no match and `unionFallback` is enabled, tries regular union matching. Otherwise returns \"No matching discriminator\" error (line 2448).\n\nThe Map enables O(1) lookup instead of trying each option sequentially."
+    },
+    {
+      "taskId": "discriminated-union",
+      "condition": "memory",
+      "durationMs": 14786,
+      "numTurns": 4,
+      "costUsd": 0.0499029,
+      "fileScore": 1,
+      "symbolScore": 1,
+      "answer": "The discriminated union is implemented in **`packages/zod/src/v4/core/schemas.ts`** with these key symbols:\n\n- **`$ZodDiscriminatedUnion`** (line 2377) — the schema class constructor\n- **`$ZodDiscriminatedUnionDef`** (line 2354) — the definition interface  \n- **`$ZodDiscriminatedUnionInternals`** (line 2362) — internals interface\n\n**How it picks the matching branch:**\n\nThe implementation builds a lazy-initialized `Map` (lines 2401–2416) that maps discriminator values to their corresponding option schemas:\n1. For each option, it extracts the possible values of the discriminator property (`propValues[def.discriminator]`)\n2. Each value is added to the map pointing to that option\n\nDuring validation (line 2431), it:\n1. Extracts the discriminator value from the input: `input?.[def.discriminator]`\n2. Looks it up in the map: `disc.value.get(...)`\n3. If found, runs that option's parser directly\n4. If not found, either falls back to regular union matching (if `unionFallback` is enabled or during backward/encode) or returns an error noting the discriminator mismatch"
+    },
+    {
+      "taskId": "safe-parse",
+      "condition": "bare",
+      "durationMs": 21173,
+      "numTurns": 6,
+      "costUsd": 0.053065,
+      "fileScore": 1,
+      "symbolScore": 1,
+      "answer": "**Core implementation:** `packages/zod/src/v4/core/parse.ts` contains `_parse`, `_parseAsync`, `_safeParse`, `_safeParseAsync`.\n\n**Key difference:**\n\n- **Sync parsing** (`_parse`, `_safeParse`): Set `async: false` in context; throw `$ZodAsyncError` if schema runs async validators (line 19–20, 62–63)\n- **Async parsing** (`_parseAsync`, `_safeParseAsync`): Set `async: true`; await Promise results if they occur (line 40–42, 82–84)\n\n**Throwing vs. safe:**\n- `parse`/`parseAsync` throw errors on validation failure\n- `safeParse`/`safeParseAsync` return `{success: true; data}` or `{success: false; error}` instead of throwing\n\nBoth are wrapped by the classic variant at `packages/zod/src/v4/classic/parse.ts` to use the `ZodRealError` class and expose them as methods on schema instances."
+    },
+    {
+      "taskId": "safe-parse",
+      "condition": "memory",
+      "durationMs": 12781,
+      "numTurns": 3,
+      "costUsd": 0.04046520000000001,
+      "fileScore": 1,
+      "symbolScore": 1,
+      "answer": "## Parse/SafeParse Implementation\n\n**File locations:**\n- **Core implementation:** `packages/zod/src/v4/core/parse.ts`\n- **Public API (exports):** `packages/zod/src/v4/classic/parse.ts` (delegates to core)\n\n**Key symbols in core/parse.ts:**\n- `parse` (line 30): wraps `_parse()` – throws `ZodError` on validation failure\n- `safeParse` (line 73): wraps `_safeParse()` – returns `{success: false, error}` or `{success: true, data}`\n- `parseAsync` (line 51): wraps `_parseAsync()` – async version that throws\n- `safeParseAsync` (line 94): wraps `_safeParseAsync()` – async version that returns result object\n\n## Sync vs. Async Difference\n\n| Aspect | Sync | Async |\n|--------|------|-------|\n| Context flag | `async: false` (line 17, 60) | `async: true` (line 40, 82) |\n| Promise handling | Throws `$ZodAsyncError` if result is Promise (line 19, 62) | Awaits Promise results (line 42, 84) |\n| Return type | Direct value or throws | `Promise<value>` or `Promise<result>` |\n\nBoth sync and async call the same `schema._zod.run()` method with a context flag that allows validators to behave differently based on whether async operations are permitted."
+    },
+    {
+      "taskId": "registry-meta",
+      "condition": "bare",
+      "durationMs": 29998,
+      "numTurns": 11,
+      "costUsd": 0.0870379,
+      "fileScore": 1,
+      "symbolScore": 1,
+      "answer": "The schema registry is implemented in **`packages/zod/src/v4/core/registries.ts`** with these key symbols:\n\n- **`$ZodRegistry<Meta, Schema>`** — The registry class that stores metadata using a WeakMap (`_map`) and an ID map (`_idmap`)\n- **`globalRegistry`** — The singleton instance attached to `globalThis.__zod_globalRegistry`, shared across all CJS/ESM builds\n\nThe `.meta()` method is defined in **`packages/zod/src/v4/classic/schemas.ts`** (lines 338–345):\n- Overloaded: `.meta()` reads from `globalRegistry.get(this)`, `.meta(data)` clones the schema and registers it via `globalRegistry.add(cl, data)`"
+    },
+    {
+      "taskId": "registry-meta",
+      "condition": "memory",
+      "durationMs": 7136,
+      "numTurns": 2,
+      "costUsd": 0.0314298,
+      "fileScore": 1,
+      "symbolScore": 1,
+      "answer": "**File:** `packages/zod/src/v4/core/registries.ts`\n\n**Key symbols:**\n- `$ZodRegistry<Meta, Schema>` — the registry class with `add()`, `get()`, `has()`, `remove()`, and `clear()` methods\n- `globalRegistry` — the singleton instance (line 105) attached to `globalThis.__zod_globalRegistry`\n- `JSONSchemaMeta` and `GlobalMeta` — metadata type interfaces\n\nThe registry uses a `WeakMap` to associate schemas with metadata and an `id`-based `Map` for lookups. The `.meta()` method on schemas adds entries via `globalRegistry.add()`."
+    },
+    {
+      "taskId": "standard-schema",
+      "condition": "bare",
+      "durationMs": 18975,
+      "numTurns": 7,
+      "costUsd": 0.0556013,
+      "fileScore": 0.5,
+      "symbolScore": 1,
+      "answer": "Zod implements the Standard Schema interface spec through two main source files:\n\n**Interface Definition:**\n- **`packages/zod/src/v4/core/standard-schema.ts`** — Defines the interface contracts:\n  - `StandardSchemaV1` — Main Standard Schema interface with a `validate()` method\n  - `StandardTypedV1` — Type information interface (input/output types)\n  - `StandardJSONSchemaV1` — JSON Schema support interface\n\n**Implementation:**\n- **`packages/zod/src/v4/core/schemas.ts`** — Implements the interface on all ZodSchema instances:\n  - **`$ZodStandardSchema<T>`** type (line 175) — Maps to `StandardSchemaV1.Props<input, output>`\n  - **`$ZodType` interface** (line 185) — Declares the `\"~standard\"` property\n  - **Lazy initialization** (lines 308–319) — Uses `util.defineLazy()` to initialize on-demand:\n    - `validate()` — calls `safeParse()` or `safeParseAsync()`, returns `{value}` or `{issues}`\n    - `vendor: \"zod\"` and `version: 1` — metadata\n\nThe spec is exposed via the read-only `\"~standard\"` symbol on every schema, allowing third-party tools to validate using any Standard Schema-compliant library interchangeably."
+    },
+    {
+      "taskId": "standard-schema",
+      "condition": "memory",
+      "durationMs": 15406,
+      "numTurns": 5,
+      "costUsd": 0.0488019,
+      "fileScore": 0.5,
+      "symbolScore": 1,
+      "answer": "**File:** `packages/zod/src/v4/core/standard-schema.ts`\n- Defines the spec interfaces: `StandardSchemaV1`, `StandardTypedV1`, `StandardJSONSchemaV1`, `StandardSchemaWithJSON`\n\n**File:** `packages/zod/src/v4/core/schemas.ts`\n- **Line 175:** `$ZodStandardSchema<T>` type maps ZodType to `StandardSchemaV1.Props<input, output>`\n- **Line 185:** `$ZodType` interface declares `\"~standard\"` property\n- **Lines 308–313:** Lazily initializes `~standard` with a `validate` function (using `util.defineLazy()`) that wraps the schema's `safeParse` method to return the Standard Schema result format\n\nEach ZodSchema instance thus implements `StandardSchemaV1` by exposing a `~standard` property with `validate` and type metadata."
+    }
+  ]
+}

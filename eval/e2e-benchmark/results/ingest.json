@@ -1,0 +1,23 @@
+{
+  "repoId": "zod-v4-benchmark",
+  "root": "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4",
+  "filesParsed": 29,
+  "nodes": 371,
+  "edges": 834,
+  "nodesByType": {
+    "file": 29,
+    "function": 326,
+    "class": 6,
+    "method": 10
+  },
+  "nodesInStore": 371,
+  "syntheticExperiencesOn": [
+    "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/schemas.ts",
+    "/tmp/claude-0/-home-user-claude-notebook/23e223a4-d0b1-5cee-841a-b8e92c8c03b9/scratchpad/zod/packages/zod/src/v4/core/checks.ts"
+  ],
+  "timingsMs": {
+    "extract": 2933,
+    "persist": 852,
+    "indexEmbeddings": 2216
+  }
+}

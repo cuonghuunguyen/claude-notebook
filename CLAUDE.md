@@ -104,6 +104,42 @@ cleanly met — never on a timer. `ROADMAP.md` growing via
 `/propose-milestone` stays a deliberate, evidenced event because of the
 evidence-bar rule itself, not because of how often a cycle gets to run.
 
+## This repo uses its own memory
+
+`scripts/self-memory.mjs` points the system at this repository. It ingests
+both halves, because the benchmarks showed one without the other is useless:
+
+```bash
+node scripts/self-memory.mjs sync             # structure + our own git history
+node scripts/self-memory.mjs ask "why ...?"   # code files + the reasoning behind them
+node scripts/self-memory.mjs stats
+```
+
+`sync` is idempotent — it skips commits already recorded, so re-run it after
+merging. Structure alone loses to grep (`E2E_BENCHMARK_MULTI_REPO.md`); the
+knowledge half is what pays (`WHY_MEMORY_SPIKE.md`: 7.7 → 1.4 turns against an
+agent that had full git access). Which is why `ask` retrieves experiences by
+their own content rather than through a node-id hit — the shipped node-gated
+path scored MRR 0.13 against 0.75 for retrieval by meaning.
+
+## Quality gate (catch it in the task that caused it)
+
+Two hooks, wired in `.claude/settings.json`:
+
+- **`.claude/hooks/quick-typecheck.sh`** (PostToolUse on Edit/Write) —
+  typechecks just the package the edited file belongs to and reports through
+  `additionalContext`. Deliberately non-blocking: mid-refactor an intermediate
+  state is legitimately broken.
+- **`.claude/hooks/quality-gate.sh`** (Stop) — when a task finishes, runs
+  typecheck + lint + tests for the packages that changed, appends a row to
+  `QUALITY_LOG.md`, and records the outcome into the memory graph bound to the
+  changed files. On failure it exits 2 so the errors come back to the agent
+  before the task is called done; `stop_hook_active` stops it blocking twice.
+
+Both no-op when no `.ts` file changed. The Stop gate takes ~11s on a passing
+tree. A failing row in `QUALITY_LOG.md` means the problem was caught at the end
+of the task that caused it rather than at the next milestone's CI run.
+
 ## Repo/branch
 
 `cuonghuunguyen/claude-notebook`. Milestone work happens on branches cut

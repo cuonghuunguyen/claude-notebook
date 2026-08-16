@@ -59,7 +59,7 @@ the protocol, and shouldn't drift from any of the three skills.
   session (human or automated) starts without a working DB.
 - **PR-based delivery, not direct pushes.** Milestones, proposals, and
   self-improve cycles all ship as PRs into
-  `claude/codebase-cognitive-memory-spec-t7nnx0`, not direct commits to it.
+  `master`, not direct commits to it.
   This buys two things a direct-push model doesn't: GitHub's own open-PR
   list becomes the concurrency guard (an open PR with a `milestone/M<N>-*`,
   `propose/*`, or `improve/*` head branch means "someone's already on
@@ -153,4 +153,4 @@ missed:
 `cuonghuunguyen/claude-notebook`. Milestone branches (`milestone/M<N>-...`),
 proposal branches (`propose/...`), and self-improve branches (`improve/...`)
 are all cut from and PR'd back into
-`claude/codebase-cognitive-memory-spec-t7nnx0`.
+`master`.

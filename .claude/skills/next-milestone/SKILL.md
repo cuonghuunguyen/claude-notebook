@@ -30,14 +30,12 @@ firing into a fresh session), this file is your task description.
    reason to give up; it's a setup step this skill owns:
    - If `git rev-parse --git-dir` fails (no repo at all): `git clone
      https://github.com/cuonghuunguyen/claude-notebook . && git checkout
-     claude/codebase-cognitive-memory-spec-t7nnx0`. If `add_repo` /
-     `register_repo_root` tools are available, that path works too — either
-     way, end this step with a real working checkout, don't stop and
-     report "no repository" as if that were a terminal state.
-   - If a checkout already exists: `git fetch origin
-     claude/codebase-cognitive-memory-spec-t7nnx0`, then `git checkout
-     claude/codebase-cognitive-memory-spec-t7nnx0 && git reset --hard
-     origin/claude/codebase-cognitive-memory-spec-t7nnx0` — fetch alone
+     master`. If `add_repo` / `register_repo_root` tools are available, that
+     path works too — either way, end this step with a real working
+     checkout, don't stop and report "no repository" as if that were a
+     terminal state.
+   - If a checkout already exists: `git fetch origin master`, then `git
+     checkout master && git reset --hard origin/master` — fetch alone
      updates remote-tracking refs but not your working tree; skipping the
      checkout means `ROADMAP.md`, `CLAUDE.md`, and this very file could be
      stale copies from whenever you last synced.
@@ -67,7 +65,7 @@ firing into a fresh session), this file is your task description.
    completion and report its outcome; don't loop back into this skill
    afterward.
 3. **Concurrency guard.** List open pull requests against
-   `claude/codebase-cognitive-memory-spec-t7nnx0` (`mcp__github__list_pull_requests`
+   `master` (`mcp__github__list_pull_requests`
    or `search_pull_requests`). If one already has a head branch named
    `milestone/M<N>-*` for the SAME milestone number you picked in step 2:
    - If you don't recognize it (no memory of opening it — e.g. you're a
@@ -79,7 +77,7 @@ firing into a fresh session), this file is your task description.
      work. Skip ahead to check its CI/review status (step 14) instead of
      aborting.
 4. **Branch.** Create `milestone/M<N>-<short-slug>` from the latest
-   `claude/codebase-cognitive-memory-spec-t7nnx0`.
+   `master`.
 5. **Environment.** `DATABASE_URL` should already be set by the
    SessionStart hook (`.claude/hooks/session-start.sh`). If it isn't
    (e.g. you're running outside the hook), run `bash scripts/setup-dev-db.sh`
@@ -118,7 +116,7 @@ firing into a fresh session), this file is your task description.
     is what resets the circuit breaker's empty-cycle count for the next
     time step 2 checks it.
 11. **Commit and push** the branch (`git push -u origin milestone/M<N>-...`).
-12. **Open a PR** into `claude/codebase-cognitive-memory-spec-t7nnx0` via
+12. **Open a PR** into `master` via
     `mcp__github__create_pull_request`. Describe what was built, how it was
     verified (real Postgres, which tests), the self-review outcome (step 8),
     and the manual sanity check (step 9) — enough that a human skimming the
@@ -150,8 +148,8 @@ firing into a fresh session), this file is your task description.
       that's exactly the case a human should see before it becomes
       load-bearing for the next milestone. Say so plainly in your final
       report. Log `left-open | PR #<n>: <deviation>` directly on
-      `claude/codebase-cognitive-memory-spec-t7nnx0` and **push it**
-      (`git push origin claude/codebase-cognitive-memory-spec-t7nnx0`) —
+      `master` and **push it**
+      (`git push origin master`) —
       for the historical record in `CHAIN_LOG.md`, same as the other two
       skills do for their own left-open case (this doesn't affect the
       breaker's count either way, since step 15 already stops without
@@ -166,7 +164,7 @@ firing into a fresh session), this file is your task description.
       unchecked box: call `mcp__Claude_Code_Remote__create_session` to
       spawn a **new** session for the next milestone — pass `source_url:
       "https://github.com/cuonghuunguyen/claude-notebook"`,
-      `source_revision: "claude/codebase-cognitive-memory-spec-t7nnx0"`,
+      `source_revision: "master"`,
       and a `prompt` telling it to run this same `/next-milestone` skill
       (a fresh session starts with none of this one's context, so the
       prompt needs to be a complete standalone instruction, not "continue

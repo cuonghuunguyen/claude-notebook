@@ -45,14 +45,14 @@ independently check. When in doubt, it isn't in doubt: leave the PR open.
 1. **Sync — but first check there's actually a checkout to sync.** Same
    reclaimed-container handling as `/next-milestone` step 1: clone fresh if
    there's no `.git`, otherwise `git fetch` + `git checkout` + `git reset
-   --hard` against `origin/claude/codebase-cognitive-memory-spec-t7nnx0` —
+   --hard` against `origin/master` —
    fetch alone doesn't update the working tree. Read `spec.md`,
    `ROADMAP.md`, and `BENCHMARKS.md` only after this step.
 2. **Confirm this skill is actually the right call.** If `ROADMAP.md` has
    any unchecked `- [ ]` box, STOP and say so — that's `/next-milestone`'s
    job.
 3. **Concurrency guard.** List open pull requests against
-   `claude/codebase-cognitive-memory-spec-t7nnx0`. If one already has a head
+   `master`. If one already has a head
    branch named `propose/*`, STOP — another proposal is already in flight
    (your own still-open PR from earlier in this conversation is "resume,"
    not a conflict — check its status instead of aborting).
@@ -121,8 +121,8 @@ independently check. When in doubt, it isn't in doubt: leave the PR open.
    surprise this catches; this is this skill's equivalent of
    `/next-milestone`'s self-review step, sized to what there actually is to
    review here. Branch as `propose/<short-slug>` from the latest
-   `claude/codebase-cognitive-memory-spec-t7nnx0`.
-9. **Open a PR** into `claude/codebase-cognitive-memory-spec-t7nnx0`. The
+   `master`.
+9. **Open a PR** into `master`. The
    description MUST include, explicitly and by name, an "Evidence" section
    answering all four of step 5's points with specifics — this is what a
    human (or your own step 10 self-merge check) audits, not the idea's
@@ -148,16 +148,16 @@ independently check. When in doubt, it isn't in doubt: leave the PR open.
       points hold up:** leave the PR open for a human, same as
       `/next-milestone` treats a flagged spec deviation. Log
       `left-open | PR #<n>: <why>` — commit this directly on
-      `claude/codebase-cognitive-memory-spec-t7nnx0` (NOT the open PR's
+      `master` (NOT the open PR's
       branch, which may not merge soon) and **`git push origin
-      claude/codebase-cognitive-memory-spec-t7nnx0`** — a commit that stays
+      master`** — a commit that stays
       local is invisible to every other session, silently defeating the
       breaker. Say plainly in your report which of step 5's four points is
       weak and why you didn't force it.
     - **Nothing found this cycle (step 4's legitimate outcome):** don't open
       a PR. Log `nothing-to-propose | <one-line summary of what you looked
-      at>` directly on `claude/codebase-cognitive-memory-spec-t7nnx0` and
-      **push it** (`git push origin claude/codebase-cognitive-memory-spec-t7nnx0`) —
+      at>` directly on `master` and
+      **push it** (`git push origin master`) —
       same reasoning as above, this is the outcome the breaker exists to
       count, so it must actually be visible to the next session. Fall
       through to `.claude/skills/self-improve/SKILL.md` directly in this

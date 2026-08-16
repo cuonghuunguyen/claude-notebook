@@ -143,4 +143,4 @@ of the task that caused it rather than at the next milestone's CI run.
 ## Repo/branch
 
 `cuonghuunguyen/claude-notebook`. Milestone work happens on branches cut
-from `claude/codebase-cognitive-memory-spec-t7nnx0`, PR'd back into it.
+from `master`, PR'd back into it.

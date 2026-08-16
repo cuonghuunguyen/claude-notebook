@@ -61,10 +61,8 @@ does so having shipped nothing.
    reclaimed-container handling as `/next-milestone` step 1: if
    `git rev-parse --git-dir` fails, clone
    `https://github.com/cuonghuunguyen/claude-notebook` fresh and check out
-   `claude/codebase-cognitive-memory-spec-t7nnx0`. Otherwise `git fetch
-   origin claude/codebase-cognitive-memory-spec-t7nnx0`, then `git checkout
-   claude/codebase-cognitive-memory-spec-t7nnx0 && git reset --hard
-   origin/claude/codebase-cognitive-memory-spec-t7nnx0` — fetch alone
+   `master`. Otherwise `git fetch origin master`, then `git checkout master
+   && git reset --hard origin/master` — fetch alone
    doesn't update the working tree. Read `ROADMAP.md`, `BENCHMARKS.md`, and
    `CLAUDE.md` only after this step.
 2. **Confirm this skill is actually the right call.** If `ROADMAP.md` has
@@ -72,7 +70,7 @@ does so having shipped nothing.
    job, not this skill's; don't build a "perf improvement" while real
    feature work is still pending.
 3. **Concurrency guard.** List open pull requests against
-   `claude/codebase-cognitive-memory-spec-t7nnx0`. If one already has a head
+   `master`. If one already has a head
    branch named `improve/*`, STOP — another cycle is already in flight
    (recognize your own still-open PR from earlier in this same conversation
    as "resume," not "conflict," same as `/next-milestone` step 3).
@@ -106,7 +104,7 @@ does so having shipped nothing.
    candidate. Write down exactly how you measured it; the PR description
    needs to let a human reproduce this, not just trust the number.
 6. **Branch.** Create `improve/<short-slug>` from the latest
-   `claude/codebase-cognitive-memory-spec-t7nnx0`.
+   `master`.
 7. **Environment.** `DATABASE_URL` should already be set by the
    SessionStart hook. If not, `bash scripts/setup-dev-db.sh` and export it.
 8. **Implement.** The smallest change that gets the improvement — no
@@ -131,7 +129,7 @@ does so having shipped nothing.
     branch before merge). Never edit or delete a prior row — if a later
     cycle finds a past "improvement" regressed, add a new row noting it,
     don't rewrite history.
-13. **Commit, push, open a PR** into `claude/codebase-cognitive-memory-spec-t7nnx0`.
+13. **Commit, push, open a PR** into `master`.
     The PR description needs, explicitly: what was measured and how
     (reproducible by a human), the before/after numbers, the self-review
     outcome, and a "Deviations from spec.md" section (`None`, or the real
@@ -155,14 +153,14 @@ does so having shipped nothing.
       If it lists a real deviation, do NOT merge — leave it
       open for a human, same rule as `/next-milestone` step 14, and instead
       log `left-open | PR #<n>: <deviation>` directly on
-      `claude/codebase-cognitive-memory-spec-t7nnx0` and **push it**
-      (`git push origin claude/codebase-cognitive-memory-spec-t7nnx0`) —
+      `master` and **push it**
+      (`git push origin master`) —
       the open PR's own branch won't merge soon, so a commit there is
       invisible to the next spawned session.
     - **Nothing found this cycle:** don't open a PR, don't force a change.
       Log `nothing-found | <one-line summary of what you looked at>`
-      directly on `claude/codebase-cognitive-memory-spec-t7nnx0` and
-      **push it** (`git push origin claude/codebase-cognitive-memory-spec-t7nnx0`) —
+      directly on `master` and
+      **push it** (`git push origin master`) —
       a commit that stays local is invisible to every other session,
       silently defeating the breaker this exists to feed. Report plainly
       that this cycle surveyed and found no candidate with a real,
@@ -177,7 +175,7 @@ does so having shipped nothing.
       "nothing found" branch):** call `mcp__Claude_Code_Remote__create_session`
       to spawn a **new** session — `source_url:
       "https://github.com/cuonghuunguyen/claude-notebook"`, `source_revision:
-      "claude/codebase-cognitive-memory-spec-t7nnx0"`, and a `prompt` telling
+      "master"`, and a `prompt` telling
       it to run `/next-milestone` (the universal re-entry point — it will
       re-check `ROADMAP.md`, hand off to `/propose-milestone` if it's still
       fully checked, which falls through to this skill again if it finds

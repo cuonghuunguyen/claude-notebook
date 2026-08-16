@@ -8,7 +8,10 @@
     "build": "tsc -b",
     "bench:ingest": "node dist/ingest.js",
     "bench:run": "node dist/run.js",
-    "bench:agent": "node dist/agentCompare.js"
+    "bench:agent": "node dist/agentCompare.js",
+    "bench:patch-contexts": "node dist/patchContexts.js",
+    "bench:patch": "node dist/patchCompare.js",
+    "bench:session": "node dist/sessionChain.js"
   },
   "dependencies": {
     "@cognitive-memory/context": "workspace:*",
@@ -18,7 +21,8 @@
     "@cognitive-memory/pipeline": "workspace:*",
     "@cognitive-memory/retrieval": "workspace:*",
     "@cognitive-memory/structural": "workspace:*",
-    "@cognitive-memory/traversal": "workspace:*"
+    "@cognitive-memory/traversal": "workspace:*",
+    "ts-morph": "^24.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

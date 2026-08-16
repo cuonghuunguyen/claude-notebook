@@ -1,0 +1,193 @@
+{
+  "target": "lodash",
+  "model": "claude-haiku-4-5-20251001",
+  "contextsPath": "/home/user/claude-notebook/eval/e2e-benchmark/results/lodash/contexts-system-heuristic.json",
+  "bare": {
+    "runs": 6,
+    "meanFileScore": 0.8333333333333334,
+    "meanSymbolScore": 0.861111111111111,
+    "meanDurationMs": 11800.166666666666,
+    "meanTurns": 4.666666666666667,
+    "totalCostUsd": 0.1779947
+  },
+  "memory": {
+    "runs": 6,
+    "meanFileScore": 0.6666666666666666,
+    "meanSymbolScore": 0.861111111111111,
+    "meanDurationMs": 9428.166666666666,
+    "meanTurns": 3.3333333333333335,
+    "totalCostUsd": 0.15866460000000002
+  },
+  "byHops": {
+    "single": {
+      "bare": {
+        "runs": 3,
+        "meanFileScore": 1,
+        "meanSymbolScore": 1,
+        "meanDurationMs": 11666.333333333334,
+        "meanTurns": 3.6666666666666665,
+        "totalCostUsd": 0.09114509999999999
+      },
+      "memory": {
+        "runs": 3,
+        "meanFileScore": 0.8333333333333334,
+        "meanSymbolScore": 1,
+        "meanDurationMs": 8600.666666666666,
+        "meanTurns": 2.6666666666666665,
+        "totalCostUsd": 0.0780556
+      }
+    },
+    "multi": {
+      "bare": {
+        "runs": 3,
+        "meanFileScore": 0.6666666666666666,
+        "meanSymbolScore": 0.7222222222222222,
+        "meanDurationMs": 11934,
+        "meanTurns": 5.666666666666667,
+        "totalCostUsd": 0.0868496
+      },
+      "memory": {
+        "runs": 3,
+        "meanFileScore": 0.5,
+        "meanSymbolScore": 0.7222222222222222,
+        "meanDurationMs": 10255.666666666666,
+        "meanTurns": 4,
+        "totalCostUsd": 0.080609
+      }
+    }
+  },
+  "runs": [
+    {
+      "taskId": "debounce-maxwait",
+      "hops": "single",
+      "condition": "bare",
+      "durationMs": 11844,
+      "numTurns": 3,
+      "costUsd": 0.0291874,
+      "fileScore": 1,
+      "symbolScore": 1,
+      "answer": "**Source file:** `debounce.js`\n\n**How maxWait works:**\nThe `maxWait` option forces a function invocation after a maximum elapsed time, even if calls are still coming in. It's enabled via the `maxing` flag (line 84) and enforced in the `shouldInvoke` function (line 126): when `maxing && timeSinceLastInvoke >= maxWait`, the function must be invoked.\n\n**Where trailing edge invocation is decided:**\nThe `shouldInvoke` function (lines 118-127) decides whether to trigger the trailing edge. It returns true when:\n- First call, OR\n- No calls for `wait` ms (normal debounce), OR  \n- `maxWait` limit exceeded: `timeSinceLastInvoke >= maxWait`\n\nOnce `shouldInvoke` returns true, `timerExpired` calls `trailingEdge` (line 138), which actually invokes the function if the `trailing` option is true (line 143).\n\nThe `remainingWait` function (lines 108-116) ensures the timer respects both `wait` and `maxWait` by taking the minimum of the two remaining times (line 114)."
+    },
+    {
+      "taskId": "debounce-maxwait",
+      "hops": "single",
+      "condition": "memory",
+      "durationMs": 10128,
+      "numTurns": 2,
+      "costUsd": 0.0260973,
+      "fileScore": 1,
+      "symbolScore": 1,
+      "answer": "**Source file:** `/tmp/lodash/debounce.js`\n\n**Key symbols:**\n\n1. **maxWait mechanism:** Lines 84-85 set up `maxing` flag and `maxWait` value. Line 114 in `remainingWait()` uses it to cap the remaining wait time: `nativeMin(timeWaiting, maxWait - timeSinceLastInvoke)`. Line 126 in `shouldInvoke()` forces invocation when `maxing && timeSinceLastInvoke >= maxWait`.\n\n2. **Trailing edge invocation decision:** The `shouldInvoke()` function (lines 118-127) decides when to invoke. When `shouldInvoke()` returns true—including when maxWait is exceeded—`timerExpired()` calls `trailingEdge()` (lines 129-136). The `trailingEdge()` function (lines 138-148) then executes the actual invocation if `trailing && lastArgs` is true.\n\nIn short: `maxWait` forces invocation when the time since the last invocation exceeds the max duration, checked in `shouldInvoke()` which gates both the `timerExpired()` callback and the trailing edge execution in `trailingEdge()`."
+    },
+    {
+      "taskId": "template-compile",
+      "hops": "single",
+      "condition": "bare",
+      "durationMs": 8511,
+      "numTurns": 3,
+      "costUsd": 0.028728999999999998,
+      "fileScore": 1,
+      "symbolScore": 1,
+      "answer": "**File:** `template.js`\n\n**Key symbol:** The `template` function compiles the template string using the JavaScript `Function` constructor at line 271:\n\n```javascript\nreturn Function(importsKeys, sourceURL + 'return ' + source)\n  .apply(undefined, importsValues);\n```\n\nThe compilation process:\n1. Parses the template string with regex to identify delimiters (lines 190-195)\n2. Replaces delimiters with JavaScript code snippets (lines 207-230)\n3. Wraps the generated code as a function body (lines 251-268)\n4. Calls the `Function` constructor to compile the string into an executable function (line 271)"
+    },
+    {
+      "taskId": "template-compile",
+      "hops": "single",
+      "condition": "memory",
+      "durationMs": 9756,
+      "numTurns": 4,
+      "costUsd": 0.0315181,
+      "fileScore": 1,
+      "symbolScore": 1,
+      "answer": "**Source file**: `template.js`\n\n**Key symbol**: The `template` function compiles the template string into a JavaScript function using:\n\n1. **Pattern matching** (line 207): A `reDelimiters` regex matches escape, interpolate, and evaluate delimiters in the template string\n2. **Source code building** (lines 207-230): The `string.replace(reDelimiters, ...)` call iteratively builds a JavaScript function source code string\n3. **Function wrapping** (lines 252-268): The source is wrapped as a complete function body\n4. **Compilation** (line 271): `Function(importsKeys, sourceURL + 'return ' + source).apply(undefined, importsValues)` uses the native `Function()` constructor to compile the generated source code into an executable JavaScript function\n\nThe compiled function is returned with a `.source` property (line 277) containing the generated source code for debugging purposes."
+    },
+    {
+      "taskId": "curry-flags",
+      "hops": "single",
+      "condition": "bare",
+      "durationMs": 14644,
+      "numTurns": 5,
+      "costUsd": 0.0332287,
+      "fileScore": 1,
+      "symbolScore": 1,
+      "answer": "**Source files:**\n- **curry.js**: Defines the entry point and sets `WRAP_CURRY_FLAG = 8`\n- **_createWrap.js**: Dispatches to the wrapper factory based on the bitmask\n- **_createCurry.js**: The wrapper factory that implements currying\n\n**Key implementation:**\n1. In `curry.js` (line 49), the `curry()` function passes `WRAP_CURRY_FLAG` (value: 8) to `createWrap()` as the bitmask argument\n2. In `_createWrap.js` (line 95-96), when `bitmask == WRAP_CURRY_FLAG`, it calls `createCurry(func, bitmask, arity)` \n3. `_createCurry.js` receives this bitmask and creates the wrapper function that handles currying logic with placeholder support and argument accumulation\n\nThe flag flows through the call chain: `curry()` → `createWrap()` → `createCurry()` via the `bitmask` parameter."
+    },
+    {
+      "taskId": "curry-flags",
+      "hops": "single",
+      "condition": "memory",
+      "durationMs": 5918,
+      "numTurns": 2,
+      "costUsd": 0.0204402,
+      "fileScore": 0.5,
+      "symbolScore": 1,
+      "answer": "**Source file:** `/tmp/lodash/curry.js`\n\n**Key symbols:**\n- `curry` - the main function\n- `WRAP_CURRY_FLAG` - the bitmask constant (value `8`)\n- `createWrap` - the wrapper factory function\n\n**How it passes the flag:**\nThe `curry` function passes the currying flag to the wrapper factory by calling `createWrap(func, WRAP_CURRY_FLAG, ...)` on line 49, where `WRAP_CURRY_FLAG` (set to `8` on line 4) is passed as the second argument to `createWrap`, which uses it as a bitmask for function metadata."
+    },
+    {
+      "taskId": "sort-stable",
+      "hops": "multi",
+      "condition": "bare",
+      "durationMs": 10926,
+      "numTurns": 5,
+      "costUsd": 0.024035300000000002,
+      "fileScore": 0.5,
+      "symbolScore": 0.6666666666666666,
+      "answer": "In the lodash repository, stable sorting is maintained by the **`index`** property in **`_compareMultiple.js`**.\n\nAt line 41 of `_compareMultiple.js`:\n```javascript\nreturn object.index - other.index;\n```\n\nWhen all sort criteria are equal, this comparison falls back to comparing the original array indices of the elements. Since each element is tagged with its `index` (original position before sorting), this ensures equal elements maintain their original relative order—the definition of a stable sort."
+    },
+    {
+      "taskId": "sort-stable",
+      "hops": "multi",
+      "condition": "memory",
+      "durationMs": 9750,
+      "numTurns": 3,
+      "costUsd": 0.0234491,
+      "fileScore": 0.5,
+      "symbolScore": 0.6666666666666666,
+      "answer": "**File:** `_compareMultiple.js`\n\n**Key symbol:** `compareMultiple` function\n\nThe stability is maintained on **line 41** with `return object.index - other.index;` — when two elements compare equal (the compareAscending returns 0), the function falls back to comparing the original indices stored in `object.index` and `other.index`. This preserves the original relative order of equal elements.\n\nThe comments in the file (lines 34-40) explain this was added to ensure stable sorting across different JS engines including V8 and as a workaround for Adobe's JS engine."
+    },
+    {
+      "taskId": "uniq-large",
+      "hops": "multi",
+      "condition": "bare",
+      "durationMs": 11274,
+      "numTurns": 5,
+      "costUsd": 0.0247689,
+      "fileScore": 1,
+      "symbolScore": 1,
+      "answer": "The answer is **`_baseUniq.js`** using a **`SetCache`** data structure with a threshold check.\n\nKey implementation:\n- **Threshold**: `LARGE_ARRAY_SIZE = 200` (line 9)\n- When array length >= 200, instead of nested loops (O(n²)), it:\n  1. Uses `createSet(array)` for native Set (O(1) lookups) if no iteratee\n  2. Falls back to `SetCache` (wrapping `MapCache` for O(1) hash-based lookups) with `cacheHas` function\n- For small arrays (< 200), simple linear search is acceptable\n\n**Files**: `_baseUniq.js`, `_SetCache.js`, and the underlying `_MapCache.js` that powers the cache."
+    },
+    {
+      "taskId": "uniq-large",
+      "hops": "multi",
+      "condition": "memory",
+      "durationMs": 9932,
+      "numTurns": 5,
+      "costUsd": 0.027486200000000002,
+      "fileScore": 0.5,
+      "symbolScore": 1,
+      "answer": "**File: `_baseUniq.js`**\n\n**Key symbols:** `SetCache`, `createSet`, `setToArray`, `LARGE_ARRAY_SIZE` (200)\n\n**How it works:** When deduplicating an array with 200+ elements, the code switches from linear array scanning (`arrayIncludes`) to a `SetCache` (or native Set) for O(1) membership testing. For smaller arrays, it uses the naive linear scan. This threshold-based approach prevents quadratic degradation on large arrays while keeping overhead low for small ones."
+    },
+    {
+      "taskId": "deep-equal",
+      "hops": "multi",
+      "condition": "bare",
+      "durationMs": 13602,
+      "numTurns": 7,
+      "costUsd": 0.0380454,
+      "fileScore": 0.5,
+      "symbolScore": 0.5,
+      "answer": "**File:** `_equalObjects.js`\n\n**Key symbols:**\n- `getAllKeys()` — retrieves all enumerable keys from an object (line 27-30)\n- `hasOwnProperty.call(other, key)` — checks if a key exists in the other object (line 38)\n\nThe logic is order-agnostic: it gets all keys from the first object, verifies both objects have the same key count (line 32), then iterates through each key to confirm it exists in the other object and that the corresponding values are equal (lines 36-70). Key order is irrelevant because it only checks for key existence, not order of enumeration."
+    },
+    {
+      "taskId": "deep-equal",
+      "hops": "multi",
+      "condition": "memory",
+      "durationMs": 11085,
+      "numTurns": 4,
+      "costUsd": 0.029673699999999997,
+      "fileScore": 0.5,
+      "symbolScore": 0.5,
+      "answer": "**Source file:** `_equalObjects.js`\n\n**Key symbol:** `equalObjects`\n\nThe logic works by:\n1. Getting all keys from both objects via `getAllKeys()` (line 27-29)\n2. Checking they have the same number of keys (line 32)\n3. Iterating through the keys and comparing values (lines 36-41, 53-70)\n\nSince it compares keys by name rather than by position, the order is irrelevant—only key existence and value equality matter."
+    }
+  ]
+}

@@ -4,7 +4,7 @@
  * codebase question than the same agent exploring cold?
  *
  * Both conditions run the same headless `claude -p` agent, same model, same
- * tool allowlist, same turn cap, cwd = the zod repo:
+ * tool allowlist, same turn cap, cwd = the active target's clone:
  *   - bare:   question only — the agent greps/reads from scratch
  *   - memory: question + the rendered AgentContext from run.ts
  *
@@ -15,23 +15,16 @@ import { execFile } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
-import { resultsDir } from "./config.js";
-import { TASKS } from "./tasks.js";
+import { activeTarget, resultsDir, targetDir } from "./config.js";
+import type { Hops } from "./targets/index.js";
 
 const execFileAsync = promisify(execFile);
 
 const MODEL = process.env["BENCH_AGENT_MODEL"] ?? "claude-haiku-4-5-20251001";
-const DEFAULT_TASK_IDS = [
-  "email-regex",
-  "coerce",
-  "discriminated-union",
-  "safe-parse",
-  "registry-meta",
-  "standard-schema",
-];
 
 interface AgentRun {
   taskId: string;
+  hops?: Hops;
   condition: "bare" | "memory";
   durationMs: number;
   numTurns: number;
@@ -75,18 +68,20 @@ function fractionMentioned(answer: string, needles: string[]): number {
 }
 
 async function main(): Promise<void> {
-  const zodRepo = process.env["ZOD_DIR"];
-  if (!zodRepo) throw new Error("ZOD_DIR must point at the zod clone");
+  const target = activeTarget();
+  const repoDir = targetDir(target);
 
   const contextsPath =
     process.env["BENCH_CONTEXTS"] ?? path.join(resultsDir(), "contexts-system-heuristic.json");
   const contexts = JSON.parse(fs.readFileSync(contextsPath, "utf8")) as Record<string, string>;
 
-  const taskIds = (process.env["BENCH_AGENT_TASKS"]?.split(",") ?? DEFAULT_TASK_IDS).map((s) => s.trim());
-  const tasks = TASKS.filter((t) => taskIds.includes(t.id));
+  const taskIds = (process.env["BENCH_AGENT_TASKS"]?.split(",") ?? target.agentTaskIds).map((s) =>
+    s.trim()
+  );
+  const tasks = target.tasks.filter((t) => taskIds.includes(t.id));
 
   const instruction =
-    "Answer concisely. Name the exact source file path(s) under packages/zod/src/v4 " +
+    `Answer concisely. Name ${target.agentPathHint} ` +
     "and the key symbol(s) that implement this.";
 
   const runs: AgentRun[] = [];
@@ -98,10 +93,11 @@ async function main(): Promise<void> {
             `<codebase-memory>\n${contexts[task.id] ?? "(none)"}\n</codebase-memory>\n\n`
           : "";
       const prompt = `${memoryBlock}Question about this repository: ${task.question}\n${instruction}`;
-      const res = await runAgent(prompt, zodRepo);
+      const res = await runAgent(prompt, repoDir);
       const answer = res.result ?? "";
       runs.push({
         taskId: task.id,
+        hops: task.hops,
         condition,
         durationMs: res.duration_ms ?? res.wallMs,
         numTurns: res.num_turns ?? -1,
@@ -119,9 +115,10 @@ async function main(): Promise<void> {
   }
 
   const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / (xs.length || 1);
-  const summarize = (condition: "bare" | "memory") => {
-    const subset = runs.filter((r) => r.condition === condition);
+  const summarize = (condition: "bare" | "memory", hops?: Hops) => {
+    const subset = runs.filter((r) => r.condition === condition && (!hops || r.hops === hops));
     return {
+      runs: subset.length,
       meanFileScore: mean(subset.map((r) => r.fileScore)),
       meanSymbolScore: mean(subset.map((r) => r.symbolScore)),
       meanDurationMs: mean(subset.map((r) => r.durationMs)),
@@ -130,16 +127,36 @@ async function main(): Promise<void> {
     };
   };
 
+  // Same single/multi-hop split as run.ts: the averaged delta hides which
+  // regime the memory context actually pays for.
+  const hopsBreakdown = (["single", "multi"] as const)
+    .filter((h) => runs.some((r) => r.hops === h))
+    .reduce<Record<string, { bare: ReturnType<typeof summarize>; memory: ReturnType<typeof summarize> }>>(
+      (acc, h) => {
+        acc[h] = { bare: summarize("bare", h), memory: summarize("memory", h) };
+        return acc;
+      },
+      {}
+    );
+
   const output = {
+    target: target.key,
     model: MODEL,
     contextsPath,
     bare: summarize("bare"),
     memory: summarize("memory"),
+    byHops: Object.keys(hopsBreakdown).length > 0 ? hopsBreakdown : undefined,
     runs,
   };
   fs.mkdirSync(resultsDir(), { recursive: true });
   fs.writeFileSync(path.join(resultsDir(), "agent-compare.json"), JSON.stringify(output, null, 2));
-  console.log(JSON.stringify({ bare: output.bare, memory: output.memory }, null, 2));
+  console.log(
+    JSON.stringify(
+      { target: output.target, bare: output.bare, memory: output.memory, byHops: output.byHops },
+      null,
+      2
+    )
+  );
 }
 
 main().catch((err) => {

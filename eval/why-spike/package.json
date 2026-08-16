@@ -1,0 +1,25 @@
+{
+  "name": "@cognitive-memory/eval-why-spike",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -b",
+    "build": "tsc -b",
+    "spike:capture": "node dist/capture.js",
+    "spike:probe": "node dist/probe.js",
+    "spike:compare": "node dist/compare.js"
+  },
+  "dependencies": {
+    "@cognitive-memory/core": "workspace:*",
+    "@cognitive-memory/episodic": "workspace:*",
+    "@cognitive-memory/graph-store": "workspace:*",
+    "@cognitive-memory/pipeline": "workspace:*",
+    "@cognitive-memory/retrieval": "workspace:*",
+    "@cognitive-memory/traversal": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,5 +1,12 @@
 # Báo cáo E2E Benchmark — Codebase Cognitive Memory trên project thực tế
 
+> **Cập nhật 2026-08-16 — xem `E2E_BENCHMARK_MULTI_REPO.md`.** Lần chạy sau
+> (2 repo: zod + lodash-es) phát hiện metric xếp hạng của báo cáo này đo nhầm:
+> `buildContext` sắp xếp `sourceFiles` theo **thứ tự alphabet** sau khi cắt
+> top-K, nên MRR/hit@1 ở §4 đang đo vị trí alphabet chứ không phải độ liên
+> quan. Đo lại theo thứ tự traversal thật: MRR 0,34 vs grep 0,34 — **hoà, không
+> phải "+15%"**. Các số recall và toàn bộ §3, §5 không bị ảnh hưởng.
+
 **Ngày chạy:** 2026-08-11 · **Môi trường:** sandbox Linux, Node 22.22, Postgres 16 + pgvector 0.6 (local) · **Nhánh code:** `claude/e2e-benchmark-setup-yvnqj5` (base: M9, toàn bộ roadmap M0–M9 đã hoàn thành) · **Harness:** `eval/e2e-benchmark/` · **Dữ liệu thô:** `eval/e2e-benchmark/results/*.json`
 
 ## 1. Câu hỏi benchmark trả lời

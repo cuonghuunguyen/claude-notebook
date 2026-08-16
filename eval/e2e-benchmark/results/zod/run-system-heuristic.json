@@ -1,0 +1,1034 @@
+{
+  "target": "zod",
+  "variant": "system-heuristic",
+  "topK": 10,
+  "tasks": 12,
+  "sourceScope": [
+    "/tmp/zod/packages/zod/src/v4/classic/**/*.ts",
+    "/tmp/zod/packages/zod/src/v4/core/**/*.ts",
+    "!/tmp/zod/packages/zod/src/v4/classic/tests/**",
+    "!/tmp/zod/packages/zod/src/v4/core/tests/**"
+  ],
+  "indexedFileCount": 32,
+  "system": {
+    "aggregate": {
+      "tasks": 12,
+      "meanRecallAtK": 0.75,
+      "meanMrr": 0.4398148148148148,
+      "hitAt1Rate": 0.25,
+      "meanRankedRecallAtK": 0.875,
+      "meanRankedMrr": 0.33634259259259264,
+      "rankedHitAt1Rate": 0.16666666666666666,
+      "meanLatencyMs": 54.583333333333336,
+      "meanContextChars": 2908.0833333333335
+    },
+    "perTask": [
+      {
+        "taskId": "email-regex",
+        "question": "Where is the email validation regex defined and which check uses it?",
+        "expectedFiles": [
+          "v4/core/regexes.ts",
+          "v4/core/checks.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/regexes.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/core/regexes.ts",
+          "/tmp/zod/packages/zod/src/v4/core/core.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts"
+        ],
+        "recallAtK": 0.5,
+        "mrr": 0.3333333333333333,
+        "hitAt1": false,
+        "rankedRecallAtK": 0.5,
+        "rankedMrr": 0.2,
+        "rankedHitAt1": false,
+        "latencyMs": 140,
+        "seeds": 25,
+        "traversedNodes": 50,
+        "reasoningSteps": 2,
+        "stopReason": "budget_exhausted",
+        "contextChars": 2639,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "coerce",
+        "question": "How does z.coerce.number() coercion work and where is it implemented?",
+        "expectedFiles": [
+          "v4/classic/coerce.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/coerce.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/coerce.ts",
+          "/tmp/zod/packages/zod/src/v4/core/core.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/compat.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/deep-partial.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 1,
+        "hitAt1": true,
+        "rankedRecallAtK": 1,
+        "rankedMrr": 0.2,
+        "rankedHitAt1": false,
+        "latencyMs": 52,
+        "seeds": 16,
+        "traversedNodes": 50,
+        "reasoningSteps": 3,
+        "stopReason": "budget_exhausted",
+        "contextChars": 2527,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "discriminated-union",
+        "question": "Where is the discriminated union schema implemented and how does it pick the matching branch?",
+        "expectedFiles": [
+          "v4/core/schemas.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/standard-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/standard-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/core.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts"
+        ],
+        "recallAtK": 0,
+        "mrr": 0,
+        "hitAt1": false,
+        "rankedRecallAtK": 1,
+        "rankedMrr": 0.1111111111111111,
+        "rankedHitAt1": false,
+        "latencyMs": 52,
+        "seeds": 20,
+        "traversedNodes": 50,
+        "reasoningSteps": 3,
+        "stopReason": "budget_exhausted",
+        "contextChars": 3176,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "to-json-schema",
+        "question": "How does converting a zod schema to JSON Schema work?",
+        "expectedFiles": [
+          "v4/core/to-json-schema.ts",
+          "v4/core/json-schema-generator.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-generator.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/iso.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-generator.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.3333333333333333,
+        "hitAt1": false,
+        "rankedRecallAtK": 1,
+        "rankedMrr": 0.25,
+        "rankedHitAt1": false,
+        "latencyMs": 46,
+        "seeds": 28,
+        "traversedNodes": 50,
+        "reasoningSteps": 2,
+        "stopReason": "budget_exhausted",
+        "contextChars": 2683,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "safe-parse",
+        "question": "Where are parse and safeParse implemented, and how do sync and async parsing differ?",
+        "expectedFiles": [
+          "v4/core/parse.ts",
+          "v4/classic/parse.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/errors.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/parse.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/core.ts",
+          "/tmp/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/index.ts",
+          "/tmp/zod/packages/zod/src/v4/core/parse.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/core.ts",
+          "/tmp/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/core/index.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/errors.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/parse.ts",
+          "/tmp/zod/packages/zod/src/v4/core/parse.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/coerce.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.5,
+        "hitAt1": false,
+        "rankedRecallAtK": 1,
+        "rankedMrr": 0.125,
+        "rankedHitAt1": false,
+        "latencyMs": 50,
+        "seeds": 18,
+        "traversedNodes": 50,
+        "reasoningSteps": 3,
+        "stopReason": "budget_exhausted",
+        "contextChars": 3278,
+        "experiencesSurfaced": 2
+      },
+      {
+        "taskId": "error-map",
+        "question": "How are custom error maps resolved when a validation issue is created?",
+        "expectedFiles": [
+          "v4/core/errors.ts",
+          "v4/core/config.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/registries.ts",
+          "/tmp/zod/packages/zod/src/v4/core/core.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/compat.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/deep-partial.ts"
+        ],
+        "recallAtK": 0,
+        "mrr": 0,
+        "hitAt1": false,
+        "rankedRecallAtK": 0.5,
+        "rankedMrr": 0.2,
+        "rankedHitAt1": false,
+        "latencyMs": 46,
+        "seeds": 17,
+        "traversedNodes": 50,
+        "reasoningSteps": 3,
+        "stopReason": "budget_exhausted",
+        "contextChars": 2742,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "registry-meta",
+        "question": "Where is the schema registry implemented that .meta() and globalRegistry use?",
+        "expectedFiles": [
+          "v4/core/registries.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/deep-partial.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/registries.ts",
+          "/tmp/zod/packages/zod/src/v4/core/standard-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/registries.ts",
+          "/tmp/zod/packages/zod/src/v4/core/standard-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/deep-partial.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-generator.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.25,
+        "hitAt1": false,
+        "rankedRecallAtK": 1,
+        "rankedMrr": 0.25,
+        "rankedHitAt1": false,
+        "latencyMs": 44,
+        "seeds": 25,
+        "traversedNodes": 50,
+        "reasoningSteps": 3,
+        "stopReason": "budget_exhausted",
+        "contextChars": 3079,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "string-checks",
+        "question": "Where are string checks like min length, max length and starts_with implemented?",
+        "expectedFiles": [
+          "v4/core/checks.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/checks.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/checks.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/coerce.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/checks.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.25,
+        "hitAt1": false,
+        "rankedRecallAtK": 1,
+        "rankedMrr": 0.2,
+        "rankedHitAt1": false,
+        "latencyMs": 47,
+        "seeds": 15,
+        "traversedNodes": 48,
+        "reasoningSteps": 3,
+        "stopReason": "budget_exhausted",
+        "contextChars": 3174,
+        "experiencesSurfaced": 2
+      },
+      {
+        "taskId": "iso-datetime",
+        "question": "Where is ISO 8601 datetime string validation implemented?",
+        "expectedFiles": [
+          "v4/classic/iso.ts",
+          "v4/core/regexes.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/iso.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/regexes.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/core/regexes.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/iso.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/coerce.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 1,
+        "hitAt1": true,
+        "rankedRecallAtK": 1,
+        "rankedMrr": 1,
+        "rankedHitAt1": true,
+        "latencyMs": 51,
+        "seeds": 21,
+        "traversedNodes": 50,
+        "reasoningSteps": 3,
+        "stopReason": "budget_exhausted",
+        "contextChars": 2741,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "standard-schema",
+        "question": "How does zod implement the Standard Schema interface spec?",
+        "expectedFiles": [
+          "v4/core/standard-schema.ts",
+          "v4/core/core.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/iso.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-generator.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/standard-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/iso.ts",
+          "/tmp/zod/packages/zod/src/v4/core/standard-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-generator.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-processors.ts"
+        ],
+        "recallAtK": 0.5,
+        "mrr": 0.1111111111111111,
+        "hitAt1": false,
+        "rankedRecallAtK": 0.5,
+        "rankedMrr": 0.16666666666666666,
+        "rankedHitAt1": false,
+        "latencyMs": 51,
+        "seeds": 32,
+        "traversedNodes": 50,
+        "reasoningSteps": 2,
+        "stopReason": "budget_exhausted",
+        "contextChars": 3025,
+        "experiencesSurfaced": 2
+      },
+      {
+        "taskId": "pipe-transform",
+        "question": "Where are pipe and transform implemented for chaining schemas?",
+        "expectedFiles": [
+          "v4/core/schemas.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/core.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/compat.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.5,
+        "hitAt1": false,
+        "rankedRecallAtK": 1,
+        "rankedMrr": 0.3333333333333333,
+        "rankedHitAt1": false,
+        "latencyMs": 44,
+        "seeds": 21,
+        "traversedNodes": 50,
+        "reasoningSteps": 3,
+        "stopReason": "budget_exhausted",
+        "contextChars": 3043,
+        "experiencesSurfaced": 2
+      },
+      {
+        "taskId": "from-json-schema",
+        "question": "How does building a zod schema from an existing JSON Schema document work?",
+        "expectedFiles": [
+          "v4/classic/from-json-schema.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/iso.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/iso.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/core.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 1,
+        "hitAt1": true,
+        "rankedRecallAtK": 1,
+        "rankedMrr": 1,
+        "rankedHitAt1": true,
+        "latencyMs": 32,
+        "seeds": 21,
+        "traversedNodes": 50,
+        "reasoningSteps": 3,
+        "stopReason": "budget_exhausted",
+        "contextChars": 2790,
+        "experiencesSurfaced": 0
+      }
+    ]
+  },
+  "baseline": {
+    "aggregate": {
+      "tasks": 12,
+      "meanRecallAtK": 0.8333333333333334,
+      "meanMrr": 0.33888888888888885,
+      "hitAt1Rate": 0.08333333333333333,
+      "meanRankedRecallAtK": 0.8333333333333334,
+      "meanRankedMrr": 0.33888888888888885,
+      "rankedHitAt1Rate": 0.08333333333333333,
+      "meanLatencyMs": 4.583333333333333,
+      "meanContextChars": 0
+    },
+    "perTask": [
+      {
+        "taskId": "email-regex",
+        "question": "Where is the email validation regex defined and which check uses it?",
+        "expectedFiles": [
+          "v4/core/regexes.ts",
+          "v4/core/checks.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/regexes.ts",
+          "/tmp/zod/packages/zod/src/v4/core/zsf.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/checks.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-processors.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/regexes.ts",
+          "/tmp/zod/packages/zod/src/v4/core/zsf.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/checks.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-processors.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 1,
+        "hitAt1": true,
+        "rankedRecallAtK": 1,
+        "rankedMrr": 1,
+        "rankedHitAt1": true,
+        "latencyMs": 5,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "coerce",
+        "question": "How does z.coerce.number() coercion work and where is it implemented?",
+        "expectedFiles": [
+          "v4/classic/coerce.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/coerce.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/zsf.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/coerce.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/zsf.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.2,
+        "hitAt1": false,
+        "rankedRecallAtK": 1,
+        "rankedMrr": 0.2,
+        "rankedHitAt1": false,
+        "latencyMs": 4,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "discriminated-union",
+        "question": "Where is the discriminated union schema implemented and how does it pick the matching branch?",
+        "expectedFiles": [
+          "v4/core/schemas.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-generator.ts",
+          "/tmp/zod/packages/zod/src/v4/core/standard-schema.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-generator.ts",
+          "/tmp/zod/packages/zod/src/v4/core/standard-schema.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.16666666666666666,
+        "hitAt1": false,
+        "rankedRecallAtK": 1,
+        "rankedMrr": 0.16666666666666666,
+        "rankedHitAt1": false,
+        "latencyMs": 6,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "to-json-schema",
+        "question": "How does converting a zod schema to JSON Schema work?",
+        "expectedFiles": [
+          "v4/core/to-json-schema.ts",
+          "v4/core/json-schema-generator.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts"
+        ],
+        "recallAtK": 0.5,
+        "mrr": 0.3333333333333333,
+        "hitAt1": false,
+        "rankedRecallAtK": 0.5,
+        "rankedMrr": 0.3333333333333333,
+        "rankedHitAt1": false,
+        "latencyMs": 3,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "safe-parse",
+        "question": "Where are parse and safeParse implemented, and how do sync and async parsing differ?",
+        "expectedFiles": [
+          "v4/core/parse.ts",
+          "v4/classic/parse.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/parse.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/parse.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/core.ts",
+          "/tmp/zod/packages/zod/src/v4/core/doc.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/parse.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/parse.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/core.ts",
+          "/tmp/zod/packages/zod/src/v4/core/doc.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.5,
+        "hitAt1": false,
+        "rankedRecallAtK": 1,
+        "rankedMrr": 0.5,
+        "rankedHitAt1": false,
+        "latencyMs": 5,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "error-map",
+        "question": "How are custom error maps resolved when a validation issue is created?",
+        "expectedFiles": [
+          "v4/core/errors.ts",
+          "v4/core/config.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/errors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/parse.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/parse.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/errors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/parse.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/parse.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts"
+        ],
+        "recallAtK": 0.5,
+        "mrr": 0.5,
+        "hitAt1": false,
+        "rankedRecallAtK": 0.5,
+        "rankedMrr": 0.5,
+        "rankedHitAt1": false,
+        "latencyMs": 6,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "registry-meta",
+        "question": "Where is the schema registry implemented that .meta() and globalRegistry use?",
+        "expectedFiles": [
+          "v4/core/registries.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/registries.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-generator.ts",
+          "/tmp/zod/packages/zod/src/v4/core/standard-schema.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/registries.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-generator.ts",
+          "/tmp/zod/packages/zod/src/v4/core/standard-schema.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.16666666666666666,
+        "hitAt1": false,
+        "rankedRecallAtK": 1,
+        "rankedMrr": 0.16666666666666666,
+        "rankedHitAt1": false,
+        "latencyMs": 4,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "string-checks",
+        "question": "Where are string checks like min length, max length and starts_with implemented?",
+        "expectedFiles": [
+          "v4/core/checks.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.25,
+        "hitAt1": false,
+        "rankedRecallAtK": 1,
+        "rankedMrr": 0.25,
+        "rankedHitAt1": false,
+        "latencyMs": 5,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "iso-datetime",
+        "question": "Where is ISO 8601 datetime string validation implemented?",
+        "expectedFiles": [
+          "v4/classic/iso.ts",
+          "v4/core/regexes.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/iso.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/iso.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts"
+        ],
+        "recallAtK": 0.5,
+        "mrr": 0.125,
+        "hitAt1": false,
+        "rankedRecallAtK": 0.5,
+        "rankedMrr": 0.125,
+        "rankedHitAt1": false,
+        "latencyMs": 4,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "standard-schema",
+        "question": "How does zod implement the Standard Schema interface spec?",
+        "expectedFiles": [
+          "v4/core/standard-schema.ts",
+          "v4/core/core.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/zod/packages/zod/src/v4/core/standard-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/zod/packages/zod/src/v4/core/standard-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts"
+        ],
+        "recallAtK": 0.5,
+        "mrr": 0.125,
+        "hitAt1": false,
+        "rankedRecallAtK": 0.5,
+        "rankedMrr": 0.125,
+        "rankedHitAt1": false,
+        "latencyMs": 5,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "pipe-transform",
+        "question": "Where are pipe and transform implemented for chaining schemas?",
+        "expectedFiles": [
+          "v4/core/schemas.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/deep-partial.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/core/parse.ts",
+          "/tmp/zod/packages/zod/src/v4/core/checks.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/deep-partial.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts",
+          "/tmp/zod/packages/zod/src/v4/core/parse.ts",
+          "/tmp/zod/packages/zod/src/v4/core/checks.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.5,
+        "hitAt1": false,
+        "rankedRecallAtK": 1,
+        "rankedMrr": 0.5,
+        "rankedHitAt1": false,
+        "latencyMs": 4,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      },
+      {
+        "taskId": "from-json-schema",
+        "question": "How does building a zod schema from an existing JSON Schema document work?",
+        "expectedFiles": [
+          "v4/classic/from-json-schema.ts"
+        ],
+        "predictedFiles": [
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts"
+        ],
+        "rankedFiles": [
+          "/tmp/zod/packages/zod/src/v4/core/json-schema-processors.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/to-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/api.ts",
+          "/tmp/zod/packages/zod/src/v4/classic/from-json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+          "/tmp/zod/packages/zod/src/v4/core/checks.ts",
+          "/tmp/zod/packages/zod/src/v4/core/json-schema.ts",
+          "/tmp/zod/packages/zod/src/v4/core/errors.ts",
+          "/tmp/zod/packages/zod/src/v4/core/util.ts"
+        ],
+        "recallAtK": 1,
+        "mrr": 0.2,
+        "hitAt1": false,
+        "rankedRecallAtK": 1,
+        "rankedMrr": 0.2,
+        "rankedHitAt1": false,
+        "latencyMs": 4,
+        "seeds": 0,
+        "traversedNodes": 0,
+        "reasoningSteps": 0,
+        "stopReason": "n/a",
+        "contextChars": 0,
+        "experiencesSurfaced": 0
+      }
+    ]
+  }
+}

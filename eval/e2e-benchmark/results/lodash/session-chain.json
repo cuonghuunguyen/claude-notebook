@@ -1,0 +1,214 @@
+{
+  "target": "lodash",
+  "model": "claude-haiku-4-5-20251001",
+  "chains": [
+    {
+      "chainId": "sorting",
+      "relation": "_baseOrderBy.js calls _baseSortBy.js with _compareMultiple.js as its comparator — the fix sites are one hop apart in the call graph, both reached from sortBy",
+      "firstTask": "fix-sort-stability",
+      "secondTask": "fix-sort-not-applied",
+      "session1Touched": [
+        "_compareMultiple.js"
+      ],
+      "experienceRecordedOnNodes": 1,
+      "experienceId": "753de71b-3572-4c8a-9885-c4aae54ce49e",
+      "taskBExperiencesBefore": 0,
+      "taskBExperiencesAfter": 0,
+      "episodicReachedTaskB": false,
+      "taskBContextCharsBefore": 2239,
+      "taskBContextCharsAfter": 2239
+    },
+    {
+      "chainId": "paths",
+      "relation": "_castPath.js imports _stringToPath.js; both are reached from _.get through _baseGet",
+      "firstTask": "fix-bracket-path",
+      "secondTask": "fix-literal-dotted-key",
+      "session1Touched": [
+        "_stringToPath.js",
+        "test_fix.mjs"
+      ],
+      "experienceRecordedOnNodes": 1,
+      "experienceId": "a9822706-7158-4518-8d17-db6967dd339d",
+      "taskBExperiencesBefore": 0,
+      "taskBExperiencesAfter": 0,
+      "episodicReachedTaskB": false,
+      "taskBContextCharsBefore": 2357,
+      "taskBContextCharsAfter": 2357
+    }
+  ],
+  "session2": {
+    "bare": {
+      "runs": 2,
+      "fixRate": 1,
+      "rightFileRate": 1,
+      "meanTurns": 13,
+      "meanDurationMs": 40045.5,
+      "totalCostUsd": 0.1703425
+    },
+    "memory": {
+      "runs": 2,
+      "fixRate": 1,
+      "rightFileRate": 1,
+      "meanTurns": 13,
+      "meanDurationMs": 73768,
+      "totalCostUsd": 0.2565894
+    },
+    "memory+episodic": {
+      "runs": 2,
+      "fixRate": 1,
+      "rightFileRate": 1,
+      "meanTurns": 13,
+      "meanDurationMs": 37284.5,
+      "totalCostUsd": 0.1816838
+    }
+  },
+  "runs": [
+    {
+      "taskId": "fix-sort-stability",
+      "fixed": true,
+      "touchedExpectedFile": true,
+      "filesTouched": [
+        "_compareMultiple.js"
+      ],
+      "escapedWorkingCopy": false,
+      "durationMs": 34766,
+      "numTurns": 11,
+      "costUsd": 0.0703751,
+      "contextChars": 2305,
+      "experiencesInContext": 0,
+      "answer": "Done. The bug was in `/tmp/bench-sorting-s1-lajESU/_compareMultiple.js` where the tiebreaker comparison was inverted, causing it to reverse the order of tied elements instead of preserving it. Changing `other.index - object.index` to `object.index - other.index` restores the stable sort behavior.",
+      "chainId": "sorting",
+      "session": 1,
+      "condition": "memory"
+    },
+    {
+      "taskId": "fix-sort-not-applied",
+      "fixed": true,
+      "touchedExpectedFile": true,
+      "filesTouched": [
+        "_baseSortBy.js"
+      ],
+      "escapedWorkingCopy": false,
+      "durationMs": 23450,
+      "numTurns": 9,
+      "costUsd": 0.0597434,
+      "contextChars": 0,
+      "experiencesInContext": 0,
+      "answer": "**Fixed!**\n\n**File changed:** `_baseSortBy.js`\n\n**Why:** The `baseSortBy` function was receiving a `comparer` parameter but never using it. Line 14 called `array.sort()` without passing the comparator, causing JavaScript's default lexicographic sort to be used instead of the custom comparison logic. This meant that `sortBy` would return the collection in its original order regardless of the iteratee provided.\n\nThe fix: Changed `array.sort()` to `array.sort(comparer)` on line 14.",
+      "chainId": "sorting",
+      "session": 2,
+      "condition": "bare"
+    },
+    {
+      "taskId": "fix-sort-not-applied",
+      "fixed": true,
+      "touchedExpectedFile": true,
+      "filesTouched": [
+        "_baseSortBy.js"
+      ],
+      "escapedWorkingCopy": false,
+      "durationMs": 103640,
+      "numTurns": 11,
+      "costUsd": 0.15503630000000002,
+      "contextChars": 2239,
+      "experiencesInContext": 0,
+      "answer": "**File changed: `/tmp/bench-sorting-s2-memory-dxc0dU/_baseSortBy.js`**\n\n**Why:** The `baseSortBy` function was calling `array.sort()` without passing the `comparer` function argument (line 14). This meant the sort operation wasn't using the comparison logic at all, causing the array to remain in its original order. The fix is to pass the `comparer` function to `sort()`: `array.sort(comparer)`.",
+      "chainId": "sorting",
+      "session": 2,
+      "condition": "memory"
+    },
+    {
+      "taskId": "fix-sort-not-applied",
+      "fixed": true,
+      "touchedExpectedFile": true,
+      "filesTouched": [
+        "_baseSortBy.js"
+      ],
+      "escapedWorkingCopy": false,
+      "durationMs": 36802,
+      "numTurns": 13,
+      "costUsd": 0.0930364,
+      "contextChars": 2239,
+      "experiencesInContext": 0,
+      "answer": "Done! The issue was in **`_baseSortBy.js`** at line 14. The function accepts a `comparer` parameter but wasn't using it in the `sort()` call. By changing `array.sort()` to `array.sort(comparer)`, the sort now properly uses the comparison function to determine the sort order instead of just returning the array in its original order.",
+      "chainId": "sorting",
+      "session": 2,
+      "condition": "memory+episodic"
+    },
+    {
+      "taskId": "fix-bracket-path",
+      "fixed": true,
+      "touchedExpectedFile": true,
+      "filesTouched": [
+        "_stringToPath.js",
+        "test_fix.mjs"
+      ],
+      "escapedWorkingCopy": false,
+      "durationMs": 44398,
+      "numTurns": 16,
+      "costUsd": 0.10363150000000002,
+      "contextChars": 2251,
+      "experiencesInContext": 0,
+      "answer": "## Summary\n\n**File changed:** `/tmp/bench-paths-s1-wFHyS7/_stringToPath.js`\n\n**Why:** The `stringToPath` function converts path strings like `'a[0].b'` into arrays of property keys. The regex correctly captured the numeric index `0` from `[0]`, but the code was pushing the full match `[0]` (including brackets) instead of extracting just the number. \n\nThe fix on line 22 now checks if a number was captured and pushes that (`number !== undefined ? number : match`) instead of always pushing the full match. This ensures bracketed paths like `'a[0].b'` are parsed the same way as dotted paths like `'a.0.b'`, resolving the bug where `_.get(obj, 'a[0].b')` was returning undefined.",
+      "chainId": "paths",
+      "session": 1,
+      "condition": "memory"
+    },
+    {
+      "taskId": "fix-literal-dotted-key",
+      "fixed": true,
+      "touchedExpectedFile": true,
+      "filesTouched": [
+        "_castPath.js",
+        "test_bug.js"
+      ],
+      "escapedWorkingCopy": false,
+      "durationMs": 56641,
+      "numTurns": 17,
+      "costUsd": 0.1105991,
+      "contextChars": 0,
+      "experiencesInContext": 0,
+      "answer": "Perfect! I've found and fixed the bug. Here's what was happening:\n\n## The Problem\n\nThe `castPath` function was always parsing string paths using `stringToPath`, which splits by dots. So when you called `_.get(obj, 'a.b')` on an object with a literal `'a.b'` key, it would split the string into `['a', 'b']` and try to navigate nested properties instead of looking for the literal key.\n\n## The Solution\n\nI modified **`_castPath.js`** to check if the string path is actually a literal key in the object (using the existing `isKey` function) before parsing it as a nested path. Now:\n\n- If `'a.b'` exists as a literal key in the object, it returns `['a.b']` (single key)\n- If `'a.b'` doesn't exist as a literal key, it parses it as a path: `['a', 'b']`\n\nThis fixes the bug while maintaining backward compatibility for nested path navigation.\n\n**File changed:** `_castPath.js` (lines 18-19)\n\nThe change adds one line to check if the value is a valid single key before parsing it as a path. This minimal fix leverages existing logic in `_isKey.js` that was designed exactly for this purpose.",
+      "chainId": "paths",
+      "session": 2,
+      "condition": "bare"
+    },
+    {
+      "taskId": "fix-literal-dotted-key",
+      "fixed": true,
+      "touchedExpectedFile": true,
+      "filesTouched": [
+        "_castPath.js"
+      ],
+      "escapedWorkingCopy": false,
+      "durationMs": 43896,
+      "numTurns": 15,
+      "costUsd": 0.1015531,
+      "contextChars": 2357,
+      "experiencesInContext": 0,
+      "answer": "## Summary\n\n**File changed:** `_castPath.js`\n\n**Why:** The bug was that `castPath` was blindly splitting all string paths on dots without checking if the object actually has a literal key with that dot in its name.\n\n**The fix:** Modified `castPath` to use the existing `isKey` function to check if the path string represents a literal key in the object. If `isKey` returns true (meaning the key exists in the object), the path is kept as a single-element array `[stringValue]`. Otherwise, it's split via `stringToPath` as before.\n\nThis allows:\n- `_.get({a: {b: 'nested'}}, 'a.b')` → `'nested'` (nested property access)\n- `_.get({'a.b': 'value'}, 'a.b')` → `'value'` (literal dot key access)\n\nThe fix is minimal and reuses existing logic, maintaining backward compatibility while fixing the reported bug.",
+      "chainId": "paths",
+      "session": 2,
+      "condition": "memory"
+    },
+    {
+      "taskId": "fix-literal-dotted-key",
+      "fixed": true,
+      "touchedExpectedFile": true,
+      "filesTouched": [
+        "_castPath.js",
+        "test_literal_dot.mjs"
+      ],
+      "escapedWorkingCopy": false,
+      "durationMs": 37767,
+      "numTurns": 13,
+      "costUsd": 0.0886474,
+      "contextChars": 2357,
+      "experiencesInContext": 0,
+      "answer": "Done! I found and fixed the bug.\n\n**File changed:** `_castPath.js`\n\n**Why:** The function was ignoring the `object` parameter and always splitting the path on dots, even when the string was a literal key in the object. The `isKey` function already existed to detect whether a value is a property name (not a path), but it wasn't being used.\n\n**The fix:** Check if the value is a literal key in the object using `isKey(value, object)`. If it is, return it as a single-element array `[stringValue]` instead of splitting it with `stringToPath`. This way:\n- `_.get({ 'a.b': 42 }, 'a.b')` correctly returns `42`\n- `_.get({ a: { b: 99 } }, 'a.b')` still returns `99` (splits the path normally)",
+      "chainId": "paths",
+      "session": 2,
+      "condition": "memory+episodic"
+    }
+  ]
+}

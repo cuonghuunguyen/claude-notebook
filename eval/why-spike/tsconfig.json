@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "outDir": "dist", "rootDir": "src" },
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/graph-store" },
+    { "path": "../../packages/retrieval" },
+    { "path": "../../packages/traversal" },
+    { "path": "../../packages/episodic" },
+    { "path": "../../packages/pipeline" }
+  ],
+  "include": ["src"]
+}

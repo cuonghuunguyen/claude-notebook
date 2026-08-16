@@ -1,0 +1,119 @@
+{
+  "target": "lodash",
+  "model": "claude-haiku-4-5-20251001",
+  "contextsPath": "/home/user/claude-notebook/eval/e2e-benchmark/results/lodash/contexts-patch.json",
+  "bare": {
+    "runs": 3,
+    "fixRate": 1,
+    "rightFileRate": 1,
+    "meanFilesTouched": 1.6666666666666667,
+    "escapeRate": 0,
+    "meanTurns": 13,
+    "meanDurationMs": 36367,
+    "totalCostUsd": 0.256483
+  },
+  "memory": {
+    "runs": 3,
+    "fixRate": 1,
+    "rightFileRate": 1,
+    "meanFilesTouched": 1,
+    "escapeRate": 0,
+    "meanTurns": 12,
+    "meanDurationMs": 33464.333333333336,
+    "totalCostUsd": 0.24516570000000001
+  },
+  "runs": [
+    {
+      "taskId": "fix-sort-stability",
+      "condition": "bare",
+      "fixed": true,
+      "touchedExpectedFile": true,
+      "filesTouched": [
+        "_compareMultiple.js",
+        "test_sort_stability.js"
+      ],
+      "escapedWorkingCopy": false,
+      "verifyError": null,
+      "durationMs": 29512,
+      "numTurns": 11,
+      "costUsd": 0.07181970000000001,
+      "answer": "## Summary\n\n**File changed:** `_compareMultiple.js`\n\n**Why:** The stability comparison was inverted. When all sort criteria are equal between two elements, the function should return the original array order (based on the index assigned during the mapping phase). \n\nThe bug was on line 41:\n```javascript\nreturn other.index - object.index;  // WRONG - inverted order\n```\n\nThis should be:\n```javascript\nreturn object.index - other.index;  // CORRECT - preserves original order\n```\n\n**How it fixes the issue:**\n- When elements have equal sort keys, the comparator should preserve their original order\n- `object.index` and `other.index` track the original position in the array\n- If `object` originally came before `other`, then `object.index < other.index`, so `object.index - other.index` returns negative (correct: object should come first)\n- The inverted formula `other.index - object.index` was reversing this, causing instability\n- The comment in the code even explains this is meant to \"ensure a stable sort in V8 and other engines,\" but it was doing the opposite"
+    },
+    {
+      "taskId": "fix-sort-stability",
+      "condition": "memory",
+      "fixed": true,
+      "touchedExpectedFile": true,
+      "filesTouched": [
+        "_compareMultiple.js"
+      ],
+      "escapedWorkingCopy": false,
+      "verifyError": null,
+      "durationMs": 22801,
+      "numTurns": 9,
+      "costUsd": 0.057678900000000005,
+      "answer": "Fixed! The bug was in **`_compareMultiple.js` at line 41**.\n\n**The Problem:**\nThe stability comparison was backwards. When all criteria are equal, the function was returning `other.index - object.index`, which reversed the original order instead of preserving it.\n\n**The Fix:**\nChanged line 41 from `return other.index - object.index;` to `return object.index - other.index;`\n\n**Why This Works:**\n- When elements have equal sort criteria, we must preserve original order for stability\n- Elements are assigned indices in order: first element gets index 0, second gets index 1, etc.\n- If `object` came before `other` in the original array, `object.index < other.index`\n- For stability, the comparator should return negative (keeping the first element first)\n- `object.index - other.index` correctly returns negative when object came first\n- The buggy `other.index - object.index` returned positive, incorrectly sorting them backwards"
+    },
+    {
+      "taskId": "fix-bracket-path",
+      "condition": "bare",
+      "fixed": true,
+      "touchedExpectedFile": true,
+      "filesTouched": [
+        "_stringToPath.js",
+        "test_bracket_path.mjs"
+      ],
+      "escapedWorkingCopy": false,
+      "verifyError": null,
+      "durationMs": 43508,
+      "numTurns": 14,
+      "costUsd": 0.095693,
+      "answer": "Perfect! The fix is now in place. Here's a summary:\n\n## File Changed: `_stringToPath.js`\n\n**Line 22** - Changed from:\n```javascript\nresult.push(quote ? subString.replace(reEscapeChar, '$1') : match);\n```\n\nTo:\n```javascript\nresult.push(quote ? subString.replace(reEscapeChar, '$1') : (number !== undefined ? number : match));\n```\n\n**Why this fixes the bug:**\n\nThe regex in `stringToPath` captures bracketed indices in group 1 (the `number` parameter). When parsing `'a[0].b'`:\n- The match `[0]` is captured with `number = '0'`\n- But the original code was pushing the entire `match` (`[0]`) instead of just the extracted `number` (`0`)\n- This caused `get()` to look for property `'[0]'` instead of `'0'`, returning undefined\n\nThe fix checks if a number was captured and uses that; otherwise it falls back to the original match behavior for regular properties. This preserves all existing functionality while correctly handling bracketed numeric indices."
+    },
+    {
+      "taskId": "fix-bracket-path",
+      "condition": "memory",
+      "fixed": true,
+      "touchedExpectedFile": true,
+      "filesTouched": [
+        "_stringToPath.js"
+      ],
+      "escapedWorkingCopy": false,
+      "verifyError": null,
+      "durationMs": 45682,
+      "numTurns": 17,
+      "costUsd": 0.111093,
+      "answer": "**Fixed!** \n\nI found and fixed the bug in **`_stringToPath.js`** (line 22).\n\n**The Problem:**\nWhen parsing bracket notation like `'a[0].b'`, the regex correctly captured the number `'0'` in a capture group, but the code only checked for the `quote` group. Since `quote` was `undefined` for numeric indices, it pushed the entire match string `'[0]'` instead of just extracting the number `'0'`.\n\n**The Fix:**\nChanged line 22 from:\n```javascript\nresult.push(quote ? subString.replace(reEscapeChar, '$1') : match);\n```\n\nTo:\n```javascript\nresult.push(quote ? subString.replace(reEscapeChar, '$1') : (number != null ? number : match));\n```\n\nNow the code properly handles three cases:\n1. Quoted strings like `[\"key\"]` → uses `subString`\n2. Numeric indices like `[0]` → uses `number`\n3. Regular properties → uses the full `match`\n\nThis makes `_.get(obj, 'a[0].b')` work the same as `_.get(obj, 'a.0.b')`."
+    },
+    {
+      "taskId": "fix-key-order-equality",
+      "condition": "bare",
+      "fixed": true,
+      "touchedExpectedFile": true,
+      "filesTouched": [
+        "_equalObjects.js"
+      ],
+      "escapedWorkingCopy": false,
+      "verifyError": null,
+      "durationMs": 36081,
+      "numTurns": 14,
+      "costUsd": 0.08897030000000002,
+      "answer": "## Summary\n\n**File changed:** `/tmp/bench-fix-key-order-equality-bare-bdDwTG/_equalObjects.js`\n\n**Why:** The bug was on line 56. When comparing two objects with identical keys and values but in different insertion order, the code was using the wrong key to access values from the second object:\n- It was using `other[othProps[index]]` — accessing `other` with a key from its own key list\n- It should use `other[key]` — accessing `other` with the same key from the first object\n\nThis caused key misalignment when the keys were in different orders. For example, comparing `{ a: 1, b: 2 }` with `{ b: 2, a: 1 }` would incorrectly compare `a` from the first object with `b` from the second, instead of comparing them with their matching keys.\n\nThe fix ensures we compare the same keys from both objects, making the equality check order-independent as intended."
+    },
+    {
+      "taskId": "fix-key-order-equality",
+      "condition": "memory",
+      "fixed": true,
+      "touchedExpectedFile": true,
+      "filesTouched": [
+        "_equalObjects.js"
+      ],
+      "escapedWorkingCopy": false,
+      "verifyError": null,
+      "durationMs": 31910,
+      "numTurns": 10,
+      "costUsd": 0.07639380000000001,
+      "answer": "**Fixed!**\n\n**File changed:** `/tmp/bench-fix-key-order-equality-memory-Nnn37R/_equalObjects.js` at line 56\n\n**Why:** The bug was in the property comparison loop. When comparing two objects, the code was using `other[othProps[index]]` to retrieve values from the second object. This is wrong because `othProps[index]` may be a different key than the one currently being compared (`objProps[index]`). When objects have identical keys and values but in different order, this caused a mismatch—comparing values from different keys.\n\nThe fix changes line 56 from:\n```javascript\nothValue = other[othProps[index]];\n```\nto:\n```javascript\nothValue = other[key];\n```\n\nNow both objects are accessed using the same key, ensuring correct comparison regardless of key insertion order."
+    }
+  ]
+}

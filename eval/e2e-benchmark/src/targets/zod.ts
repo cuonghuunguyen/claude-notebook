@@ -1,23 +1,22 @@
 /**
- * The benchmark query set: realistic developer questions against zod v4,
- * each hand-labeled with the source files a correct answer lives in.
+ * Target: zod v4 (`packages/zod/src/v4/{classic,core}`) — few, very large
+ * TypeScript modules, schemas defined through `export const X = $constructor(...)`
+ * rather than `class`/`function` declarations.
  *
- * Ground truth was labeled by manually inspecting the zod v4 source
- * (packages/zod/src/v4/{classic,core}) — every expected file was verified
- * to actually contain the implementation the question asks about. Paths
- * are suffixes relative to the repo root, matched with endsWith().
+ * Ground truth was labeled by manually inspecting the zod v4 source — every
+ * expected file was verified to actually contain the implementation the
+ * question asks about. Paths are suffixes, matched with endsWith().
+ *
+ * The `hops` field is deliberately left unset here: this question set predates
+ * the single/multi-hop split and labeling it after the fact would be a
+ * post-hoc rationalisation, not a design. See the lodash target for a set
+ * where the split was chosen up front.
  */
-export interface BenchmarkTask {
-  id: string;
-  /** The question as a developer/agent would actually phrase it. */
-  question: string;
-  /** File(s) a correct answer must point at. */
-  expectedFiles: string[];
-  /** Symbols a correct *answer* (agent run) should mention — grading aid. */
-  expectedSymbols: string[];
-}
+import fs from "node:fs";
+import path from "node:path";
+import type { BenchTarget, BenchmarkTask } from "./types.js";
 
-export const TASKS: BenchmarkTask[] = [
+const TASKS: BenchmarkTask[] = [
   {
     id: "email-regex",
     question: "Where is the email validation regex defined and which check uses it?",
@@ -91,3 +90,50 @@ export const TASKS: BenchmarkTask[] = [
     expectedSymbols: ["fromJSONSchema"],
   },
 ];
+
+export const zodTarget: BenchTarget = {
+  key: "zod",
+  repoId: "zod-v4-benchmark",
+  origin: "https://github.com/colinhacks/zod (default branch)",
+  dirEnv: "ZOD_DIR",
+  agentPathHint: "the exact source file path(s) under packages/zod/src/v4",
+  root: (cloneDir) => path.join(cloneDir, "packages", "zod", "src", "v4"),
+  /** Indexed scope: classic + core, tests excluded — what an agent memory would index. */
+  sourceGlobs: (root) => [
+    `${root}/classic/**/*.ts`,
+    `${root}/core/**/*.ts`,
+    `!${root}/classic/tests/**`,
+    `!${root}/core/tests/**`,
+  ],
+  indexedFiles: (root) => {
+    const files: string[] = [];
+    for (const dir of ["classic", "core"]) {
+      const base = path.join(root, dir);
+      for (const entry of fs.readdirSync(base, { withFileTypes: true })) {
+        if (entry.isFile() && entry.name.endsWith(".ts")) files.push(path.join(base, entry.name));
+      }
+    }
+    return files;
+  },
+  episodicSeeds: [
+    {
+      fileSuffix: "v4/core/schemas.ts",
+      lesson:
+        "[synthetic] core/schemas.ts is a ~10k-line module; schema classes are defined via $constructor, not `class X {}` declarations.",
+    },
+    {
+      fileSuffix: "v4/core/checks.ts",
+      lesson:
+        "[synthetic] String/number checks live in core/checks.ts as $ZodCheck* constructors; the regexes they use live in core/regexes.ts.",
+    },
+  ],
+  agentTaskIds: [
+    "email-regex",
+    "coerce",
+    "discriminated-union",
+    "safe-parse",
+    "registry-meta",
+    "standard-schema",
+  ],
+  tasks: TASKS,
+};

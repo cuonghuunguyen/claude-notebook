@@ -1,0 +1,30 @@
+{
+  "target": "zod",
+  "repoId": "zod-v4-benchmark",
+  "origin": "https://github.com/colinhacks/zod (default branch)",
+  "root": "/tmp/zod/packages/zod/src/v4",
+  "filesParsed": 32,
+  "nodes": 406,
+  "edges": 997,
+  "nodesByType": {
+    "file": 32,
+    "function": 358,
+    "class": 6,
+    "method": 10
+  },
+  "edgesByRelation": {
+    "contains": 374,
+    "imports": 95,
+    "calls": 528
+  },
+  "nodesInStore": 406,
+  "syntheticExperiencesOn": [
+    "/tmp/zod/packages/zod/src/v4/core/schemas.ts",
+    "/tmp/zod/packages/zod/src/v4/core/checks.ts"
+  ],
+  "timingsMs": {
+    "extract": 3965,
+    "persist": 1367,
+    "indexEmbeddings": 800
+  }
+}

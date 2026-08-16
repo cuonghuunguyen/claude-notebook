@@ -1,0 +1,57 @@
+{
+  "fix-sort-stability": {
+    "chars": 2305,
+    "files": [
+      "_baseFindKey.js",
+      "_baseOrderBy.js",
+      "_baseSortBy.js",
+      "_isKey.js",
+      "findKey.js",
+      "keyBy.js",
+      "orderBy.js",
+      "sortBy.js"
+    ],
+    "hitsExpected": false
+  },
+  "fix-bracket-path": {
+    "chars": 2251,
+    "files": [
+      "_getValue.js",
+      "_listCacheGet.js",
+      "_mapCacheGet.js"
+    ],
+    "hitsExpected": false
+  },
+  "fix-key-order-equality": {
+    "chars": 2302,
+    "files": [
+      "_baseIsEqual.js",
+      "_baseKeysIn.js",
+      "_nativeKeysIn.js",
+      "keysIn.js"
+    ],
+    "hitsExpected": false
+  },
+  "fix-sort-not-applied": {
+    "chars": 2239,
+    "files": [
+      "_isKey.js",
+      "collection.js",
+      "findKey.js",
+      "orderBy.js"
+    ],
+    "hitsExpected": false
+  },
+  "fix-literal-dotted-key": {
+    "chars": 2357,
+    "files": [
+      "_assocIndexOf.js",
+      "_cacheHas.js",
+      "_listCacheGet.js",
+      "_listCacheHas.js",
+      "_mapCacheGet.js",
+      "_setCacheHas.js"
+    ],
+    "hitsExpected": false
+  }
+}

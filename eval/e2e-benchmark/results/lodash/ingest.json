@@ -1,0 +1,25 @@
+{
+  "target": "lodash",
+  "repoId": "lodash-es-benchmark",
+  "origin": "https://github.com/lodash/lodash (branch: es)",
+  "root": "/tmp/lodash",
+  "filesParsed": 644,
+  "nodes": 1122,
+  "edges": 2923,
+  "nodesByType": {
+    "file": 644,
+    "function": 478
+  },
+  "edgesByRelation": {
+    "contains": 478,
+    "imports": 1652,
+    "calls": 793
+  },
+  "nodesInStore": 1122,
+  "syntheticExperiencesOn": [],
+  "timingsMs": {
+    "extract": 2314,
+    "persist": 1985,
+    "indexEmbeddings": 9089
+  }
+}

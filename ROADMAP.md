@@ -21,7 +21,14 @@ This checklist is the source of truth for what's done — see
 - [x] M7 — Staleness, Events, GC, Full Eval Set
 - [x] M8 — Multi-Language Structural Extraction (Python via `tree-sitter`, approved — see CLAUDE.md)
 - [x] M9 — Pipeline Orchestration
-- [ ] M10 — Structural Extraction: Variable-Bound Declarations
+- ~~M10 — Structural Extraction: Variable-Bound Declarations~~ — **superseded,
+  never built** (knowledge-first pivot, human-directed 2026-08-19; see spec §24
+  and the M10 section note below)
+- [ ] M11 — Knowledge Layer as Product (by-meaning retrieval + commit-mining capture shipped into `packages/`)
+- [ ] M12 — Text Anchors & Commit-Triggered Staleness (git replaces the AST for anchoring and staleness)
+- [ ] M13 — Refine-Memory Skill (read-repair + `supersedes` links)
+- [ ] M14 — Knowledge-Link Edges (spike: memory-to-memory traversal, go/no-go on a measured win)
+- [ ] M15 — Decommission the Structural Graph (gated on M11–M14 outcomes)
 
 Repo layout target:
 
@@ -300,7 +307,15 @@ package's existing public API.
   `AgentContext.experiences` — this is the first real (non-test-only)
   exercise of episodic memory's read path from outside its own package.
 
-## M10 — Structural Extraction: Variable-Bound Declarations (spec §23)
+## M10 — Structural Extraction: Variable-Bound Declarations (spec §23) — SUPERSEDED
+
+> **Superseded 2026-08-19 by direct human decision — do not build.** The
+> knowledge-first pivot (spec §24) removes the premise this milestone rests
+> on: memories no longer bind to structural node ids, so extending node
+> coverage buys nothing. The measured gap it cites (zero-hit retrieval on
+> `export const` files) is answered instead by M11's by-meaning retrieval,
+> which does not route through node hits at all (WHY_MEMORY_SPIKE.md: MRR
+> 0.75 by content vs 0.13 node-gated). Text preserved below for the record.
 
 **Proposed via `/propose-milestone`** — demonstrated gap: the real-world E2E
 benchmark added in `eval/e2e-benchmark/` (see `E2E_BENCHMARK_REPORT.md`, a
@@ -373,9 +388,148 @@ exist), no change to any other package's public API.
 
 ---
 
+## M11 — Knowledge Layer as Product (spec §24)
+
+**Human-directed pivot (2026-08-19).** The measured case: the structural
+graph loses to grep at code location in every regime on both benchmark repos
+(`E2E_BENCHMARK_MULTI_REPO.md`), while recorded-reasoning memory mined from
+git history cut agent work 7.7 → 1.4 turns at −47% cost
+(`WHY_MEMORY_SPIKE.md`) — and did it by retrieving experiences **by their own
+content** (MRR 0.75) rather than through node hits (the shipped node-gated
+path: MRR 0.13). The winning paths live only in `scripts/self-memory.mjs` and
+`eval/why-spike/`; nothing in `packages/` produces or content-searches an
+experience. This milestone ships them.
+
+**Goal:** the knowledge layer becomes the product surface of `packages/`.
+
+- Migration: content-search capability on `experiences` — pg_trgm index on
+  experience text + embedding column/HNSW index (the table today has indexes
+  only on `related_nodes` and `timestamp`; it cannot search knowledge by
+  content).
+- `packages/episodic`: a by-meaning query API — hybrid text + embedding
+  search over experience content, mirroring §9's hybrid shape but over
+  experiences, **not** gated on any structural node hit.
+- Capture as a package (new `packages/capture` or grown inside episodic):
+  the why-spike's git-history miner (self-explaining commits, revert
+  references, PR/issue linkage) as an idempotent API — re-running over the
+  same history writes nothing new, same contract as `self-memory.mjs sync`.
+- `packages/pipeline`: `runPipeline` surfaces by-meaning experience hits
+  directly in `AgentContext.experiences`, no longer only node-hydrated ones.
+
+**Acceptance:**
+- Migration is idempotent (applies twice cleanly).
+- Unit: a by-meaning query returns a relevant experience whose
+  `related_nodes` is empty — proving retrieval is not node-gated.
+- Capture idempotency test: mining the same fixture history twice produces
+  no duplicate experiences.
+- Re-run the why-spike retrieval harness through the shipped package path
+  (integration, gated on `DATABASE_URL`): by-meaning MRR must land in the
+  neighborhood of the spike's 0.75 and decisively above the node-gated
+  0.13 — record the real number in `BENCHMARKS.md`.
+
+## M12 — Text Anchors & Commit-Triggered Staleness (spec §24)
+
+**Goal:** memories bind to plain-text anchors — `{ path, symbol? }` (file
+path plus optional symbol name as text, never line numbers) — instead of
+structural node ids, and staleness is driven by git, not by AST diffing.
+
+- `packages/core`: `Anchor` type; experiences carry `anchors: Anchor[]`
+  alongside (eventually instead of) `related_nodes`.
+- Capture/sync marks a memory **suspect** when a commit touches an anchored
+  path (file-level trigger; follows git renames via `--follow`/rename
+  detection rather than treating a rename as a delete).
+- Retrieval-time staleness flag: if the last commit touching a memory's
+  anchored paths is newer than the memory itself, the returned context tags
+  it `possibly-stale — verify before trusting`. One git lookup, no parser.
+- Suspect memories are still returned (flagged), never silently dropped —
+  the why-spike showed missing context is a cost too; the flag is the
+  compromise.
+
+**Acceptance:**
+- Unit: anchor matching against a changed-paths list, including a
+  renamed-file case resolving to the same anchor.
+- Unit: commit newer than memory ⇒ flag present; memory newer than last
+  commit ⇒ no flag.
+- Integration (gated on `DATABASE_URL`): sync over a fixture repo's history
+  marks exactly the memories anchored to the changed files as suspect.
+
+## M13 — Refine-Memory Skill (read-repair + supersedes) (spec §24)
+
+**Goal:** staleness gets *repaired* where it is *noticed* — at read time.
+
+- Migration + `packages/episodic`: a `supersedes` link between experiences.
+  Retrieval excludes superseded memories by default (the chain's newest
+  memory answers; history remains queryable explicitly).
+- `.claude/skills/refine-memory`: retrieve a memory → read its anchored
+  files and `git log` since its timestamp → if stale, write a corrected
+  memory that supersedes the old one (and clear the suspect mark); if still
+  accurate, just clear the mark.
+- Wire into this repo's own loop: `self-memory.mjs ask` output flags stale
+  hits and names the skill, so dogfooding exercises read-repair naturally.
+
+**Acceptance:**
+- Unit: superseded memories excluded from by-meaning retrieval; explicitly
+  included when asked for history.
+- Integration: supersede chain of length 3 returns only the head.
+- Dogfood evidence in the PR: the skill run against one genuinely stale
+  memory in this repo's own graph, before/after shown.
+
+## M14 — Knowledge-Link Edges (spike — go/no-go, not a feature) (spec §24)
+
+**Goal:** test whether memory-to-memory edges are worth building before
+building them. Call-graph traversal lost to grep because grep can
+reconstruct code relations from source; relations *between memories*
+(commit B reverts commit A; fix and regression share an incident) are not
+in the source at all — but that argument is currently unproven, so this
+milestone is explicitly a measured spike, mirroring `WHY_MEMORY_SPIKE.md`'s
+method.
+
+- Miner: derive candidate edges from git metadata only — revert references
+  ("This reverts commit …"), shared PR/issue numbers, same-files-within-a-
+  time-window follow-ups.
+- Hand-check edge precision on a labeled sample (target: a real number in
+  the report, not an assertion).
+- Benchmark: why-spike-style A/B — answers built from the hit memory alone
+  vs hit memory + 1-hop linked memories — on questions whose ground truth
+  spans two commits (e.g. change + its revert).
+
+**Acceptance:**
+- Edge-miner unit tests on fixture histories (revert / issue-ref / window).
+- A written go/no-go in `BENCHMARKS.md` with the measured before/after. A
+  null result is a valid outcome: log it honestly and do NOT integrate
+  traversal into the pipeline — per the repo rule, no fabricated rows.
+
+## M15 — Decommission the Structural Graph (gated on M11–M14) (spec §24)
+
+**Goal:** once nothing load-bearing reads structural nodes — retrieval is
+by meaning (M11), anchors are text (M12), staleness is git-driven (M12) —
+remove the machinery: `packages/structural`, `packages/structural-python`,
+the symbol-graph traversal path, and the schema surface only they used.
+
+Gate, not a formality: this milestone may only start after M11 and M12 are
+merged AND a re-run of the existing eval sets through the knowledge-first
+pipeline shows no regression vs the `BENCHMARKS.md` baseline. If something
+still measurably depends on structural nodes, that finding blocks this
+milestone and gets written down instead.
+
+**Acceptance:**
+- `pnpm -r build && pnpm -r test` green with the packages removed.
+- Pipeline eval re-run post-removal recorded in `BENCHMARKS.md`, no
+  regression vs the pre-removal baseline.
+- Migration retires now-unused columns/indexes (e.g. node-gating surfaces),
+  idempotent as always; `experiences` data is preserved.
+
+---
+
 ## Sequencing note
 
 M2 and M4 have no dependency on each other and can be built in parallel once
 M1 exists. M3 depends on M4 only for its acceptance test (needs at least one
 experience source), not for its core logic — build M3's promotion table
 against synthetic provenance first if M4 is behind schedule.
+
+Post-pivot (spec §24): M11 → M12 → M13 are sequential (anchors need the
+shipped knowledge layer; read-repair needs anchors and staleness flags).
+M14 only needs M11 and can run in parallel with M12/M13. M15 is last and
+gated — it starts only after M11–M12 are merged and the eval re-run shows
+no regression, and it must respect M14's go/no-go either way.

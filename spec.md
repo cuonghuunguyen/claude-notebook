@@ -818,7 +818,7 @@ someday-nice-to-have — the same posture §19 and §21 take.
 
 ---
 
-## 23. Structural Extraction: Variable-Bound Declarations (extends §2.1, §5 — proposed via `/propose-milestone`)
+## 23. Structural Extraction: Variable-Bound Declarations (extends §2.1, §5 — proposed via `/propose-milestone`) — SUPERSEDED by §24, never built
 
 §2.1 names `variable` as a structural node type and commits the TS/JS
 extractor to covering "file, directory, module, class, function, interface,
@@ -905,3 +905,84 @@ proposal if and when it's similarly demonstrated, not assumed here.
 Variable-bound declaration extraction is a build milestone (see
 `ROADMAP.md`), not a someday-nice-to-have — the same posture §19, §21, and
 §22 take.
+
+---
+
+## 24. Knowledge-First Pivot (supersedes §23; amends the weight of §2.1, §5, §10 — direct human decision, 2026-08-19)
+
+This section records a direction decision made directly by the project's
+human owner, not via `/propose-milestone` — so the evidence bar it must meet
+is the one it cites, not a self-merge rule.
+
+### 24.1 The evidence
+
+Two measurements of the same shipped system, on two different jobs:
+
+- **Code location** (`E2E_BENCHMARK_MULTI_REPO.md`): the structural graph
+  loses to a naive grep baseline on both benchmark repos in every regime,
+  including multi-hop — the regime graph traversal was designed for
+  (lodash multi-hop: 0.36 vs 0.43 recall). The earlier "beats grep at
+  ranking" claim was a measurement artefact.
+- **Recorded reasoning** (`WHY_MEMORY_SPIKE.md`): memories of *why* —
+  design decisions, reverts, debugging outcomes mined from git history —
+  cut agent work from 7.7 to 1.4 mean turns (−82%) at −47% cost against a
+  baseline agent with full git access. Retrieval that reaches experiences
+  **by their own content** scored MRR 0.75; the shipped path that gates
+  experiences behind structural-node hits scored 0.13.
+
+Conclusion drawn: the product is the knowledge layer. The structural graph
+is not the value; at most it was a coordinate system for anchoring
+knowledge — and a cheaper coordinate system exists (§24.3).
+
+### 24.2 What this decides
+
+1. **The knowledge layer is the product surface.** Capture (git-history
+   mining per the why-spike method, plus agent-session outcomes) and
+   by-meaning retrieval (hybrid text + embedding search over experience
+   content, not node-gated) move from scripts/spikes into `packages/`.
+   (ROADMAP M11.)
+2. **Anchors are plain text**: `{ path, symbol? }` — file path plus
+   optional symbol name as text. Never line numbers (they rot on every
+   edit above them). A moved symbol is re-found lexically at read time.
+   (M12.)
+3. **Staleness is git-driven, not AST-driven**: a commit touching a
+   memory's anchored paths marks it suspect; at retrieval, a memory older
+   than the last commit touching its anchors is flagged
+   `possibly-stale — verify`, still returned, never silently dropped.
+   Repair happens at read time (§24.2.4), not by background rescans.
+   (M12.)
+4. **Read-repair with supersedes chains**: a refine step re-checks a
+   retrieved memory against the current code/history and, if stale, writes
+   a corrected memory superseding the old one. Retrieval returns chain
+   heads by default. This is the update path §7/§13 wanted, relocated to
+   the moment of use. (M13.)
+5. **Graph traversal moves up one level — pending proof.** Code-symbol
+   edges (calls/imports) lost to grep because grep can reconstruct them
+   from source. Edges *between memories* (revert references, shared
+   PR/issue, temporal follow-ups on the same files) exist nowhere in the
+   source — that is the only traversal hypothesis still standing, and it
+   ships only if a measured spike moves a number. (M14, go/no-go.)
+6. **The structural graph is slated for decommission** once nothing
+   load-bearing reads it — gated on the above landing without regression,
+   not on enthusiasm. (M15.)
+
+### 24.3 What §23 got wrong (and why it dies)
+
+§23 read the zod zero-hit failures as a node-coverage gap and prescribed
+more extraction. The why-spike showed the winning retrieval path never
+routes through node hits at all — the correct fix for "the graph has no
+node for `errors.ts`" is retrieval that doesn't need one. With anchors as
+plain text (§24.2.2), extending node coverage buys nothing a text anchor
+doesn't already provide. §23 is therefore superseded unbuilt; its evidence
+(the zod measurements) remains valid and is answered by M11 instead.
+
+### 24.4 What survives unchanged
+
+The three-layer intent of §2 survives; what changes is which layer is
+load-bearing. §3.3 (confidence vs weight), §7 (promotion thresholds), §8
+(episodic memory), §13 (conflict resolution — now realized as supersedes
+chains), §18 (GC) all stand. §3.2's node-identity machinery stands for as
+long as structural nodes exist (until M15) but new knowledge binds to text
+anchors, not node ids. §9's hybrid-search shape is reused, pointed at
+experience content. §10's traversal batching applies to memory-link
+traversal if and only if M14's spike returns "go".

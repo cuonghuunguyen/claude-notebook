@@ -21,6 +21,7 @@ This checklist is the source of truth for what's done — see
 - [x] M7 — Staleness, Events, GC, Full Eval Set
 - [x] M8 — Multi-Language Structural Extraction (Python via `tree-sitter`, approved — see CLAUDE.md)
 - [x] M9 — Pipeline Orchestration
+- [ ] M10 — Structural Extraction: Variable-Bound Declarations
 
 Repo layout target:
 
@@ -298,6 +299,77 @@ package's existing public API.
   call for a node the traversal reaches, assert it surfaces in the returned
   `AgentContext.experiences` — this is the first real (non-test-only)
   exercise of episodic memory's read path from outside its own package.
+
+## M10 — Structural Extraction: Variable-Bound Declarations (spec §23)
+
+**Proposed via `/propose-milestone`** — demonstrated gap: the real-world E2E
+benchmark added in `eval/e2e-benchmark/` (see `E2E_BENCHMARK_REPORT.md`, a
+real run against zod v4's `packages/zod/src/v4/{classic,core}`, 29 files /
+~42,000 lines) measured that M1's TS/JS extractor produced 326 `function`
+nodes but only 6 `class` nodes from that codebase, because zod v4 defines
+almost all of its schema constructors as `export const X = $constructor(...)`
+(a call-expression-initialized `const`, not an ES6 `class`) and many helpers
+as `export const foo = (...) => {...}` (arrow functions, not `function`
+declarations) — patterns `sourceFile.getFunctions()`/`getClasses()` never
+see. 2 of the benchmark's 12 hand-labeled retrieval questions failed with
+**zero** hits because their ground-truth files (`regexes.ts`, `errors.ts`)
+consist entirely of `export const` bindings with no corresponding node in
+the graph at all — a coverage gap, not a ranking one. See spec §23 for the
+full decision and evidence.
+
+**Goal:** extend `packages/structural`'s TS/JS extractor to emit a node for
+every module-level `VariableDeclaration`, per spec §23's decision — no
+change to `packages/core`'s `NodeType` enum (`function`/`variable` already
+exist), no change to any other package's public API.
+
+- Walk each source file's module-level `VariableDeclaration`s (nested
+  declarations inside a function/block body stay out of scope, same as
+  `getFunctions()`/`getClasses()`'s existing top-level-only reach).
+- Initializer is an arrow function or function expression → emit a
+  `function` node, identity via `shapeFingerprint` generalized to accept
+  `ArrowFunction`/`FunctionExpression` (not just `FunctionDeclaration`/
+  `MethodDeclaration`) — same name-independent, rename-survives contract.
+  Extend pass 2's call-resolution (`extract.ts`) so a call into one of
+  these resolves a `calls` edge exactly like a call into a `function`
+  declaration already does.
+- Any other initializer → emit a `variable` node, identity via a new
+  initializer-fingerprint (hash of the initializer expression's text,
+  excluding the binding's name) — same "rename survives, value-change
+  doesn't" contract, generalized from function shape to value shape.
+- Both kinds get a `contains` edge from their containing file, `sourceType:
+  "source_code"` provenance at `confidence: 1.0` — identical convention to
+  every existing M1 node.
+- Incremental mode: same contract as M1/§5 — a changed file's variable
+  declarations are removed/recreated per §3.2 identity rules alongside its
+  functions/classes, not a parallel mechanism.
+
+**Acceptance:**
+- Fixture test (no DB): a fixture module reproducing the three patterns the
+  benchmark actually found missing — `export const add = (a, b) => a + b`
+  (arrow-function-bound), `export const DEFAULT_TIMEOUT = 5000` (plain
+  value), `export const Circle = makeShape("circle", 1)` (factory-call
+  pattern, mirroring zod's `$constructor(...)`) — asserts each produces the
+  expected node type (`function`/`variable`/`variable` respectively) and
+  `contains` edge.
+- Rename test: renaming one of these bindings (initializer unchanged) keeps
+  the same node id, for both the `function`-typed and `variable`-typed
+  cases.
+- Delete-and-recreate test: changing a binding's initializer AND moving it
+  to a different file with no rename signal is a delete+create (old node →
+  `deleted`, new node created, old edges → `stale`) — same shape as M1's
+  existing delete-and-recreate test.
+- Call-resolution test: a `function` declaration that calls an arrow-
+  function-bound `const` resolves a `calls` edge, same as calling a
+  `function`-declaration callee.
+- Integration test (gated on `DATABASE_URL`): the fixture module written
+  through `graph-store` into real Postgres, read back matches — same
+  `graph-store` code M1/M8/M9 already use, unmodified.
+- Coverage regression guard: a small synthetic fixture shaped like the
+  benchmark's actual failure (a file consisting entirely of `export const`
+  literal bindings, no functions/classes at all) must produce at least one
+  node per binding — this is the exact shape of the two zero-hit retrieval
+  questions the benchmark measured; see `E2E_BENCHMARK_REPORT.md` and the
+  PR that added spec §23 for the captured evidence.
 
 ---
 

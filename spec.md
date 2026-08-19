@@ -815,3 +815,93 @@ section only wires existing contracts together.
 
 Pipeline orchestration is a build milestone (see `ROADMAP.md`), not a
 someday-nice-to-have — the same posture §19 and §21 take.
+
+---
+
+## 23. Structural Extraction: Variable-Bound Declarations (extends §2.1, §5 — proposed via `/propose-milestone`)
+
+§2.1 names `variable` as a structural node type and commits the TS/JS
+extractor to covering "file, directory, module, class, function, interface,
+type, variable, import, export, call, inheritance, implementation,
+reference, test" — but M1's implementation (`packages/structural/src/extract.ts`)
+only ever walks `sourceFile.getFunctions()` (function declarations) and
+`sourceFile.getClasses()` (class declarations). A module-level
+`const`/`let`/`var` declaration — whether it holds a function value, a
+factory-produced object, or a plain literal — produces no node at all,
+regardless of §2.1's stated scope.
+
+**Demonstrated, not asserted:** the real-world benchmark added in
+`eval/e2e-benchmark/` (see `E2E_BENCHMARK_REPORT.md`, run against zod v4's
+`packages/zod/src/v4/{classic,core}` — 29 files, ~42,000 lines, a real,
+popular library unrelated to this repo's own fixtures) measured this gap
+directly:
+
+- Ingest produced 326 `function` nodes but only 6 `class` nodes from 42k
+  lines of code, because zod v4 defines nearly all of its schema
+  constructors via `export const ZodString = $constructor("ZodString", ...)`
+  — a call-expression-initialized `const`, not an ES6 `class` declaration —
+  and its helper functions are frequently `export const foo = (...) => {...}`
+  arrow functions, not `function` declarations.
+- 2 of 12 hand-labeled retrieval questions ("where's the email validation
+  regex" / "where's the error map defined") failed with **zero** hits,
+  full stop — not a ranking problem, a coverage problem: the ground-truth
+  files (`regexes.ts`, `errors.ts`) consist entirely of `export const`
+  bindings, so the graph contained no node representing their content at
+  all for retrieval or traversal to ever reach.
+
+**Consistency check:** this section only adds node emission for a
+declaration kind M1 already scoped in §2.1 but never implemented — it does
+not touch node identity (§3.2), confidence/weight (§3.3), the promotion
+table (§7), or traversal batching (§10). Every node this section adds
+carries `sourceType: "source_code"` provenance at `confidence: 1.0`, same
+as every other M1/§21 structural node — no LLM inference, no new
+provenance tier.
+
+**What this section decides:** the TS/JS extractor additionally walks each
+source file's **module-level** `VariableDeclaration`s (declarations nested
+inside a function/block body are out of scope, same MVP-scoping posture
+§2.1 already takes with `getFunctions()`/`getClasses()`'s top-level-only
+reach) and emits one node per declaration, per its initializer:
+
+- **Initializer is a function-like expression** (arrow function or function
+  expression) — emit a `function` node. Structurally this binding IS a
+  function; nothing is inferred. It participates in call resolution
+  exactly like a `function`-declaration node (§5's existing call-edge
+  pass): a call into `export const add = (a, b) => a + b` resolves a
+  `calls` edge the same way a call into `function add(a, b) {}` already
+  does.
+- **Any other initializer** (call expression / factory pattern, object,
+  array, literal, template, etc.) — emit a `variable` node. This is
+  deliberately the least-inferential choice available: a call expression
+  like `$constructor("ZodString", ...)` MIGHT play the architectural role
+  of a class in the source library's own design, but structural extraction
+  "MUST NOT depend on LLM inference" (§2.1) to make that judgment — calling
+  it a class would be a semantic claim (§6), not a structural fact. Later
+  layers (§6 semantic memory, e.g. an LLM-proposed `related_to`/`owns` fact
+  observing "this variable is used like a class") can add that
+  interpretation on top of the structural `variable` node this section
+  guarantees exists; structural extraction's job is only to guarantee it
+  exists at all, which today it does not.
+
+Both kinds get a `contains` edge from their containing file node, identical
+in shape to every existing M1 node/edge. Node identity is unchanged —
+`hash(repoId, stableSymbolPath)` per §3.2 — with a new `stableSymbolPath`
+shape for this declaration kind: `function`-typed variable bindings reuse
+the existing shape-fingerprint identity strategy (name-independent, so a
+plain rename keeps the same id), generalized to arrow functions/function
+expressions the same way it already covers `FunctionDeclaration`/
+`MethodDeclaration`; `variable`-typed bindings use an analogous
+initializer-fingerprint (hashing the initializer expression's text,
+excluding the binding's name) so the same "rename survives, changing the
+value doesn't" contract §3.2 established for functions applies to plain
+variables too.
+
+**What this section deliberately does NOT decide:** whether the same gap
+exists in the Python extractor (§21) — the evidence above is TS/JS-only
+(a real TS/JS library). Whether Python's `def`/`class`-only coverage has an
+equivalent module-level-binding gap is a separate question for a separate
+proposal if and when it's similarly demonstrated, not assumed here.
+
+Variable-bound declaration extraction is a build milestone (see
+`ROADMAP.md`), not a someday-nice-to-have — the same posture §19, §21, and
+§22 take.

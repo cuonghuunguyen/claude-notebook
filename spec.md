@@ -997,3 +997,36 @@ long as structural nodes exist (until M15) but new knowledge binds to text
 anchors, not node ids. §9's hybrid-search shape is reused, pointed at
 experience content. §10's traversal batching applies to memory-link
 traversal if and only if M14's spike returns "go".
+
+### 24.5 Memory Tiers: Access-Driven Promotion (extends §7, §11, §18 — human-directed, 2026-08-19)
+
+Memories live in three tiers — **short-term → mid-term → long-term** — and
+move between them based on real access, extending §7's promotion lifecycle
+(evidence-driven) with a usage-driven axis, and giving §18's GC its
+retention signal.
+
+- Every retrieval hit records `access_count` / `last_accessed` /
+  `distinct_sessions` on the memory (write-on-read, cheap).
+- **Capture lands in short-term.** Promotion to mid-term when a *different*
+  session than the writer retrieves and uses it; promotion to long-term on
+  sustained access across multiple distinct sessions/tasks. Exact numeric
+  thresholds are set at milestone time from eval data, in the same style
+  §7 fixed its promotion numbers — but the shape (distinct-session counts
+  over a time window, not raw hit counts, so one chatty session can't
+  self-promote a memory) is decided here.
+- **Demotion is decay**: no access within a tier-specific window drops the
+  memory a tier; an unaccessed short-term memory becomes a §18 GC
+  candidate. Long-term demotes but is never GC'd solely for coldness.
+- **Tier is a ranking boost, not a gate**: by-meaning search (§24.2.1)
+  always spans all tiers; tier feeds the §11 ranking function as a score
+  multiplier. Retrieval must never miss a correct cold memory outright —
+  it may only rank it lower.
+- **Synergy with read-repair (§24.2.4)**: promotion is triggered by the
+  same event (retrieval) that triggers verification, so the hot tier is
+  also the freshest tier by construction; the cold tail is handled by
+  decay/GC rather than repair effort.
+- **Relation to bi-temporal designs (Zep/Graphiti)**: deliberately not
+  adopted wholesale. Supersede chains + `created_at`/`superseded_at`
+  timestamps already answer "what did we believe at time X" by walking a
+  chain; tiers answer the different question bi-temporality doesn't —
+  what is worth keeping and ranking up. (ROADMAP M16.)

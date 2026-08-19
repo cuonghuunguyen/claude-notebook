@@ -29,6 +29,7 @@ This checklist is the source of truth for what's done — see
 - [ ] M13 — Refine-Memory Skill (read-repair + `supersedes` links)
 - [ ] M14 — Knowledge-Link Edges (spike: memory-to-memory traversal, go/no-go on a measured win)
 - [ ] M15 — Decommission the Structural Graph (gated on M11–M14 outcomes)
+- [ ] M16 — Memory Tiers: short/mid/long-term with access-driven promotion (extends §7/§18)
 
 Repo layout target:
 
@@ -530,6 +531,37 @@ milestone and gets written down instead.
 - Migration retires now-unused columns/indexes (e.g. node-gating surfaces),
   idempotent as always; `experiences` data is preserved.
 
+## M16 — Memory Tiers: Access-Driven Promotion (spec §24.5)
+
+**Goal:** short-term → mid-term → long-term memory tiers, promoted by real
+cross-session access, demoted by decay — extending §7's promotion lifecycle
+with a usage axis and giving §18's GC its retention signal.
+
+- Migration: `tier`, `access_count`, `last_accessed`, `distinct_sessions`
+  on experiences; retrieval performs write-on-read access accounting.
+- Promotion rules per spec §24.5: capture lands short-term; a distinct
+  session's retrieval promotes to mid-term; sustained multi-session access
+  promotes to long-term. Fix the numeric thresholds from eval data in this
+  milestone and write them into §24.5, §7-style.
+- Demotion: tier-specific idle windows drop a tier; idle short-term
+  memories become §18 GC candidates; long-term is never GC'd for coldness
+  alone.
+- Ranking: tier is a §11 score multiplier in by-meaning retrieval — never
+  a filter; add the boost to the retrieval scorer with all tiers still
+  searched.
+
+**Acceptance:**
+- Unit: full transition table — promote short→mid on distinct-session
+  access, mid→long on sustained access, decay demotions, GC candidacy;
+  same-session repeat hits do NOT promote (no self-promotion).
+- Unit: ranking boost applied, and a cold-tier memory with the best
+  content match still wins over a hot-tier weak match below the boost cap
+  (tier never gates).
+- Integration (gated on `DATABASE_URL`): access accounting persists across
+  two simulated sessions and produces a promotion.
+- Dogfood evidence in the PR: tier distribution of this repo's own memory
+  after replaying its real access history.
+
 ---
 
 ## Sequencing note
@@ -541,6 +573,7 @@ against synthetic provenance first if M4 is behind schedule.
 
 Post-pivot (spec §24): M11 → M12 → M13 are sequential (anchors need the
 shipped knowledge layer; read-repair needs anchors and staleness flags).
-M14 only needs M11 and can run in parallel with M12/M13. M15 is last and
-gated — it starts only after M11–M12 are merged and the eval re-run shows
+M14 only needs M11 and can run in parallel with M12/M13. M16 needs M11's
+shipped retrieval (it hooks access accounting into it) and is independent
+of M12–M15. M15 is last and gated — it starts only after M11–M12 are merged and the eval re-run shows
 no regression, and it must respect M14's go/no-go either way.

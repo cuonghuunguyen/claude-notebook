@@ -24,7 +24,7 @@ This checklist is the source of truth for what's done — see
 - ~~M10 — Structural Extraction: Variable-Bound Declarations~~ — **superseded,
   never built** (knowledge-first pivot, human-directed 2026-08-19; see spec §24
   and the M10 section note below)
-- [ ] M11 — Knowledge Layer as Product (by-meaning retrieval + commit-mining capture shipped into `packages/`)
+- [ ] M11 — Knowledge Layer as Product (by-meaning retrieval + capture — git-history mining AND session scout-report distillation — shipped into `packages/`)
 - [ ] M12 — Text Anchors & Commit-Triggered Staleness (git replaces the AST for anchoring and staleness)
 - [ ] M13 — Refine-Memory Skill (read-repair + `supersedes` links)
 - [ ] M14 — Knowledge-Link Edges (spike: memory-to-memory traversal, go/no-go on a measured win)
@@ -409,10 +409,18 @@ experience. This milestone ships them.
 - `packages/episodic`: a by-meaning query API — hybrid text + embedding
   search over experience content, mirroring §9's hybrid shape but over
   experiences, **not** gated on any structural node hit.
-- Capture as a package (new `packages/capture` or grown inside episodic):
-  the why-spike's git-history miner (self-explaining commits, revert
-  references, PR/issue linkage) as an idempotent API — re-running over the
-  same history writes nothing new, same contract as `self-memory.mjs sync`.
+- Capture as a package (new `packages/capture` or grown inside episodic),
+  two source classes per spec §24.2.1:
+  - the why-spike's git-history miner (self-explaining commits, revert
+    references, PR/issue linkage) as an idempotent API — re-running over
+    the same history writes nothing new, same contract as
+    `self-memory.mjs sync`;
+  - a session-distillation API (`recordScoutReport` or similar): persist
+    the synthesized what/how understanding an agent builds while scouting
+    (subsystem maps, how-X-works, gotchas) with text anchors to the files
+    it covers — wired into this repo's own hooks as the dogfood producer.
+    Guardrail (spec §24.2.1): distilled understanding only, never bare
+    file locations — grep owns those, measured.
 - `packages/pipeline`: `runPipeline` surfaces by-meaning experience hits
   directly in `AgentContext.experiences`, no longer only node-hydrated ones.
 
@@ -422,6 +430,9 @@ experience. This milestone ships them.
   `related_nodes` is empty — proving retrieval is not node-gated.
 - Capture idempotency test: mining the same fixture history twice produces
   no duplicate experiences.
+- Scout-capture test: a recorded scout report is retrievable by meaning
+  (a paraphrased how-does-X-work query returns it), and its anchors are
+  plain text paths — no structural node required to exist.
 - Re-run the why-spike retrieval harness through the shipped package path
   (integration, gated on `DATABASE_URL`): by-meaning MRR must land in the
   neighborhood of the spike's 0.75 and decisively above the node-gated

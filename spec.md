@@ -936,11 +936,22 @@ knowledge — and a cheaper coordinate system exists (§24.3).
 
 ### 24.2 What this decides
 
-1. **The knowledge layer is the product surface.** Capture (git-history
-   mining per the why-spike method, plus agent-session outcomes) and
-   by-meaning retrieval (hybrid text + embedding search over experience
-   content, not node-gated) move from scripts/spikes into `packages/`.
-   (ROADMAP M11.)
+1. **The knowledge layer is the product surface.** Capture and by-meaning
+   retrieval (hybrid text + embedding search over experience content, not
+   node-gated) move from scripts/spikes into `packages/`. Capture has two
+   source classes, covering *why*, *what*, and *how* alike:
+   - **Git-history mining** (the why-spike method): design decisions,
+     reverts, debugging outcomes — knowledge not present in the source.
+   - **Agent-session distillation**: the synthesized understanding an agent
+     builds while scouting a codebase before a task — subsystem maps,
+     how-X-works walkthroughs, gotchas — recorded at task end so the next
+     session doesn't re-spend those turns.
+   Guardrail on the second class: store **synthesized understanding, not
+   bare locations**. "X lives in file Y" is a question grep answers in one
+   turn (measured — `E2E_BENCHMARK_MULTI_REPO.md`); persisting it buys no
+   turns and adds staleness risk. What/how memories are also the
+   fastest-rotting class, which is precisely what §24.2.3–4 (git-driven
+   staleness + read-repair) exist to absorb. (ROADMAP M11.)
 2. **Anchors are plain text**: `{ path, symbol? }` — file path plus
    optional symbol name as text. Never line numbers (they rot on every
    edit above them). A moved symbol is re-found lexically at read time.

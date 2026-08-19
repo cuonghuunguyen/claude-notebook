@@ -976,6 +976,15 @@ knowledge — and a cheaper coordinate system exists (§24.3).
 6. **The structural graph is slated for decommission** once nothing
    load-bearing reads it — gated on the above landing without regression,
    not on enthusiasm. (M15.)
+7. **Language-agnosticism is a design principle, not a side effect.**
+   Every mechanism above — git-history mining, text anchors, commit-
+   triggered staleness, supersede chains, memory-link edges — works
+   identically for any language (and for SQL, YAML, infra, docs). Parsing
+   does not: each language costs its own extractor forever (M1 ts-morph,
+   M8 tree-sitter, an unbuilt M10, …) and the coverage frontier never
+   closes. This, alongside the benchmark evidence, is an independent
+   reason the pivot removes parsing from the load-bearing path: nothing in
+   §24 may reintroduce a per-language dependency.
 
 ### 24.3 What §23 got wrong (and why it dies)
 
@@ -1025,6 +1034,21 @@ retention signal.
   same event (retrieval) that triggers verification, so the hot tier is
   also the freshest tier by construction; the cold tail is handled by
   decay/GC rather than repair effort.
+- **Open problem — access is not correctness.** A plausible-but-wrong
+  memory that keeps getting retrieved would climb tiers on raw access
+  counts. The promotion signal must therefore be *useful* access, not mere
+  retrieval. The mechanism is deliberately NOT decided yet (no measured
+  winner); M16 must pick from — or beat — these candidates, with a
+  measured justification:
+  1. **Verification-gated promotion**: an access only counts if read-repair
+     (§24.2.4) verified the memory fresh at that access; a stale verdict
+     contributes nothing (the supersession it triggers is the fix).
+  2. **Task-outcome feedback**: the quality gate already records pass/fail
+     bound to changed files at task end — join that back to the memories
+     retrieved during the task, so memories in failing tasks don't promote.
+  3. **Used-vs-ignored signal**: the agent cites which retrieved memories
+     it actually relied on; retrieved-but-repeatedly-ignored is a demotion
+     signal, not a neutral one.
 - **Relation to bi-temporal designs (Zep/Graphiti)**: deliberately not
   adopted wholesale. Supersede chains + `created_at`/`superseded_at`
   timestamps already answer "what did we believe at time X" by walking a

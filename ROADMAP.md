@@ -543,6 +543,14 @@ with a usage axis and giving §18's GC its retention signal.
   session's retrieval promotes to mid-term; sustained multi-session access
   promotes to long-term. Fix the numeric thresholds from eval data in this
   milestone and write them into §24.5, §7-style.
+- **Solve §24.5's open problem first: access ≠ correctness.** Raw
+  retrieval counts must not be the promotion signal, or a
+  plausible-but-wrong memory climbs tiers. Candidates documented in
+  §24.5 (verification-gated promotion; task-outcome feedback joined from
+  the quality gate's pass/fail records; used-vs-ignored citations from
+  the agent). This milestone picks one — or a better one — and writes the
+  decision + its measured justification back into §24.5. A pure
+  access-count implementation is an automatic review failure.
 - Demotion: tier-specific idle windows drop a tier; idle short-term
   memories become §18 GC candidates; long-term is never GC'd for coldness
   alone.
@@ -554,6 +562,9 @@ with a usage axis and giving §18's GC its retention signal.
 - Unit: full transition table — promote short→mid on distinct-session
   access, mid→long on sustained access, decay demotions, GC candidacy;
   same-session repeat hits do NOT promote (no self-promotion).
+- Unit: the chosen usefulness signal gates promotion — an access whose
+  signal is negative (stale verdict / failed task / retrieved-but-unused,
+  per the mechanism chosen) does not increment toward promotion.
 - Unit: ranking boost applied, and a cold-tier memory with the best
   content match still wins over a hot-tier weak match below the boost cap
   (tier never gates).

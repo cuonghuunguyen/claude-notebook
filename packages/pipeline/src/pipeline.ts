@@ -1,7 +1,8 @@
 import type { Experience, Node } from "@cognitive-memory/core";
 import type { Subgraph } from "@cognitive-memory/context";
-import { buildContext } from "@cognitive-memory/context";
-import { queryByNode } from "@cognitive-memory/episodic";
+import { buildContext, DEFAULT_MAX_EXPERIENCES as CONTEXT_MAX_EXPERIENCES } from "@cognitive-memory/context";
+import type { ScoredExperience } from "@cognitive-memory/episodic";
+import { queryByMeaning, queryByNode } from "@cognitive-memory/episodic";
 import { getNodesByIds } from "@cognitive-memory/graph-store";
 import type { EmbeddingProvider } from "@cognitive-memory/retrieval";
 import { retrieveSeeds } from "@cognitive-memory/retrieval";
@@ -36,6 +37,50 @@ async function hydrateRecentExperiences(nodeIds: string[], maxExperiences: numbe
     .slice(0, maxExperiences);
 }
 
+
+/**
+ * How many experiences this call may put into the subgraph.
+ *
+ * Clamped to `buildContext`'s own cap, because `buildContext` sorts
+ * experiences by recency *before* truncating (packages/context/src/build.ts):
+ * hand it more than it will keep, and it keeps the newest rather than the
+ * best-matching. That was harmless while every experience arrived
+ * recency-ordered from node hydration; it is not harmless now that
+ * by-meaning hits arrive relevance-ordered (spec.md §24.2.1), because the
+ * top-ranked answer to the task is frequently an old commit.
+ */
+function experienceBudget(options: PipelineOptions): number {
+  const pipelineCap = options.maxExperiences ?? DEFAULT_MAX_EXPERIENCES;
+  const contextCap = options.contextOptions?.maxExperiences ?? CONTEXT_MAX_EXPERIENCES;
+  return Math.min(pipelineCap, contextCap);
+}
+
+/**
+ * Interleaves the two memory sources round-robin, by-meaning first.
+ *
+ * By-meaning goes first because it is the measured-stronger signal (MRR 0.75
+ * vs 0.13, `WHY_MEMORY_SPIKE.md`), but it does not get the whole budget:
+ * node-hydrated experiences are the ones bound to code the traversal actually
+ * reached, and a task about a specific file should still see them even when
+ * the task wording matches other memories better. Taking alternately means
+ * neither source can starve the other, whatever the budget is.
+ */
+function interleaveExperiences(
+  byMeaning: Experience[],
+  nodeHydrated: Experience[],
+  budget: number
+): Experience[] {
+  const picked = new Map<string, Experience>();
+  for (let i = 0; picked.size < budget && (i < byMeaning.length || i < nodeHydrated.length); i++) {
+    for (const candidate of [byMeaning[i], nodeHydrated[i]]) {
+      if (candidate && !picked.has(candidate.id) && picked.size < budget) {
+        picked.set(candidate.id, candidate);
+      }
+    }
+  }
+  return [...picked.values()];
+}
+
 /**
  * task -> `AgentContext` (spec.md §22): the composition layer over §9's
  * `retrieveSeeds`, §10's `traverse`, and §17's `buildContext` that no code
@@ -43,7 +88,7 @@ async function hydrateRecentExperiences(nodeIds: string[], maxExperiences: numbe
  * step-by-step contract this function implements.
  */
 export async function runPipeline(task: string, options: PipelineOptions): Promise<PipelineResult> {
-  const maxExperiences = options.maxExperiences ?? DEFAULT_MAX_EXPERIENCES;
+  const maxExperiences = experienceBudget(options);
 
   // Step 1: compute the task embedding at most once, and hand retrieval a
   // shim `EmbeddingProvider` that just returns the cached vector — this way
@@ -55,18 +100,35 @@ export async function runPipeline(task: string, options: PipelineOptions): Promi
     ? { embed: async () => taskEmbedding }
     : undefined;
 
-  // Step 2.
-  const seeds = await retrieveSeeds(task, {
-    repoId: options.repoId,
-    embedder: cachedEmbedder,
-    ...options.retrieveOptions,
-  });
+  // Step 2. The by-meaning query runs concurrently with seed retrieval rather
+  // than after it: it consumes nothing the structural side produces (that is
+  // the whole point of spec.md §24.2.1), so serializing it would add its
+  // latency to every call for no reason.
+  const [seeds, byMeaning] = await Promise.all([
+    retrieveSeeds(task, {
+      repoId: options.repoId,
+      embedder: cachedEmbedder,
+      ...options.retrieveOptions,
+    }),
+    retrieveByMeaning(task, options, taskEmbedding, maxExperiences),
+  ]);
+  const byMeaningExperiences = byMeaning.map((hit) => hit.experience);
 
   // Step 3: empty-seed short-circuit — never call traverse() at all.
+  //
+  // Pre-M11 this returned an empty context. It no longer can: knowledge
+  // retrieval does not depend on a structural seed hit, so "the graph has no
+  // node matching this task" must not also mean "the memory has nothing to
+  // say about it" — that conflation is exactly what spec.md §24.3 records as
+  // §23's mistake.
   if (seeds.length === 0) {
-    const emptySubgraph: Subgraph = { nodes: [], edges: [], experiences: [] };
-    const context = buildContext(emptySubgraph, task, options.contextOptions);
-    return { context, seeds, traversal: EMPTY_TRAVERSAL_RESULT };
+    const knowledgeOnly: Subgraph = {
+      nodes: [],
+      edges: [],
+      experiences: byMeaningExperiences.slice(0, maxExperiences),
+    };
+    const context = buildContext(knowledgeOnly, task, options.contextOptions);
+    return { context, seeds, traversal: EMPTY_TRAVERSAL_RESULT, byMeaning };
   }
 
   // Step 4.
@@ -94,15 +156,38 @@ export async function runPipeline(task: string, options: PipelineOptions): Promi
     .map((id) => hydratedById.get(id))
     .filter((n): n is Node => n !== undefined);
 
-  // Step 6.
-  const experiences = await hydrateRecentExperiences(
+  // Step 6. Both memory sources, merged under one budget.
+  const nodeHydrated = await hydrateRecentExperiences(
     nodes.map((n) => n.id),
     maxExperiences
   );
+  const experiences = interleaveExperiences(byMeaningExperiences, nodeHydrated, maxExperiences);
 
   // Step 7.
   const subgraph: Subgraph = { nodes, edges: traversal.edges, experiences };
   const context = buildContext(subgraph, task, options.contextOptions);
 
-  return { context, seeds, traversal };
+  return { context, seeds, traversal, byMeaning };
+}
+
+/** Step 2b: spec.md §24.2.1's by-meaning leg, unless the caller turned it off. */
+async function retrieveByMeaning(
+  task: string,
+  options: PipelineOptions,
+  taskEmbedding: number[] | undefined,
+  budget: number
+): Promise<ScoredExperience[]> {
+  if (options.byMeaning === false) return [];
+  const overrides = typeof options.byMeaning === "object" ? options.byMeaning : {};
+  return queryByMeaning(task, {
+    ...overrides,
+    // After the spread, not before: `limit` is the clamp `experienceBudget`
+    // exists to enforce, so a caller-supplied `byMeaning.limit` must not be
+    // able to defeat it. Everything else in `overrides` (legLimit, weights,
+    // includeCold) is genuinely the caller's business.
+    limit: budget,
+    // Reuses §22 step 1's single embedding — never a second embed() call for
+    // the same task string.
+    queryEmbedding: taskEmbedding,
+  });
 }

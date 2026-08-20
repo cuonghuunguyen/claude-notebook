@@ -1,55 +1,38 @@
 /**
  * Two ways of asking the memory a "why" question, run side by side.
  *
- * `nodeGated` is what the shipped system does (spec.md §17 + pipeline step 6):
- * retrieve code seeds, traverse, then hydrate experiences attached to exactly
- * those node ids. Knowledge is reachable only through the code — you must
- * already know *where* before you can learn *why*.
+ * `nodeGated` is what the system shipped before M11 (spec.md §17 + pipeline
+ * step 6): retrieve code seeds, traverse, then hydrate experiences attached to
+ * exactly those node ids. Knowledge is reachable only through the code — you
+ * must already know *where* before you can learn *why*.
  *
  * `byMeaning` inverts it: the question is matched against the experience text
  * itself, and code binding is used to enrich and rank rather than to gate.
- * That is the change the spike is testing.
  *
- * Note this uses Postgres full-text ranking rather than embeddings: the
- * environment has no embedding API, and the shipped vector leg is a
- * hash-embedder stub. A real embedder should only help the `byMeaning` side,
- * so treating lexical rank as its floor keeps the comparison honest.
+ * As of M11 this file no longer *implements* either side. `byMeaning` calls the
+ * shipped `queryByMeaning` from `packages/episodic`, and `nodeGated` disables
+ * it in `runPipeline` to reproduce the pre-M11 behaviour. That is the point of
+ * the milestone: the number this harness reports is now a property of the
+ * product, not of the spike.
+ *
+ * The vector leg is left off by default (`SPIKE_EMBEDDER=fake` turns it on):
+ * the environment has no embedding API and the workspace's only provider is a
+ * feature-hashing stub, so lexical rank is treated as the by-meaning floor —
+ * a real embedder should only help, which keeps the comparison honest.
  */
 import type { Experience } from "@cognitive-memory/core";
+import { queryByMeaning, type ScoredExperience as MeaningHit } from "@cognitive-memory/episodic";
 import { getPool } from "@cognitive-memory/graph-store";
 import { runPipeline } from "@cognitive-memory/pipeline";
 import { createFakeEmbedder } from "@cognitive-memory/retrieval";
 import { createPostgresGraphProvider } from "@cognitive-memory/traversal";
 import { REPO_ID } from "./config.js";
 
-const STOPWORDS = new Set([
-  "the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "with", "is",
-  "are", "was", "were", "be", "been", "it", "its", "that", "this", "why",
-  "what", "how", "does", "do", "did", "when", "which", "who", "whom", "there",
-  "then", "than", "so", "as", "at", "by", "from", "into", "instead", "rather",
-  "not", "no", "any", "ever", "still", "just", "also", "would", "could",
-  "should", "can", "will", "happened", "happens", "used", "use",
-]);
-
-/** OR-joined tsquery: a "why" question shares only a few terms with the commit that answers it. */
-function toTsQuery(question: string): string {
-  const terms = [
-    ...new Set(
-      question
-        .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-        .split(/[^a-zA-Z0-9_]+/)
-        .map((t) => t.toLowerCase())
-        .filter((t) => t.length > 2 && !STOPWORDS.has(t))
-    ),
-  ];
-  return terms.join(" | ");
-}
-
 export interface ScoredExperience {
   experience: Experience;
   rank: number;
-  /** True when the experience is also bound to a node the traversal reached. */
-  codeConfirmed: boolean;
+  /** True when the experience carries any anchor (a node id, or a text path since §24.2.2). */
+  anchored: boolean;
 }
 
 interface Row {
@@ -61,7 +44,6 @@ interface Row {
   related_nodes: string[];
   confidence: number;
   timestamp: Date;
-  rank: number;
 }
 
 const toExperience = (r: Row): Experience => ({
@@ -75,12 +57,17 @@ const toExperience = (r: Row): Experience => ({
   timestamp: r.timestamp.toISOString(),
 });
 
-/** What the shipped design surfaces: experiences on exactly the traversed nodes. */
+/** Opt-in vector leg — see the file header. */
+const embedder = process.env["SPIKE_EMBEDDER"] === "fake" ? createFakeEmbedder() : undefined;
+
+/** What the system surfaced before M11: experiences on exactly the traversed nodes. */
 export async function nodeGated(question: string): Promise<ScoredExperience[]> {
   const { traversal } = await runPipeline(question, {
     repoId: REPO_ID,
     embedder: createFakeEmbedder(),
     graph: createPostgresGraphProvider(),
+    // The whole point of this arm: reproduce the pre-M11 node-gated path.
+    byMeaning: false,
     reasoner: {
       async decide(ctx) {
         return {
@@ -95,29 +82,23 @@ export async function nodeGated(question: string): Promise<ScoredExperience[]> {
   });
   if (traversal.nodeIds.length === 0) return [];
   const { rows } = await getPool().query<Row>(
-    `SELECT *, 0::real AS rank FROM experiences
+    `SELECT id, task, observation, action, lessons, related_nodes, confidence, "timestamp"
+       FROM experiences
       WHERE related_nodes ?| $1::text[]
       ORDER BY "timestamp" DESC LIMIT 10`,
     [traversal.nodeIds]
   );
-  return rows.map((r) => ({ experience: toExperience(r), rank: 0, codeConfirmed: true }));
+  return rows.map((r) => ({ experience: toExperience(r), rank: 0, anchored: true }));
 }
 
-/** The flip: match the question against the knowledge itself. */
+/** The flip, now the shipped package path: match the question against the knowledge itself. */
 export async function byMeaning(question: string, limit = 5): Promise<ScoredExperience[]> {
-  const tsquery = toTsQuery(question);
-  if (!tsquery) return [];
-  const { rows } = await getPool().query<Row>(
-    `SELECT *,
-            ts_rank(to_tsvector('english', task || ' ' || observation),
-                    to_tsquery('english', $1)) AS rank
-       FROM experiences
-      WHERE to_tsvector('english', task || ' ' || observation) @@ to_tsquery('english', $1)
-      ORDER BY rank DESC, "timestamp" DESC
-      LIMIT $2`,
-    [tsquery, limit]
-  );
-  return rows.map((r) => ({ experience: toExperience(r), rank: r.rank, codeConfirmed: false }));
+  const hits: MeaningHit[] = await queryByMeaning(question, { limit, embedder });
+  return hits.map((h) => ({
+    experience: h.experience,
+    rank: h.score,
+    anchored: h.anchored,
+  }));
 }
 
 /**

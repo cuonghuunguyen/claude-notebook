@@ -1,12 +1,12 @@
 {
   "questions": 10,
   "nodeGated": {
-    "recall": 0.7,
-    "mrr": 0.13416666666666666
+    "recall": 0,
+    "mrr": 0
   },
   "byMeaning": {
     "recall": 0.9,
-    "mrr": 0.75
+    "mrr": 0.85
   },
   "perQuestion": [
     {
@@ -14,8 +14,8 @@
       "answerSha": "69be843f",
       "nodeGated": {
         "returned": 10,
-        "rankOfAnswer": 2,
-        "found": true
+        "rankOfAnswer": -1,
+        "found": false
       },
       "byMeaning": {
         "returned": 5,
@@ -34,7 +34,7 @@
       },
       "byMeaning": {
         "returned": 5,
-        "rankOfAnswer": 1,
+        "rankOfAnswer": 0,
         "found": true
       },
       "contextChars": 19969
@@ -44,60 +44,60 @@
       "answerSha": "4c27fe87",
       "nodeGated": {
         "returned": 10,
-        "rankOfAnswer": 4,
-        "found": true
+        "rankOfAnswer": -1,
+        "found": false
       },
       "byMeaning": {
         "returned": 5,
         "rankOfAnswer": 0,
         "found": true
       },
-      "contextChars": 15466
+      "contextChars": 26549
     },
     {
       "id": "domain-lookahead",
       "answerSha": "2a5164f5",
       "nodeGated": {
         "returned": 10,
-        "rankOfAnswer": 7,
-        "found": true
+        "rankOfAnswer": -1,
+        "found": false
       },
       "byMeaning": {
         "returned": 5,
         "rankOfAnswer": -1,
         "found": false
       },
-      "contextChars": 5851
+      "contextChars": 7543
     },
     {
       "id": "anchor-helper",
       "answerSha": "e25b68e1",
       "nodeGated": {
         "returned": 10,
-        "rankOfAnswer": 5,
-        "found": true
-      },
-      "byMeaning": {
-        "returned": 5,
-        "rankOfAnswer": 0,
-        "found": true
-      },
-      "contextChars": 12930
-    },
-    {
-      "id": "prototype-methods",
-      "answerSha": "3063993a",
-      "nodeGated": {
-        "returned": 10,
-        "rankOfAnswer": 5,
-        "found": true
+        "rankOfAnswer": -1,
+        "found": false
       },
       "byMeaning": {
         "returned": 5,
         "rankOfAnswer": 1,
         "found": true
       },
-      "contextChars": 11443
+      "contextChars": 7045
+    },
+    {
+      "id": "prototype-methods",
+      "answerSha": "3063993a",
+      "nodeGated": {
+        "returned": 10,
+        "rankOfAnswer": -1,
+        "found": false
+      },
+      "byMeaning": {
+        "returned": 5,
+        "rankOfAnswer": 0,
+        "found": true
+      },
+      "contextChars": 22052
     },
     {
       "id": "catch-optin",
@@ -112,22 +112,22 @@
         "rankOfAnswer": 0,
         "found": true
       },
-      "contextChars": 17549
+      "contextChars": 25783
     },
     {
       "id": "iso-cycle",
       "answerSha": "dfd8766b",
       "nodeGated": {
         "returned": 10,
-        "rankOfAnswer": 9,
-        "found": true
+        "rankOfAnswer": -1,
+        "found": false
       },
       "byMeaning": {
         "returned": 5,
         "rankOfAnswer": 0,
         "found": true
       },
-      "contextChars": 12520
+      "contextChars": 21033
     },
     {
       "id": "base64-revert",
@@ -142,22 +142,22 @@
         "rankOfAnswer": 0,
         "found": true
       },
-      "contextChars": 10656
+      "contextChars": 10133
     },
     {
       "id": "tuple-length",
       "answerSha": "97edd70a",
       "nodeGated": {
         "returned": 10,
-        "rankOfAnswer": 3,
-        "found": true
+        "rankOfAnswer": -1,
+        "found": false
       },
       "byMeaning": {
         "returned": 5,
-        "rankOfAnswer": 1,
+        "rankOfAnswer": 0,
         "found": true
       },
-      "contextChars": 20412
+      "contextChars": 17558
     }
   ]
 }

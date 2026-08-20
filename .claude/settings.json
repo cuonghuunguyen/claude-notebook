@@ -33,6 +33,16 @@
             "statusMessage": "Running the quality gate..."
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/scout-capture.sh",
+            "timeout": 120,
+            "statusMessage": "Recording the scout report..."
+          }
+        ]
       }
     ]
   }

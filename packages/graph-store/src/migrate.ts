@@ -17,7 +17,40 @@ async function ensureMigrationsTable(): Promise<void> {
   `);
 }
 
+/**
+ * Arbitrary but fixed 64-bit key for the migration advisory lock. Any two
+ * processes/workers using this module agree on it, which is the whole point.
+ */
+const MIGRATION_LOCK_KEY = 4_812_003_117_260_001n;
+
+/**
+ * Serializes the whole migrate run across connections.
+ *
+ * `CREATE EXTENSION IF NOT EXISTS` and `CREATE TABLE` are not safe against a
+ * concurrent identical statement — the IF NOT EXISTS check and the catalog
+ * insert are not atomic with respect to each other, so two callers that pass
+ * the check together race and one gets `duplicate key value violates unique
+ * constraint "pg_extension_name_index"`. Vitest runs a package's test files in
+ * parallel workers, and every integration suite calls `runMigrations()` in its
+ * own `beforeAll`, so as soon as a package has two suites this is reachable on
+ * any fresh database. A session-level advisory lock makes the loser wait and
+ * then find the work already done, which is the behaviour every caller already
+ * assumed.
+ */
 export async function runMigrations(): Promise<{ applied: string[] }> {
+  const client = await getPool().connect();
+  try {
+    await client.query("SELECT pg_advisory_lock($1)", [MIGRATION_LOCK_KEY.toString()]);
+    return await applyPendingMigrations();
+  } finally {
+    // Best effort: if the unlock fails the connection is being discarded
+    // anyway, and a session-level lock dies with its session.
+    await client.query("SELECT pg_advisory_unlock($1)", [MIGRATION_LOCK_KEY.toString()]).catch(() => {});
+    client.release();
+  }
+}
+
+async function applyPendingMigrations(): Promise<{ applied: string[] }> {
   await ensureMigrationsTable();
   const pool = getPool();
 

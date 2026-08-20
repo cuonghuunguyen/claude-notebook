@@ -14,7 +14,15 @@ import type {
 const DEFAULT_MAX_SUBSYSTEMS = 10;
 const DEFAULT_MAX_RELATIONSHIPS = 25;
 const DEFAULT_MAX_INVARIANTS = 25;
-const DEFAULT_MAX_EXPERIENCES = 10;
+/**
+ * Exported because a caller assembling the subgraph has to know this number:
+ * `buildContext` sorts experiences by recency before applying the cap, so a
+ * caller that hands in MORE than this many relevance-ranked memories loses the
+ * lowest-recency ones regardless of how relevant they were (spec.md §24.2.1's
+ * by-meaning hits are ranked, not recent). `packages/pipeline` clamps its own
+ * experience budget to this.
+ */
+export const DEFAULT_MAX_EXPERIENCES = 10;
 const DEFAULT_MAX_SOURCE_FILES = 25;
 
 function nodeLabel(node: Node): string {

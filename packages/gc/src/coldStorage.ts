@@ -1,4 +1,9 @@
-import { getEdgesTouchingNode, listWarmExperienceRefs, markExperienceCold } from "@cognitive-memory/graph-store";
+import {
+  getEdgesTouchingNode,
+  getNodesByIds,
+  listWarmExperienceRefs,
+  markExperienceCold,
+} from "@cognitive-memory/graph-store";
 
 /**
  * spec.md §18: "experiences whose lessons were promoted to durable semantic
@@ -21,17 +26,30 @@ async function isPromotedToDurable(nodeId: string): Promise<boolean> {
 }
 
 /**
- * An experience is eligible for cold storage once EVERY node it's related
- * to already has a durable(-proxy) semantic edge — if even one related node
- * has no such edge yet, the experience's lessons about that node are still
- * the only route to that knowledge and must stay in the hot path.
+ * An experience is eligible for cold storage once EVERY structural node it's
+ * related to already has a durable(-proxy) semantic edge — if even one has no
+ * such edge yet, the experience's lessons about that node are still the only
+ * route to that knowledge and must stay in the hot path.
+ *
+ * "Structural node" is load-bearing since spec.md §24.2.2: `relatedNodes` now
+ * also carries plain-text anchors (`packages/capture` writes the paths a mined
+ * commit touched), and a path is not a node id — `getEdgesTouchingNode("src/
+ * parse.ts")` returns nothing, so a naive read would find every text-anchored
+ * memory un-promotable and quietly turn this function into a no-op for the
+ * whole knowledge layer. Entries that do not resolve to a node are therefore
+ * skipped rather than counted as unpromoted, which keeps the pre-§24 behaviour
+ * exactly for node-id-anchored memories. A memory anchored ONLY to text has no
+ * structural evidence to judge and stays warm; giving that case a retention
+ * signal is ROADMAP M16's job, not this function's.
  */
 export async function markPromotedExperiencesCold(): Promise<number> {
   const refs = await listWarmExperienceRefs();
   let marked = 0;
   for (const ref of refs) {
     if (ref.relatedNodes.length === 0) continue;
-    const promotedFlags = await Promise.all(ref.relatedNodes.map(isPromotedToDurable));
+    const nodeIds = (await getNodesByIds(ref.relatedNodes)).map((node) => node.id);
+    if (nodeIds.length === 0) continue;
+    const promotedFlags = await Promise.all(nodeIds.map(isPromotedToDurable));
     if (promotedFlags.every(Boolean)) {
       await markExperienceCold(ref.id);
       marked += 1;

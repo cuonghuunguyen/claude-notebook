@@ -7,14 +7,22 @@ what a fix regressed. None of it is in the source.
 
 See `WHY_MEMORY_SPIKE.md` at the repo root for results.
 
+**As of M11 this is no longer a spike.** The capture layer and the by-meaning
+retrieval it measured now live in `packages/capture` and `packages/episodic`;
+what is left here is target-specific wiring plus the questions. Every script
+below composes the shipped packages, so the numbers it reports are properties
+of the product, not of this directory.
+
 | script | what it does |
 |---|---|
-| `spike:capture` | Mines the target's git history for commits that explain themselves, records each as an `Experience` bound to the file nodes it touched. This is the capture layer `packages/` does not have. |
-| `spike:probe` | Scores retrieval alone: does the memory surface the commit that actually explains each question? Compares the shipped node-gated hydration against matching the question to the knowledge text. |
+| `spike:capture` | Runs `packages/capture`'s `captureGitHistory` against the target: mines commits that explain themselves and records each as an `Experience` anchored to the paths it touched. Idempotent — a second run records nothing. |
+| `spike:probe` | Scores retrieval alone: does the memory surface the commit that actually explains each question? Compares the pre-M11 node-gated hydration (`runPipeline` with `byMeaning: false`) against `queryByMeaning`. |
 | `spike:compare` | A/B with a real agent. The baseline has full git access (`log`/`show`/`blame`/`grep`) — it can mine the same history on demand. |
+| `pnpm test` | The same measurement over a self-contained fixture history, so it runs in CI with no zod clone at all. See `src/knowledge.eval.test.ts`. |
 
-Nothing under `packages/` is modified; the spike composes the shipped
-`recordExperience`, `runPipeline` and graph store as they are.
+`SPIKE_EMBEDDER=fake` turns on the vector leg (the workspace's stub
+feature-hashing embedder). It is off by default so the reported number is the
+lexical floor — see BENCHMARKS.md for both.
 
 ```bash
 export ZOD_DIR=/tmp/zod          # full clone, NOT --depth 1

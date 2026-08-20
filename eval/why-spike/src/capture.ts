@@ -1,78 +1,58 @@
 /**
- * Writes the mined history into the graph as real `Experience` records bound
- * to the file nodes each commit touched — the missing half of spec.md §8.
+ * Runs the shipped git-history capture (`packages/capture`) against the zod
+ * clone, so the corpus this harness probes is produced by the product, not by
+ * the spike.
  *
- * Uses the shipped `recordExperience` unchanged, so what lands in Postgres is
- * exactly what the system's own episodic layer stores. Only the *source* is
- * new.
+ * Before M11 this file contained its own miner and its own persistence loop.
+ * Both moved into `packages/capture`; what is left here is the target-specific
+ * wiring (which repo, which path scope, how to resolve the file nodes the
+ * pre-M11 node-gated arm needs to have something to hydrate).
  */
-import { recordExperience } from "@cognitive-memory/episodic";
+import { captureGitHistory } from "@cognitive-memory/capture";
 import { closePool, getPool } from "@cognitive-memory/graph-store";
-import { lessonFrom, mineCommits } from "./corpus.js";
+import { createFakeEmbedder } from "@cognitive-memory/retrieval";
 import { REPO_ID, repoDir, pathScope } from "./config.js";
 
-/** Maps repo-relative commit paths onto the absolute paths stored at ingest. */
-async function fileNodeIndex(): Promise<Map<string, string>> {
+/**
+ * Maps repo-relative commit paths onto the absolute paths stored at ingest.
+ * Only the node-gated *baseline* needs this — by-meaning retrieval never
+ * dereferences a node id (spec.md §24.2.1).
+ */
+async function fileNodeResolver(): Promise<(paths: string[]) => string[]> {
   const { rows } = await getPool().query<{ id: string; path: string }>(
     "SELECT id, path FROM nodes WHERE repo_id = $1 AND type = 'file' AND path IS NOT NULL",
     [REPO_ID]
   );
-  const bySuffix = new Map<string, string>();
-  for (const row of rows) bySuffix.set(row.path, row.id);
-  return bySuffix;
-}
-
-function resolve(index: Map<string, string>, repoRelative: string): string | undefined {
-  for (const [absolute, id] of index) {
-    if (absolute.endsWith(`/${repoRelative}`)) return id;
-  }
-  return undefined;
+  return (paths) => {
+    const ids: string[] = [];
+    for (const repoRelative of paths) {
+      for (const row of rows) {
+        if (row.path.endsWith(`/${repoRelative}`)) {
+          ids.push(row.id);
+          break;
+        }
+      }
+    }
+    return ids;
+  };
 }
 
 async function main(): Promise<void> {
-  const commits = await mineCommits(repoDir(), pathScope());
-  const index = await fileNodeIndex();
+  const resolveNodeIds = await fileNodeResolver();
+  const result = await captureGitHistory({
+    repoDir: repoDir(),
+    pathScope: pathScope(),
+    resolveNodeIds,
+    embedder: process.env["SPIKE_EMBEDDER"] === "fake" ? createFakeEmbedder() : undefined,
+  });
 
-  let recorded = 0;
-  let unbound = 0;
-  const perFile = new Map<string, number>();
-
-  // Oldest first, so the append-only log reads in the order things happened.
-  for (const commit of [...commits].reverse()) {
-    const nodeIds = commit.files
-      .map((f) => resolve(index, f))
-      .filter((id): id is string => Boolean(id));
-    if (nodeIds.length === 0) {
-      unbound += 1;
-      continue;
-    }
-    const lesson = lessonFrom(commit);
-    await recordExperience({
-      task: commit.subject,
-      observation: lesson,
-      // `action` is the closest field spec.md §8 gives for "what was done";
-      // the sha is what makes the record checkable against the repo.
-      action: `commit ${commit.shortSha}`,
-      lessons: [lesson],
-      relatedNodes: nodeIds,
-      // Evidence hierarchy (spec.md §4): git history sits below code and
-      // tests, above bare LLM inference.
-      confidence: 0.7,
-      timestamp: commit.date || undefined,
-    });
-    recorded += 1;
-    for (const f of commit.files) perFile.set(f, (perFile.get(f) ?? 0) + 1);
-  }
-
-  const top = [...perFile.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
   console.log(
     JSON.stringify(
       {
-        commitsMined: commits.length,
-        experiencesRecorded: recorded,
-        skippedUnbound: unbound,
-        filesCovered: perFile.size,
-        busiest: top.map(([f, n]) => `${n}× ${f.split("/").slice(-2).join("/")}`),
+        commitsMined: result.mined,
+        experiencesRecorded: result.recorded,
+        skippedAlreadyRecorded: result.alreadyRecorded,
+        skippedUnanchored: result.unanchored,
       },
       null,
       2

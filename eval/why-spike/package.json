@@ -8,9 +8,11 @@
     "build": "tsc -b",
     "spike:capture": "node dist/capture.js",
     "spike:probe": "node dist/probe.js",
-    "spike:compare": "node dist/compare.js"
+    "spike:compare": "node dist/compare.js",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@cognitive-memory/capture": "workspace:*",
     "@cognitive-memory/core": "workspace:*",
     "@cognitive-memory/episodic": "workspace:*",
     "@cognitive-memory/graph-store": "workspace:*",
@@ -20,6 +22,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
   }
 }

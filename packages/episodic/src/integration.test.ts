@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { nodeId } from "@cognitive-memory/core";
-import { closePool, getEdgeByTriple, runMigrations, upsertNode } from "@cognitive-memory/graph-store";
+import { closePool, getEdgeByTriple, markExperienceCold, runMigrations, upsertNode } from "@cognitive-memory/graph-store";
 import { recordObservation } from "@cognitive-memory/semantic";
+import { createFakeEmbedder } from "@cognitive-memory/retrieval";
+import { upsertExperienceEmbedding } from "@cognitive-memory/graph-store";
 import * as episodic from "./index.js";
-import { queryByNode, queryByTask, recordExperience } from "./index.js";
+import { queryByMeaning, queryByNode, queryByTask, recordExperience } from "./index.js";
 
 describe("packages/episodic public API", () => {
   it("exposes no update or delete surface — spec.md §8 append-only is a package-boundary guarantee", () => {
@@ -12,6 +14,7 @@ describe("packages/episodic public API", () => {
     expect(exported).toContain("recordExperience");
     expect(exported).toContain("queryByNode");
     expect(exported).toContain("queryByTask");
+    expect(exported).toContain("queryByMeaning");
     expect(exported.some((name) => /update|delete/i.test(name))).toBe(false);
   });
 });
@@ -110,5 +113,121 @@ d("packages/episodic integration", () => {
         (p) => p.sourceType === "agent_experience" && p.sourceId === experience.id
       )
     ).toBe(true);
+  });
+});
+
+d("by-meaning retrieval (spec.md §24.2.1 / ROADMAP.md M11)", () => {
+  beforeAll(async () => {
+    await runMigrations();
+  });
+
+  afterAll(async () => {
+    await closePool();
+  });
+
+  it("finds a memory by what it says, with related_nodes empty — retrieval is not node-gated", async () => {
+    const marker = randomUUID().replace(/-/g, "");
+    const recorded = await recordExperience({
+      task: `Why the ${marker} fastpass returns before assigning`,
+      observation:
+        `The ${marker} fastpass kept the parsed success value on the stack, so an early ` +
+        `return from the optional-key branch discarded it and the caller saw undefined ` +
+        `instead of the parsed object. Assigning before returning is the fix; re-walking ` +
+        `the shape per optional key was the alternative and was measurably slower.`,
+      lessons: ["assign before returning in the fastpass"],
+      // The whole point: nothing to gate on.
+      relatedNodes: [],
+      confidence: 0.7,
+    });
+
+    // Paraphrased, not the recorded wording.
+    const hits = await queryByMeaning(`what bug did the ${marker} early return cause`);
+
+    const hit = hits.find((h) => h.experience.id === recorded.id);
+    expect(
+      hit,
+      `expected the anchorless memory to be retrievable by meaning, got ${JSON.stringify(
+        hits.map((h) => h.experience.task)
+      )}`
+    ).toBeDefined();
+    expect(hit?.experience.relatedNodes).toEqual([]);
+    expect(hit?.anchored).toBe(false);
+  });
+
+  it("puts a hit that both lexical legs and the vector leg agree on ahead of a single-leg hit", async () => {
+    const marker = randomUUID().replace(/-/g, "");
+    const embedder = createFakeEmbedder();
+
+    const strong = await recordExperience({
+      task: `${marker} prototype methods retain memory in v8`,
+      observation:
+        `Moving schema methods to the ${marker} prototype cut bundle size but made v8 ` +
+        `retain more memory per instance, because inline slots no longer covered the ` +
+        `method properties. The bundle win was judged worth the retained memory.`,
+      relatedNodes: [],
+      confidence: 0.7,
+    });
+    const weak = await recordExperience({
+      task: `${marker} unrelated release chore`,
+      observation:
+        `Bumped the ${marker} version and regenerated the changelog. Nothing about ` +
+        `prototypes, memory, or bundling changed in this commit at all whatsoever.`,
+      relatedNodes: [],
+      confidence: 0.7,
+    });
+    for (const e of [strong, weak]) {
+      await upsertExperienceEmbedding(e.id, await embedder.embed(`${e.task} ${e.observation}`));
+    }
+
+    const hits = await queryByMeaning(
+      `${marker} why do prototype methods make v8 retain more memory per instance`,
+      { embedder, limit: 10 }
+    );
+    const ids = hits.map((h) => h.experience.id);
+    expect(ids).toContain(strong.id);
+    if (ids.includes(weak.id)) {
+      expect(ids.indexOf(strong.id)).toBeLessThan(ids.indexOf(weak.id));
+    }
+    expect(hits.find((h) => h.experience.id === strong.id)?.legs.length).toBeGreaterThan(1);
+  });
+
+  it("returns nothing rather than throwing when the question is all stopwords", async () => {
+    expect(await queryByMeaning("why is it that we do this")).toEqual([]);
+  });
+
+  it("honours spec.md §18's cold flag, and can be asked for cold knowledge explicitly", async () => {
+    const marker = randomUUID().replace(/-/g, "");
+    const recorded = await recordExperience({
+      task: `${marker} anchor helper exists for esbuild tree shaking`,
+      observation:
+        `The ISO date regex is built through an ${marker} anchor helper rather than an ` +
+        `inline template literal because esbuild will not treat an interpolated regex ` +
+        `literal as pure, so the dead-code elimination pass kept the whole module.`,
+      relatedNodes: [],
+      confidence: 0.7,
+    });
+    const question = `${marker} why is the iso regex built through a helper`;
+
+    expect((await queryByMeaning(question)).map((h) => h.experience.id)).toContain(recorded.id);
+
+    await markExperienceCold(recorded.id);
+
+    expect((await queryByMeaning(question)).map((h) => h.experience.id)).not.toContain(recorded.id);
+    expect(
+      (await queryByMeaning(question, { includeCold: true })).map((h) => h.experience.id)
+    ).toContain(recorded.id);
+  });
+
+  it("persists the caller's timestamp, so a memory mined from history is dated by the history and not by the sync", async () => {
+    const past = "2021-03-04T05:06:07.000Z";
+    const recorded = await recordExperience({
+      task: `timestamp-fidelity-${randomUUID()}`,
+      observation: "A memory mined from a 2021 commit must not be dated today.",
+      relatedNodes: [],
+      confidence: 0.7,
+      timestamp: past,
+    });
+    expect(recorded.timestamp).toBe(past);
+    expect((await queryByTask(recorded.task))[0]?.timestamp).toBe(past);
   });
 });

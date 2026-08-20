@@ -1,5 +1,5 @@
 {
-  "name": "@cognitive-memory/episodic",
+  "name": "@cognitive-memory/capture",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,13 +12,23 @@
   },
   "dependencies": {
     "@cognitive-memory/core": "workspace:*",
+    "@cognitive-memory/episodic": "workspace:*",
     "@cognitive-memory/graph-store": "workspace:*",
     "@cognitive-memory/retrieval": "workspace:*"
   },
   "devDependencies": {
-    "@cognitive-memory/semantic": "workspace:*",
     "@types/node": "^22.10.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
+    }
   }
 }

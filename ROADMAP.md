@@ -24,7 +24,7 @@ This checklist is the source of truth for what's done — see
 - ~~M10 — Structural Extraction: Variable-Bound Declarations~~ — **superseded,
   never built** (knowledge-first pivot, human-directed 2026-08-19; see spec §24
   and the M10 section note below)
-- [ ] M11 — Knowledge Layer as Product (by-meaning retrieval + capture — git-history mining AND session scout-report distillation — shipped into `packages/`)
+- [x] M11 — Knowledge Layer as Product (by-meaning retrieval + capture — git-history mining AND session scout-report distillation — shipped into `packages/`)
 - [ ] M12 — Text Anchors & Commit-Triggered Staleness (git replaces the AST for anchoring and staleness)
 - [ ] M13 — Refine-Memory Skill (read-repair + `supersedes` links)
 - [ ] M14 — Knowledge-Link Edges (spike: memory-to-memory traversal, go/no-go on a measured win)
@@ -39,15 +39,18 @@ ROADMAP.md
 docker-compose.yml            # local Postgres+pgvector for contributors without a local cluster
 migrations/
   0001_init.sql
+  0004_experiences_content_search.sql   # M11: knowledge is searchable by its own content
 packages/
   core/                       # shared types (Node, Edge, Provenance, Experience) mirrored from spec.md §3-§8
   graph-store/                # Postgres client, migration runner, typed CRUD for nodes/edges/experiences/events
   structural/                 # M1: ts-morph based extractor
   retrieval/                  # M2: hybrid search (pg_trgm + pgvector) -> seed nodes
   semantic/                   # M3: promotion pipeline per spec §7
-  episodic/                   # M4: experience capture/query per spec §8
+  episodic/                   # M4: experience capture/query per spec §8; M11: by-meaning retrieval per spec §24.2.1
   traversal/                  # M5: reasoning-guided expansion per spec §10
   context/                    # M6: subgraph -> compact agent context per spec §17
+  pipeline/                   # M9: task -> AgentContext orchestration per spec §22
+  capture/                    # M11: git-history mining + scout-report distillation per spec §24.2.1
 eval/                         # M7-adjacent: retrieval/staleness/promotion eval sets, spec §19
 ```
 

@@ -15,11 +15,17 @@
  * alone loses to grep.
  *
  * Usage:
- *   node scripts/self-memory.mjs sync            # ingest structure + history
- *   node scripts/self-memory.mjs ask "why ...?"  # query it
- *   node scripts/self-memory.mjs record <json>   # append one experience
+ *   node scripts/self-memory.mjs sync             # ingest structure + history
+ *   node scripts/self-memory.mjs ask "why ...?"   # query it
+ *   node scripts/self-memory.mjs record <json>    # append one experience
+ *   node scripts/self-memory.mjs scout <file>     # persist a distilled scout report
  *   node scripts/self-memory.mjs stats
+ *
+ * As of M11 the capture and by-meaning retrieval this script used to hand-roll
+ * live in `packages/capture` and `packages/episodic`. What is left here is the
+ * wiring: which repo, which globs, and how the output is printed.
  */
+import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import process from "node:process";
@@ -31,7 +37,7 @@ const REPO_ID = "claude-notebook";
 const require = createRequire(path.join(ROOT, "packages/structural/package.json"));
 const { Project } = require("ts-morph");
 
-const [{ extractProject, persistExtraction }, graphStore, retrieval, traversal, pipelineMod, episodic, contextMod, corpus] =
+const [{ extractProject, persistExtraction }, graphStore, retrieval, traversal, pipelineMod, episodic, contextMod, capture] =
   await Promise.all([
     import(path.join(ROOT, "packages/structural/dist/index.js")),
     import(path.join(ROOT, "packages/graph-store/dist/index.js")),
@@ -40,7 +46,7 @@ const [{ extractProject, persistExtraction }, graphStore, retrieval, traversal, 
     import(path.join(ROOT, "packages/pipeline/dist/index.js")),
     import(path.join(ROOT, "packages/episodic/dist/index.js")),
     import(path.join(ROOT, "packages/context/dist/index.js")),
-    import(path.join(ROOT, "eval/why-spike/dist/corpus.js")),
+    import(path.join(ROOT, "packages/capture/dist/index.js")),
   ]);
 
 const { closePool, getPool, runMigrations } = graphStore;
@@ -64,45 +70,35 @@ async function sync() {
   await retrieval.indexNodeEmbeddings(extraction.nodes, retrieval.createFakeEmbedder());
   const structureMs = Date.now() - t0;
 
-  // Knowledge half: our own history. Only commits that explain themselves —
-  // a bare "fix typo" carries nothing a future agent can't re-derive.
+  // Knowledge half: our own history, through the shipped capture package.
+  // Idempotent by contract (spec.md §24.2.1) — re-running after a merge only
+  // records commits that are actually new.
   const t1 = Date.now();
-  const commits = await corpus.mineCommits(ROOT, "packages", 500);
-  const evalCommits = await corpus.mineCommits(ROOT, "eval", 500);
-  const all = [...commits, ...evalCommits];
-
   const { rows } = await getPool().query(
     "SELECT id, path FROM nodes WHERE repo_id = $1 AND type = 'file' AND path IS NOT NULL",
     [REPO_ID]
   );
-  const known = new Set(rows.map((r) => r.path));
   const idByPath = new Map(rows.map((r) => [r.path, r.id]));
+  // The structural graph is still alive until M15, so keep new memories bound
+  // to it as well as to their text anchors — that is what `resolveNodeIds` is
+  // for. Text anchors are written unconditionally by the package.
+  const resolveNodeIds = (paths) =>
+    paths.map((f) => idByPath.get(path.join(ROOT, f))).filter(Boolean);
 
-  // Skip commits already recorded, so `sync` is safe to re-run.
-  const { rows: seen } = await getPool().query(
-    "SELECT action FROM experiences WHERE action LIKE 'commit %'"
-  );
-  const recorded = new Set(seen.map((r) => r.action));
-
-  let added = 0;
-  for (const commit of [...all].reverse()) {
-    if (recorded.has(`commit ${commit.shortSha}`)) continue;
-    const nodeIds = commit.files
-      .map((f) => idByPath.get(path.join(ROOT, f)))
-      .filter(Boolean);
-    if (nodeIds.length === 0) continue;
-    const lesson = corpus.lessonFrom(commit);
-    await episodic.recordExperience({
-      task: commit.subject,
-      observation: lesson,
-      action: `commit ${commit.shortSha}`,
-      lessons: [lesson],
-      relatedNodes: nodeIds,
-      confidence: 0.7,
-      timestamp: commit.date || undefined,
-    });
-    added += 1;
-  }
+  const embedder = retrieval.createFakeEmbedder();
+  // Whole repo, not just `packages/`: the commits that recorded this project's
+  // biggest decisions (the spec.md §24 pivot, for instance) touch spec.md and
+  // ROADMAP.md at the root, and a subtree-scoped mine cannot see them — which
+  // made the most valuable "why" here the part the memory did not have.
+  const result = await capture.captureGitHistory({
+    repoDir: ROOT,
+    pathScope: "",
+    limit: 500,
+    resolveNodeIds,
+    embedder,
+  });
+  const mined = result.mined;
+  const added = result.recorded;
 
   console.log(
     JSON.stringify(
@@ -112,10 +108,10 @@ async function sync() {
         nodes: extraction.nodes.length,
         edges: extraction.edges.length,
         structureMs,
-        explanatoryCommits: all.length,
+        explanatoryCommits: mined,
         experiencesAdded: added,
         knowledgeMs: Date.now() - t1,
-        indexedFiles: known.size,
+        indexedFiles: idByPath.size,
       },
       null,
       2
@@ -124,39 +120,15 @@ async function sync() {
   await closePool();
 }
 
-const STOPWORDS = new Set([
-  "the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "with", "is",
-  "are", "was", "were", "be", "it", "its", "that", "this", "why", "what",
-  "how", "does", "do", "did", "when", "which", "we", "our", "i", "you",
-  "not", "any", "ever", "still", "just", "also", "would", "could", "should",
-]);
-
 /**
- * Retrieve knowledge by its own content, not by exact node id. The spike
- * measured the shipped node-gated path at MRR 0.13 (it returns whatever is
- * newest on the traversed files) against 0.75 for this.
+ * Retrieve knowledge by its own content, through the shipped by-meaning API.
+ * The spike measured the node-gated path at MRR 0.13 (it returns whatever is
+ * newest on the traversed files) against 0.75 for this; M11 re-measured the
+ * shipped package path at 0.85 lexical-only / 0.90 with the stub embedder (see
+ * BENCHMARKS.md).
  */
 async function askKnowledge(question, limit = 4) {
-  const terms = [
-    ...new Set(
-      question
-        .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-        .split(/[^a-zA-Z0-9_]+/)
-        .map((t) => t.toLowerCase())
-        .filter((t) => t.length > 2 && !STOPWORDS.has(t))
-    ),
-  ];
-  if (terms.length === 0) return [];
-  const { rows } = await getPool().query(
-    `SELECT task, observation, action, "timestamp",
-            ts_rank(to_tsvector('english', task || ' ' || observation),
-                    to_tsquery('english', $1)) AS rank
-       FROM experiences
-      WHERE to_tsvector('english', task || ' ' || observation) @@ to_tsquery('english', $1)
-      ORDER BY rank DESC, "timestamp" DESC LIMIT $2`,
-    [terms.join(" | "), limit]
-  );
-  return rows;
+  return episodic.queryByMeaning(question, { limit, embedder: retrieval.createFakeEmbedder() });
 }
 
 async function ask(question) {
@@ -189,8 +161,13 @@ async function ask(question) {
   if (knowledge.length === 0) {
     console.log("(nothing recorded for this — run `sync`, or the question may be new ground)");
   }
-  for (const k of knowledge) {
-    console.log(`### ${k.task}\n_${k.action} · ${new Date(k.timestamp).toISOString().slice(0, 10)}_\n`);
+  for (const hit of knowledge) {
+    const k = hit.experience;
+    console.log(
+      `### ${k.task}\n_${k.action ?? "unknown source"} · ${new Date(k.timestamp)
+        .toISOString()
+        .slice(0, 10)} · ${hit.reason} (${hit.legs.join("+")}), score ${hit.score.toFixed(4)}_\n`
+    );
     console.log(`${k.observation.split("\n").slice(0, 14).join("\n")}\n`);
   }
   await closePool();
@@ -214,6 +191,29 @@ async function record(json) {
     confidence: input.confidence ?? 0.7,
   });
   console.log(JSON.stringify({ id: saved.id, boundTo: rows.length }));
+  await closePool();
+}
+
+/**
+ * Persists a distilled scout report (spec.md §24.2.1's second capture source
+ * class). Takes a path to a JSON file rather than inline JSON: a real report is
+ * multi-paragraph prose and does not survive a shell argument intact.
+ *
+ * Expected shape (see packages/capture's `ScoutReportInput`):
+ *   { "task": "...", "understanding": "...", "anchors": ["packages/x/src/y.ts"] }
+ *
+ * The §24.2.1 guardrail applies — a report that is really a file listing is
+ * rejected rather than written.
+ */
+async function scout(file) {
+  if (!file) throw new Error("usage: self-memory.mjs scout <path-to-report.json>");
+  const input = JSON.parse(await readFile(path.resolve(ROOT, file), "utf-8"));
+  const saved = await capture.recordScoutReport({
+    ...input,
+    anchors: (input.anchors ?? []).map((a) => path.relative(ROOT, path.resolve(ROOT, a))),
+    embedder: retrieval.createFakeEmbedder(),
+  });
+  console.log(JSON.stringify({ id: saved.id, anchors: saved.relatedNodes.length }));
   await closePool();
 }
 
@@ -241,10 +241,16 @@ async function stats() {
 }
 
 const [cmd, ...rest] = process.argv.slice(2);
-const commands = { sync, ask: () => ask(rest.join(" ")), record: () => record(rest.join(" ")), stats };
+const commands = {
+  sync,
+  ask: () => ask(rest.join(" ")),
+  record: () => record(rest.join(" ")),
+  scout: () => scout(rest[0]),
+  stats,
+};
 const run = commands[cmd];
 if (!run) {
-  console.error("usage: self-memory.mjs <sync|ask|record|stats>");
+  console.error("usage: self-memory.mjs <sync|ask|record|scout|stats>");
   process.exit(1);
 }
 run().catch((err) => {

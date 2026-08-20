@@ -1,5 +1,8 @@
 import type { Node, NodeStatus, NodeType, Provenance } from "@cognitive-memory/core";
 import { getPool, type Queryable } from "./db.js";
+// pgvector expects `'[0.1,0.2,...]'` text input, not a JS array — `pg` has no
+// native vector type support. Shared with `experiences.ts` (see vector.ts).
+import { toVectorLiteral } from "./vector.js";
 
 interface NodeRow {
   id: string;
@@ -150,11 +153,6 @@ export async function listNodesByType(type: NodeType): Promise<Node[]> {
     [type]
   );
   return rows.map(rowToNode);
-}
-
-/** pgvector expects `'[0.1,0.2,...]'` text input, not a JS array — `pg` has no native vector type support. */
-function toVectorLiteral(embedding: number[]): string {
-  return `[${embedding.join(",")}]`;
 }
 
 /**

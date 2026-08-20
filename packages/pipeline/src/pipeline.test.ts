@@ -1,11 +1,11 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Edge, Experience, Node } from "@cognitive-memory/core";
 
 /**
  * `runPipeline` calls three functions that are hardcoded module imports,
  * not injected parameters (per spec.md §22 — only `embedder`/`graph`/
  * `reasoner` are injected): `retrieveSeeds` (retrieval), `getNodesByIds`
- * (graph-store), and `queryByNode` (episodic). Each hits real Postgres in
+ * (graph-store), and `queryByNode` / `queryByMeaning` (episodic). Each hits real Postgres in
  * its real implementation, same as traversal's own `createPostgresGraphProvider`
  * does for the (separately, properly injected) `GraphProvider`. To keep
  * this suite DB-free — the acceptance criterion's whole point, contrasted
@@ -24,8 +24,10 @@ vi.mock("@cognitive-memory/graph-store", async (importOriginal) => ({
 vi.mock("@cognitive-memory/episodic", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@cognitive-memory/episodic")>()),
   queryByNode: vi.fn(),
+  queryByMeaning: vi.fn(),
 }));
 
+import { queryByMeaning, type ScoredExperience } from "@cognitive-memory/episodic";
 import { queryByNode } from "@cognitive-memory/episodic";
 import { getNodesByIds } from "@cognitive-memory/graph-store";
 import { retrieveSeeds } from "@cognitive-memory/retrieval";
@@ -37,6 +39,7 @@ import { runPipeline } from "./pipeline.js";
 const mockRetrieveSeeds = vi.mocked(retrieveSeeds);
 const mockGetNodesByIds = vi.mocked(getNodesByIds);
 const mockQueryByNode = vi.mocked(queryByNode);
+const mockQueryByMeaning = vi.mocked(queryByMeaning);
 
 const NOW = new Date().toISOString();
 
@@ -108,6 +111,22 @@ function createFixtureGraphProvider(nodes: Node[], edges: Edge[]): GraphProvider
 afterEach(() => {
   vi.clearAllMocks();
 });
+
+// By-meaning retrieval is on by default (spec.md §24.2.1), so every case that
+// does not care about it still needs it to answer *something*.
+beforeEach(() => {
+  mockQueryByMeaning.mockResolvedValue([]);
+});
+
+function makeMeaningHit(experience: Experience, score: number): ScoredExperience {
+  return {
+    experience,
+    score,
+    legs: ["text"],
+    reason: "text_match",
+    anchored: experience.relatedNodes.length > 0,
+  };
+}
 
 describe("runPipeline", () => {
   it("composes retrieveSeeds -> traverse -> hydration -> buildContext in one call", async () => {
@@ -255,5 +274,124 @@ describe("runPipeline shared embedding", () => {
     const passedOptions = mockRetrieveSeeds.mock.calls[0]?.[1];
     expect(passedOptions?.embedder).toBeDefined();
     expect(passedOptions?.embedder).not.toBe(embedder);
+  });
+});
+
+describe("runPipeline by-meaning experiences (spec.md §24.2.1 / ROADMAP.md M11)", () => {
+  it("surfaces a by-meaning hit with no related nodes at all — knowledge is no longer node-gated", async () => {
+    mockRetrieveSeeds.mockResolvedValue([{ nodeId: "svc", score: 0.9, reason: "lexical_match" }]);
+    mockGetNodesByIds.mockResolvedValue([makeNode("svc", { type: "subsystem", name: "Svc" })]);
+    mockQueryByNode.mockResolvedValue([]);
+
+    const anchorless = makeExperience("anchorless", {
+      task: "why the fastpass assigns before returning",
+      lessons: ["assign before returning"],
+      relatedNodes: [],
+    });
+    mockQueryByMeaning.mockResolvedValue([makeMeaningHit(anchorless, 0.02)]);
+
+    const result = await runPipeline("why does the fastpass assign first", {
+      graph: createFixtureGraphProvider([], []),
+      reasoner: expandAllReasoner(),
+    });
+
+    expect(result.context.experiences.map((e) => e.experienceId)).toContain("anchorless");
+    expect(result.byMeaning[0]?.experience.id).toBe("anchorless");
+  });
+
+  it("still returns knowledge when retrieval finds no seed at all — spec.md §24.3's whole point", async () => {
+    mockRetrieveSeeds.mockResolvedValue([]);
+    const known = makeExperience("known", { lessons: ["the revert was accidental"], relatedNodes: [] });
+    mockQueryByMeaning.mockResolvedValue([makeMeaningHit(known, 0.05)]);
+
+    const result = await runPipeline("was whitespace rejection ever implemented", {
+      graph: createFixtureGraphProvider([], []),
+      reasoner: expandAllReasoner(),
+    });
+
+    expect(result.seeds).toEqual([]);
+    expect(result.traversal.stopReason).toBe("no_frontier");
+    expect(result.context.sourceFiles).toEqual([]);
+    expect(result.context.experiences.map((e) => e.experienceId)).toEqual(["known"]);
+  });
+
+  it("keeps the pre-M11 node-gated-only behaviour when by-meaning is switched off", async () => {
+    mockRetrieveSeeds.mockResolvedValue([]);
+    mockQueryByMeaning.mockResolvedValue([makeMeaningHit(makeExperience("ignored"), 1)]);
+
+    const result = await runPipeline("anything", {
+      graph: createFixtureGraphProvider([], []),
+      reasoner: expandAllReasoner(),
+      byMeaning: false,
+    });
+
+    expect(mockQueryByMeaning).not.toHaveBeenCalled();
+    expect(result.byMeaning).toEqual([]);
+    expect(result.context.experiences).toEqual([]);
+  });
+
+  it("interleaves the two sources so neither starves the other under a tight budget", async () => {
+    mockRetrieveSeeds.mockResolvedValue([{ nodeId: "svc", score: 0.9, reason: "lexical_match" }]);
+    mockGetNodesByIds.mockResolvedValue([makeNode("svc")]);
+    // Recency ordering is what node hydration returns; make it distinguishable.
+    mockQueryByNode.mockResolvedValue([
+      makeExperience("node-1", { relatedNodes: ["svc"], timestamp: "2026-01-02T00:00:00.000Z" }),
+      makeExperience("node-2", { relatedNodes: ["svc"], timestamp: "2026-01-01T00:00:00.000Z" }),
+    ]);
+    mockQueryByMeaning.mockResolvedValue([
+      makeMeaningHit(makeExperience("meaning-1", { relatedNodes: [] }), 0.03),
+      makeMeaningHit(makeExperience("meaning-2", { relatedNodes: [] }), 0.02),
+    ]);
+
+    const result = await runPipeline("task", {
+      graph: createFixtureGraphProvider([], []),
+      reasoner: expandAllReasoner(),
+      maxExperiences: 2,
+    });
+
+    const ids = result.context.experiences.map((e) => e.experienceId).sort();
+    expect(ids).toEqual(["meaning-1", "node-1"]);
+  });
+
+  it("clamps its experience budget to buildContext's cap, so a relevance-ranked hit is never dropped by the recency sort", async () => {
+    mockRetrieveSeeds.mockResolvedValue([]);
+    // The best-matching memory is also the OLDEST. With a budget above
+    // buildContext's cap it would be sorted to the back and truncated away.
+    const best = makeExperience("best-and-oldest", {
+      lessons: ["the answer"],
+      relatedNodes: [],
+      timestamp: "2019-01-01T00:00:00.000Z",
+    });
+    const filler = Array.from({ length: 12 }, (_, i) =>
+      makeMeaningHit(
+        makeExperience(`filler-${i}`, { relatedNodes: [], timestamp: `2026-01-${String(i + 10)}T00:00:00.000Z` }),
+        0.001
+      )
+    );
+    mockQueryByMeaning.mockResolvedValue([makeMeaningHit(best, 0.5), ...filler]);
+
+    const result = await runPipeline("task", {
+      graph: createFixtureGraphProvider([], []),
+      reasoner: expandAllReasoner(),
+      maxExperiences: 20,
+    });
+
+    expect(mockQueryByMeaning.mock.calls[0]?.[1]?.limit).toBe(10);
+    expect(result.context.experiences.map((e) => e.experienceId)).toContain("best-and-oldest");
+  });
+
+  it("reuses spec.md §22 step 1's single task embedding for the vector leg instead of embedding twice", async () => {
+    const embed = vi.fn(async () => [0.1, 0.2, 0.3]);
+    const embedder: EmbeddingProvider = { embed };
+    mockRetrieveSeeds.mockResolvedValue([]);
+
+    await runPipeline("task", {
+      graph: createFixtureGraphProvider([], []),
+      reasoner: expandAllReasoner(),
+      embedder,
+    });
+
+    expect(embed).toHaveBeenCalledTimes(1);
+    expect(mockQueryByMeaning.mock.calls[0]?.[1]?.queryEmbedding).toEqual([0.1, 0.2, 0.3]);
   });
 });

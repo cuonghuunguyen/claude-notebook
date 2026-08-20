@@ -152,3 +152,46 @@ d("runPipeline integration", () => {
     expect(embed).toHaveBeenCalledTimes(1);
   });
 });
+
+d("runPipeline by-meaning integration (spec.md §24.2.1 / ROADMAP.md M11)", () => {
+  beforeAll(async () => {
+    await runMigrations();
+  });
+
+  afterAll(async () => {
+    await closePool();
+  });
+
+  it("hands the agent knowledge that no structural node points at, against a real database", async () => {
+    const marker = randomUUID().replace(/-/g, "");
+    const recorded = await recordExperience({
+      task: `why the ${marker} anchor helper exists`,
+      observation:
+        `The ${marker} ISO date regex is assembled through an anchor helper instead of an ` +
+        `inline template literal because esbuild refuses to treat an interpolated regex ` +
+        `literal as pure, so its dead-code pass kept the entire module in every bundle.`,
+      lessons: [`the ${marker} anchor helper exists for esbuild purity, not readability`],
+      // Nothing to gate on: no node, no traversal reach.
+      relatedNodes: [],
+      confidence: 0.7,
+    });
+
+    const result = await runPipeline(
+      `${marker} why is the iso regex built through a helper rather than inline`,
+      {
+        repoId: `nonexistent-repo-${marker}`,
+        embedder: createFakeEmbedder(),
+        graph: createPostgresGraphProvider(),
+        reasoner: expandAllReasoner(),
+      }
+    );
+
+    // The structural half genuinely found nothing — this repo id has no nodes.
+    expect(result.seeds).toEqual([]);
+    expect(result.context.sourceFiles).toEqual([]);
+    // The knowledge half answered anyway.
+    expect(result.context.experiences.map((e) => e.experienceId)).toContain(recorded.id);
+    expect(result.byMeaning.map((h) => h.experience.id)).toContain(recorded.id);
+    expect(result.byMeaning.find((h) => h.experience.id === recorded.id)?.anchored).toBe(false);
+  });
+});

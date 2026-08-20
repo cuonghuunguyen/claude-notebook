@@ -110,17 +110,40 @@ evidence-bar rule itself, not because of how often a cycle gets to run.
 both halves, because the benchmarks showed one without the other is useless:
 
 ```bash
-node scripts/self-memory.mjs sync             # structure + our own git history
-node scripts/self-memory.mjs ask "why ...?"   # code files + the reasoning behind them
+node scripts/self-memory.mjs sync              # structure + our own git history
+node scripts/self-memory.mjs ask "why ...?"    # code files + the reasoning behind them
+node scripts/self-memory.mjs scout report.json # persist a distilled scout report
 node scripts/self-memory.mjs stats
 ```
 
+Since M11 both halves are shipped packages, not script-local code:
+`packages/capture` (`captureGitHistory` — idempotent; `recordScoutReport`) and
+`packages/episodic` (`queryByMeaning` — full-text + trigram + vector, never
+gated on a structural node hit). `runPipeline` surfaces by-meaning hits in
+`AgentContext.experiences`, so it answers even when the structural graph has no
+matching node at all.
+
+**Writing back what you worked out.** If a task made you understand how
+something here actually fits together, drop it in `.claude/scout-report.json`
+before finishing (`{ task, understanding, anchors }`) — the
+`.claude/hooks/scout-capture.sh` Stop hook persists it and clears the file, so
+the next session retrieves it instead of re-deriving it. Store synthesized
+understanding only: `packages/capture` rejects a report that is really a file
+listing, because grep already answers "where is X" in one turn (spec.md §24.2.1,
+measured in `E2E_BENCHMARK_MULTI_REPO.md`).
+
 `sync` is idempotent — it skips commits already recorded, so re-run it after
-merging. Structure alone loses to grep (`E2E_BENCHMARK_MULTI_REPO.md`); the
-knowledge half is what pays (`WHY_MEMORY_SPIKE.md`: 7.7 → 1.4 turns against an
-agent that had full git access). Which is why `ask` retrieves experiences by
-their own content rather than through a node-id hit — the shipped node-gated
-path scored MRR 0.13 against 0.75 for retrieval by meaning.
+merging. It mines the **whole** repo, not just `packages/`: the commits that
+recorded this project's own direction changes touch `spec.md`/`ROADMAP.md` at
+the root, and a subtree-scoped mine could not see them.
+
+Structure alone loses to grep (`E2E_BENCHMARK_MULTI_REPO.md`); the knowledge
+half is what pays (`WHY_MEMORY_SPIKE.md`: 7.7 → 1.4 turns against an agent that
+had full git access). Which is why `ask` retrieves experiences by their own
+content rather than through a node-id hit — re-measured through the shipped
+package path in M11 at MRR 0.85 (0.90 with the stub embedder) against 0.00 for
+the node-gated path on the same corpus (`BENCHMARKS.md`, which also records the
+controls that rule out this PR's own changes as the cause of that 0.13 → 0.00).
 
 ## Quality gate (catch it in the task that caused it)
 

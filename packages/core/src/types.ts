@@ -226,6 +226,34 @@ export interface Experience {
   /** Which change made it suspect, e.g. `modified src/parse.ts in a1b2c3d4`. */
   suspectReason?: string;
 
+  /**
+   * Set when read-repair recorded a corrected memory in this one's place
+   * (spec.md §24.2 decision 4 / §24.6, ROADMAP.md M13): the id of the memory
+   * that replaced it.
+   *
+   * A memory carrying this is out of default retrieval — the chain's head (the
+   * memory with no successor) is the current answer. It is still reachable
+   * explicitly, which is the whole reason the old text is kept rather than
+   * rewritten: "what did we believe before, and what changed our mind" is a
+   * question the corrected memory alone cannot answer.
+   */
+  supersededBy?: string;
+
+  /** When the supersede link was made — not when either memory was written. */
+  supersededAt?: string;
+
+  /**
+   * When read-repair last checked this memory against the code and found it
+   * still accurate (§24.6).
+   *
+   * This is the memory's staleness reference instant, not merely an audit
+   * field: §24.2.3's test is "is the newest commit touching my anchors newer
+   * than me?", and after a verification the honest answer uses the verification
+   * instant rather than the write instant. `stalenessAsOf` is the one place
+   * that choice is made.
+   */
+  verifiedAt?: string;
+
   confidence: number;
   timestamp: string;
 }

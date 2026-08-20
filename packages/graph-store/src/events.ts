@@ -10,7 +10,14 @@ export type EventType =
   | "InvariantLearned"
   | "DecisionRecorded"
   | "ExperienceRecorded"
-  | "ExperiencePromoted";
+  | "ExperiencePromoted"
+  /**
+   * Read-repair replaced a memory with a correction (spec.md §24.2 decision 4
+   * / §24.6, M13). Eventful — unlike `cold` and `suspect`, which a rebuild can
+   * recompute — because a replay that dropped it would put retracted knowledge
+   * back into the default retrieval path.
+   */
+  | "ExperienceSuperseded";
 
 export interface MemoryEvent<TPayload = unknown> {
   id?: number;

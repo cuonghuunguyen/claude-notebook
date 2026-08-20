@@ -264,8 +264,18 @@ showed one half without the other is useless:
 node scripts/self-memory.mjs sync              # structure + our own git history (idempotent)
 node scripts/self-memory.mjs ask "why ...?"    # code files + the reasoning behind them
 node scripts/self-memory.mjs scout report.json # persist a distilled scout report
+node scripts/self-memory.mjs stale             # re-flag what history has overtaken
+node scripts/self-memory.mjs suspects          # M13: the read-repair worklist
+node scripts/self-memory.mjs verify <id>       # M13: checked it, still accurate
+node scripts/self-memory.mjs supersede fix.json# M13: checked it, here's the correction
+node scripts/self-memory.mjs history <id>      # what we used to believe
 node scripts/self-memory.mjs stats
 ```
+
+A hit that `ask` returns flagged `possibly-stale` names `/refine-memory <id>`,
+the skill that settles it: read the anchored files and the commits since, then
+either record a correction that supersedes the memory or confirm it and clear
+the mark. Retrieval returns chain heads; nothing is ever deleted.
 
 Since M11 the script is only wiring — which repo, which globs, how output is
 printed. The capture and retrieval it used to hand-roll now live in
@@ -353,11 +363,11 @@ in its own words.
 | M0–M9 | Scaffolding, structural graph, hybrid retrieval, semantic + episodic memory, traversal, context, staleness/GC/eval, Python extraction, pipeline orchestration | ✅ shipped |
 | M10 | Structural extraction: variable-bound declarations | ⛔ **superseded, never built** — knowledge-first pivot (`spec.md` §24.3) |
 | M11 | **Knowledge Layer as Product** — by-meaning retrieval + capture shipped into `packages/` | ✅ shipped |
-| M12 | Text anchors & commit-triggered staleness (git replaces the AST for anchoring) | ⬜ next |
-| M13 | Refine-memory skill — read-repair + `supersedes` chains | ⬜ planned |
+| M12 | Text anchors & commit-triggered staleness (git replaces the AST for anchoring) | ✅ shipped |
+| M13 | Refine-memory skill — read-repair + `supersedes` chains | ✅ shipped |
 | M14 | Knowledge-link edges (measured spike) | ✅ measured → **NO-GO on integrating** |
-| M15 | Decommission the structural graph | ⬜ gated on M11–M14 outcomes |
-| M16 | Memory tiers — short/mid/long-term with access-driven promotion | ⬜ planned |
+| M15 | Decommission the structural graph | ⬜ next — gated on M11–M14 outcomes |
+| M16 | Memory tiers — short/mid/long-term with access-driven promotion | ✅ shipped |
 
 M16 carries a deliberately open problem: **access is not correctness.** A
 plausible-but-wrong memory that keeps getting retrieved would climb tiers on

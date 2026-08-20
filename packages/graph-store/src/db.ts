@@ -13,6 +13,19 @@ let pool: Pool | undefined;
  */
 export type Queryable = Pool | PoolClient;
 
+/**
+ * A checked-out client specifically — NOT the pool.
+ *
+ * Used by the parameters whose whole purpose is to join a caller's
+ * transaction. `Queryable` is wrong there: it is satisfied by `Pool`, and a
+ * `Pool` silently turns the join into "run these statements on whatever
+ * connections happen to be free", i.e. no `BEGIN`, row locks released
+ * immediately, and the check and the write potentially on different
+ * connections. That is precisely the atomicity those parameters exist to
+ * provide, so the type rules it out rather than documenting against it.
+ */
+export type TransactionClient = PoolClient;
+
 function connectionStringFromEnv(): string {
   const url = process.env["DATABASE_URL"];
   if (!url) {

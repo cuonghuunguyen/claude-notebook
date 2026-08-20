@@ -15,6 +15,8 @@ import type { Anchor, Experience } from "@cognitive-memory/core";
 import {
   clearExperienceSuspect,
   closePool,
+  getPool,
+  markExperienceVerified,
   getExperienceById,
   listExperiencesByAnchorPaths,
   recordExperience,
@@ -22,6 +24,16 @@ import {
 } from "@cognitive-memory/graph-store";
 import { bulkyContent, buildFixtureRepo, type FixtureRepo } from "./fixtureRepo.js";
 import { flagPossiblyStale, markSuspectFromHistory } from "./memoryStaleness.js";
+
+/**
+ * Un-stamps a verification. Not a graph-store export on purpose — nothing in
+ * the system should be able to un-verify a memory (that is what a *new* commit
+ * does, through the ordinary staleness test). It exists here only so this
+ * suite's fixtures survive test order.
+ */
+async function clearVerification(id: string): Promise<void> {
+  await getPool().query(`UPDATE experiences SET verified_at = NULL WHERE id = $1`, [id]);
+}
 
 const hasDb = Boolean(process.env["DATABASE_URL"]);
 const d = hasDb ? describe : describe.skip;
@@ -230,6 +242,44 @@ d("markSuspectFromHistory over a fixture repo (ROADMAP.md M12)", () => {
   it("derives anchors from relatedNodes for a memory written before migration 0006", async () => {
     const legacy = await getExperienceById(IDS.legacyRelatedNodes);
     expect(legacy?.anchors).toEqual([{ path: "src/touched.ts" }]);
+  });
+
+  it("a verification survives the read-time recompute — the repair is not undone by the next read (M13)", async () => {
+    // The failure this pins: `clearExperienceSuspect` alone clears the
+    // PERSISTED verdict, but §24.2.3's verdict is also recomputed from git on
+    // every read, and the commit that raised it is still newer than the
+    // memory's write instant. Without `verified_at`, read-repair's "I checked;
+    // it is accurate" outcome would be reverted by the very next query.
+    await markSuspectFromHistory({ repoDir: repo.dir });
+    const before = await getExperienceById(IDS.touched);
+    expect(before?.suspect).toBe(true);
+    expect((await flagPossiblyStale([before as Experience], { repoDir: repo.dir }))[0]?.possiblyStale).toBe(
+      true
+    );
+
+    // Verified now — after every commit in the fixture.
+    await markExperienceVerified(IDS.touched, AFTER_ALL_COMMITS);
+    const verified = await getExperienceById(IDS.touched);
+    expect(verified?.suspect).toBe(false);
+    expect(
+      (await flagPossiblyStale([verified as Experience], { repoDir: repo.dir }))[0]?.possiblyStale
+    ).toBe(false);
+
+    // ...and a re-run of the sync pass does not re-flag it either.
+    await markSuspectFromHistory({ repoDir: repo.dir });
+    expect((await getExperienceById(IDS.touched))?.suspect).toBe(false);
+
+    // Verifying is not suppressing: a memory verified BEFORE the fixture's
+    // commits is still flagged by them.
+    await markExperienceVerified(IDS.touched, "2026-01-20T00:00:00Z");
+    const staleAgain = await getExperienceById(IDS.touched);
+    expect(
+      (await flagPossiblyStale([staleAgain as Experience], { repoDir: repo.dir }))[0]?.possiblyStale
+    ).toBe(true);
+
+    // Restore, so test order cannot affect the other cases.
+    await clearVerification(IDS.touched);
+    await markSuspectFromHistory({ repoDir: repo.dir });
   });
 
   it("clearExperienceSuspect undoes the flag (the hook M13 read-repair needs)", async () => {

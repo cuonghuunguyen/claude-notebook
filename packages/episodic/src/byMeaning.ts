@@ -126,6 +126,17 @@ export interface QueryByMeaningOptions {
   queryEmbedding?: number[];
   /** spec.md §18: include experiences already promoted to cold storage. Default false. */
   includeCold?: boolean;
+  /**
+   * spec.md §24.2 decision 4 / §24.6 (M13): include memories that read-repair
+   * has replaced with a correction. Default false — the chain's head is the
+   * current answer, and returning a retracted memory alongside its replacement
+   * would hand the reader two contradictory answers and no way to rank them.
+   *
+   * Set true only for an explicit "what did we believe before" query. Note that
+   * this returns chain MEMBERS matching the question, not chains: to read one
+   * memory's history in order, use `memoryHistory`.
+   */
+  includeSuperseded?: boolean;
   /** `word_similarity` floor for the trigram leg. Default 0.35. */
   trigramThreshold?: number;
   /**
@@ -277,7 +288,10 @@ export async function queryByMeaning(
   options: QueryByMeaningOptions = {}
 ): Promise<ScoredExperience[]> {
   const legLimit = options.legLimit ?? DEFAULT_LEG_LIMIT;
-  const searchOptions = { includeCold: options.includeCold ?? false };
+  const searchOptions = {
+    includeCold: options.includeCold ?? false,
+    includeSuperseded: options.includeSuperseded ?? false,
+  };
   const tsQuery = toExperienceTsQuery(question);
 
   // Independent I/O, same as §9's two legs — never serialize the vector leg's

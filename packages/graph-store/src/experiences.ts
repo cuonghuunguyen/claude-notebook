@@ -1,6 +1,6 @@
 import type { Anchor, Experience, MemoryTier } from "@cognitive-memory/core";
 import { anchorsFromRelatedNodes } from "@cognitive-memory/core";
-import { getPool, type Queryable } from "./db.js";
+import { getPool, type Queryable, type TransactionClient } from "./db.js";
 import { toVectorLiteral } from "./vector.js";
 
 interface ExperienceRow {
@@ -15,6 +15,9 @@ interface ExperienceRow {
   anchors: Anchor[];
   suspect: boolean;
   suspect_reason: string | null;
+  superseded_by: string | null;
+  superseded_at: Date | null;
+  verified_at: Date | null;
   confidence: number;
   timestamp: Date;
   cold: boolean;
@@ -44,12 +47,27 @@ function rowToExperience(row: ExperienceRow): Experience {
     anchors: row.anchors.length > 0 ? row.anchors : anchorsFromRelatedNodes(row.related_nodes),
     suspect: row.suspect,
     suspectReason: row.suspect_reason ?? undefined,
+    supersededBy: row.superseded_by ?? undefined,
+    supersededAt: row.superseded_at?.toISOString(),
+    verifiedAt: row.verified_at?.toISOString(),
     confidence: row.confidence,
     timestamp: row.timestamp.toISOString(),
   };
 }
 
-const EXPERIENCE_COLUMNS = `id, task, observation, hypothesis, action, result, lessons, related_nodes, anchors, suspect, suspect_reason, confidence, "timestamp", cold, tier`;
+const EXPERIENCE_COLUMNS = `id, task, observation, hypothesis, action, result, lessons, related_nodes, anchors, suspect, suspect_reason, superseded_by, superseded_at, verified_at, confidence, "timestamp", cold, tier`;
+
+/**
+ * The same column list qualified with the `e` alias, for the recursive-chain
+ * queries that join `experiences` against a CTE which also has an `id` column
+ * (Postgres rejects the unqualified list there as ambiguous). Derived rather
+ * than written out twice so a future column cannot be added to one and not the
+ * other.
+ */
+const EXPERIENCE_COLUMNS_QUALIFIED = EXPERIENCE_COLUMNS.split(", ")
+  .map((column) => `e.${column}`)
+  .join(", ");
+
 
 /**
  * Append-only per spec.md §8 — there is deliberately no update/delete
@@ -110,6 +128,33 @@ export async function recordExperience(
 export interface ExperienceQueryOptions {
   /** spec.md §18: cold experiences are excluded from default retrieval. Set true to include them (e.g. an explicit "search full history" request). */
   includeCold?: boolean;
+  /**
+   * spec.md §24.2 decision 4 / §24.6: a memory that read-repair has replaced
+   * with a correction is excluded from default retrieval — the chain's head
+   * answers. Set true for an explicit "what did we believe before" query.
+   *
+   * Applied to EVERY experience query in this module, not just the by-meaning
+   * legs M13's acceptance names. A retracted memory that stays reachable
+   * through by-node or by-task is retracted in name only, and those are the
+   * paths `runPipeline` and the promotion pipeline read.
+   */
+  includeSuperseded?: boolean;
+}
+
+/**
+ * The default-retrieval predicate shared by every query below, as SQL text.
+ *
+ * Written once because it is a policy, not a detail: "cold and superseded rows
+ * are out unless explicitly asked for" has to hold identically across five
+ * queries, and the previous copy-paste of the cold half is exactly how the
+ * superseded half would come to be missing from one of them.
+ *
+ * `coldParam`/`supersededParam` are 1-based placeholder numbers supplied by the
+ * caller — the callers' other parameters are already numbered, so this cannot
+ * own the numbering.
+ */
+function defaultVisibility(coldParam: number, supersededParam: number): string {
+  return `($${coldParam} OR NOT cold) AND ($${supersededParam} OR superseded_by IS NULL)`;
 }
 
 export async function queryExperiencesByNode(
@@ -119,9 +164,9 @@ export async function queryExperiencesByNode(
   const pool = getPool();
   const { rows } = await pool.query<ExperienceRow>(
     `SELECT ${EXPERIENCE_COLUMNS} FROM experiences
-     WHERE related_nodes @> $1::jsonb AND ($2 OR NOT cold)
+     WHERE related_nodes @> $1::jsonb AND ${defaultVisibility(2, 3)}
      ORDER BY "timestamp" DESC`,
-    [JSON.stringify([nodeId]), options.includeCold ?? false]
+    [JSON.stringify([nodeId]), options.includeCold ?? false, options.includeSuperseded ?? false]
   );
   return rows.map(rowToExperience);
 }
@@ -133,9 +178,9 @@ export async function queryExperiencesByTask(
   const pool = getPool();
   const { rows } = await pool.query<ExperienceRow>(
     `SELECT ${EXPERIENCE_COLUMNS} FROM experiences
-     WHERE task = $1 AND ($2 OR NOT cold)
+     WHERE task = $1 AND ${defaultVisibility(2, 3)}
      ORDER BY "timestamp" DESC`,
-    [task, options.includeCold ?? false]
+    [task, options.includeCold ?? false, options.includeSuperseded ?? false]
   );
   return rows.map(rowToExperience);
 }
@@ -224,10 +269,10 @@ export async function searchExperiencesByFullText(
             ts_rank(to_tsvector('english', ${EXPERIENCE_TEXT}), to_tsquery('english', $1)) AS score
        FROM experiences
       WHERE to_tsvector('english', ${EXPERIENCE_TEXT}) @@ to_tsquery('english', $1)
-        AND ($3 OR NOT cold)
+        AND ${defaultVisibility(3, 4)}
       ORDER BY score DESC, "timestamp" DESC, id
       LIMIT $2`,
-    [tsQuery, limit, options.includeCold ?? false]
+    [tsQuery, limit, options.includeCold ?? false, options.includeSuperseded ?? false]
   );
   return rows.map(rowToHit);
 }
@@ -278,10 +323,10 @@ export async function searchExperiencesByTrigram(
       `SELECT ${EXPERIENCE_COLUMNS}, word_similarity($1, ${EXPERIENCE_TEXT}) AS score
          FROM experiences
         WHERE $1 <% ${EXPERIENCE_TEXT}
-          AND ($3 OR NOT cold)
+          AND ${defaultVisibility(3, 4)}
         ORDER BY score DESC, "timestamp" DESC, id
         LIMIT $2`,
-      [query, limit, options.includeCold ?? false]
+      [query, limit, options.includeCold ?? false, options.includeSuperseded ?? false]
     );
     await client.query("COMMIT");
     return rows.map(rowToHit);
@@ -307,10 +352,10 @@ export async function searchExperiencesByEmbedding(
     `SELECT ${EXPERIENCE_COLUMNS}, 1 - (embedding <=> $1) AS score
        FROM experiences
       WHERE embedding IS NOT NULL
-        AND ($3 OR NOT cold)
+        AND ${defaultVisibility(3, 4)}
       ORDER BY embedding <=> $1, "timestamp" DESC, id
       LIMIT $2`,
-    [toVectorLiteral(embedding), limit, options.includeCold ?? false]
+    [toVectorLiteral(embedding), limit, options.includeCold ?? false, options.includeSuperseded ?? false]
   );
   return rows.map(rowToHit);
 }
@@ -410,6 +455,17 @@ export async function listExperienceActions(prefix = ""): Promise<string[]> {
  * where containment handles that case properly; nothing is silently wrong, the
  * older form is just coarser.
  *
+ * Superseded memories are EXCLUDED, unlike cold ones — the two flags look
+ * similar and are not. A cold memory (§18) is still the current answer, merely
+ * promoted out of the hot path, so a staleness verdict on it must keep being
+ * maintained against the day `includeCold` brings it back. A superseded memory
+ * has been *retracted*: something else is the answer now, and "has history
+ * moved past this text" is a question about a claim nobody will act on. Keeping
+ * them in would also permanently inflate `markSuspectFromHistory`'s `marked`
+ * count — the very number the read-repair loop watches to see whether repairs
+ * are landing — since a retired memory stays older than the commits that
+ * flagged it forever.
+ *
  * Cold memories are INCLUDED here, unlike every retrieval query in this module.
  * §18's cold flag governs what retrieval surfaces by default; it says nothing
  * about whether a memory is still true. A cold memory that `includeCold` later
@@ -421,8 +477,9 @@ export async function listExperiencesByAnchorPaths(paths: readonly string[]): Pr
   if (distinct.length === 0) return [];
   const { rows } = await getPool().query<ExperienceRow>(
     `SELECT ${EXPERIENCE_COLUMNS} FROM experiences
-      WHERE anchors @> ANY ($1::jsonb[])
-         OR related_nodes @> ANY ($2::jsonb[])
+      WHERE (anchors @> ANY ($1::jsonb[])
+         OR related_nodes @> ANY ($2::jsonb[]))
+        AND superseded_by IS NULL
       ORDER BY "timestamp" DESC, id`,
     [
       distinct.map((path) => JSON.stringify([{ path }])),
@@ -473,4 +530,304 @@ export async function clearExperienceSuspect(id: string): Promise<void> {
     `UPDATE experiences SET suspect = false, suspect_reason = NULL WHERE id = $1`,
     [id]
   );
+}
+
+// ---------------------------------------------------------------------------
+// Read-repair: verification stamps + supersede chains
+// (spec.md §24.2 decision 4 / §24.6, ROADMAP.md M13).
+// ---------------------------------------------------------------------------
+
+/**
+ * Read-repair's "still accurate" outcome: clear the doubt AND record when the
+ * check happened (spec.md §24.6).
+ *
+ * `clearExperienceSuspect` above is not enough on its own, and the difference
+ * is the entire reason this function exists. M12's staleness verdict is
+ * *recomputed* at read time from git as well as persisted, so clearing the
+ * persisted flag leaves the read-time test to re-derive the identical verdict
+ * from the identical commit one query later — the repair would last exactly
+ * until the next read. Stamping `verified_at` moves the instant that test
+ * measures from (`stalenessAsOf`), which is what makes "I checked; it's fine"
+ * survive.
+ *
+ * Not a suppression: only commits made BEFORE the verification stop counting.
+ * The next commit to touch the anchored files flags the memory again, exactly
+ * as §24.2.3 intends.
+ *
+ * `verifiedAt` is a parameter rather than `now()` so a caller can stamp the
+ * instant it actually read the code at, not the instant its database write
+ * landed — a refine run that reads a file, thinks, and writes minutes later
+ * must not claim to have verified against commits that landed in between.
+ *
+ * Returns false when no such memory exists, so a caller repairing a stale id
+ * finds out instead of believing it succeeded.
+ */
+export async function markExperienceVerified(
+  id: string,
+  verifiedAt: string = new Date().toISOString()
+): Promise<boolean> {
+  const { rowCount } = await getPool().query(
+    `UPDATE experiences
+        SET suspect = false, suspect_reason = NULL, verified_at = $2::timestamptz
+      WHERE id = $1`,
+    [id, verifiedAt]
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+/**
+ * Recursion guard for the chain walks. A cycle is refused at write time and
+ * forbidden by a CHECK, so this bound is only ever reached by data written
+ * around this module — in which case a bounded wrong answer beats a query that
+ * never returns. Far above any chain a real repair history produces.
+ */
+const MAX_CHAIN_DEPTH = 1000;
+
+/**
+ * Advisory-lock key serializing every `supersedeExperience` call. Arbitrary but
+ * fixed, and distinct from `migrate.ts`'s key — any two processes using this
+ * module agree on it, which is the whole point.
+ */
+const SUPERSEDE_LOCK_KEY = "4812003117260002";
+
+/** Thrown by `supersedeExperience` when the link asked for is not representable. */
+export class SupersedeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SupersedeError";
+  }
+}
+
+export interface SupersedeResult {
+  /** False when the link already existed exactly as asked — the call was a no-op. */
+  linked: boolean;
+  supersededAt: string;
+}
+
+/**
+ * Read-repair's "was wrong" outcome: link an outdated memory to the correction
+ * that replaces it (spec.md §24.2 decision 4).
+ *
+ * The correction must already exist as its own memory. That ordering is
+ * deliberate rather than an API inconvenience: the correction is a first-class
+ * memory with its own anchors, confidence and `ExperienceRecorded` event, and
+ * the link is a second fact about a *pair* of memories. Folding both into one
+ * call would make the correction unrecordable without a victim, which is wrong
+ * — plenty of new knowledge supersedes nothing.
+ *
+ * Three refusals, all of them shapes that would silently destroy knowledge
+ * rather than merely fail:
+ *
+ *  - a memory superseding itself: the row would satisfy no default retrieval
+ *    (`superseded_by IS NULL` fails) and have no successor to answer in its
+ *    place. Also enforced by migration 0007's CHECK.
+ *  - a memory already superseded by something ELSE: overwriting the pointer
+ *    orphans the previous correction — it stays a head, so BOTH corrections
+ *    answer, which is the fork the single-column design exists to prevent.
+ *    Re-linking to the same successor is idempotent instead of an error, so a
+ *    retried refine run is safe.
+ *  - a cycle: if the correction is (transitively) already superseded by the
+ *    memory being retired, linking closes a loop in which every member fails
+ *    `superseded_by IS NULL` and the whole chain vanishes from retrieval.
+ *
+ * ## Why the whole operation takes one global lock
+ *
+ * `FOR UPDATE` on the old row serializes two runs racing on the SAME memory,
+ * but the cycle check reads *other* rows, and under READ COMMITTED it cannot
+ * see another transaction's uncommitted pointer. Two runs doing
+ * `supersede(X, Y)` and `supersede(Y, X)` concurrently lock different rows and
+ * each walks a snapshot in which the other's link does not exist, so both cycle
+ * checks pass.
+ *
+ * What saves that case *without* this lock is not the check — it is migration
+ * 0007's foreign key. Writing `superseded_by` takes a `FOR KEY SHARE` lock on
+ * the referenced row, which conflicts with the other transaction's
+ * `FOR UPDATE` on that same row, so the two updates deadlock and Postgres
+ * kills one. Measured, not assumed: replaying the exact statement sequence on
+ * two connections produces `deadlock detected` on one side and leaves a single
+ * clean link behind. So a cycle cannot actually be committed today.
+ *
+ * That is a fine outcome to have and a bad one to rely on. It depends on an
+ * implicit lock the FK happens to take, it surfaces as an opaque
+ * `deadlock detected` rather than the specific refusal this function is written
+ * to give, and it is not what any of the three refusals above says is
+ * happening. A transaction-scoped advisory lock makes the check-then-write
+ * genuinely atomic against every other supersede, so the loser waits and then
+ * gets the real reason. Serializing all supersedes globally costs nothing —
+ * a supersede is an agent-driven repair, not a hot path — and the lock dies
+ * with its transaction, so a crashed run cannot wedge it.
+ */
+export async function supersedeExperience(
+  oldId: string,
+  newId: string,
+  options: { supersededAt?: string; db?: TransactionClient } = {}
+): Promise<SupersedeResult> {
+  if (oldId === newId) {
+    throw new SupersedeError(`a memory cannot supersede itself (${oldId})`);
+  }
+  const supersededAt = options.supersededAt ?? new Date().toISOString();
+
+  const run = async (db: TransactionClient): Promise<SupersedeResult> => {
+    // Transaction-scoped, so it is released by COMMIT/ROLLBACK whatever
+    // happens below — including a throw out of one of the refusals.
+    await db.query("SELECT pg_advisory_xact_lock($1)", [SUPERSEDE_LOCK_KEY]);
+
+    const { rows: oldRows } = await db.query<{ superseded_by: string | null }>(
+      `SELECT superseded_by FROM experiences WHERE id = $1 FOR UPDATE`,
+      [oldId]
+    );
+    const existing = oldRows[0];
+    if (!existing) throw new SupersedeError(`no such experience to supersede: ${oldId}`);
+
+    const { rows: newRows } = await db.query<{ id: string }>(
+      `SELECT id FROM experiences WHERE id = $1`,
+      [newId]
+    );
+    if (!newRows[0]) throw new SupersedeError(`no such superseding experience: ${newId}`);
+
+    if (existing.superseded_by === newId) return { linked: false, supersededAt };
+    if (existing.superseded_by !== null) {
+      throw new SupersedeError(
+        `${oldId} is already superseded by ${existing.superseded_by}; ` +
+          `supersede ${existing.superseded_by} instead (chains do not fork)`
+      );
+    }
+
+    // Walk forward from the correction. If the memory being retired is
+    // reachable, linking would close a cycle.
+    const { rows: cycle } = await db.query<{ id: string }>(
+      `WITH RECURSIVE forward(id, depth) AS (
+           SELECT id, 0 FROM experiences WHERE id = $1
+         UNION ALL
+           SELECT e.superseded_by, f.depth + 1
+             FROM experiences e JOIN forward f ON e.id = f.id
+            WHERE e.superseded_by IS NOT NULL AND f.depth < ${MAX_CHAIN_DEPTH}
+       )
+       SELECT id FROM forward WHERE id = $2 LIMIT 1`,
+      [newId, oldId]
+    );
+    if (cycle[0]) {
+      throw new SupersedeError(
+        `linking ${oldId} -> ${newId} would close a supersede cycle`
+      );
+    }
+
+    // Clearing `suspect` is part of the milestone's own definition of the
+    // repair ("write a corrected memory that supersedes the old one — and clear
+    // the suspect mark", ROADMAP M13). It is not cosmetic: the doubt has been
+    // *answered*, and leaving it standing keeps the retired memory in every
+    // count of "memories still needing read-repair", so the number the
+    // dogfooding loop watches would never come down as repairs land.
+    await db.query(
+      `UPDATE experiences
+          SET superseded_by = $2, superseded_at = $3::timestamptz,
+              suspect = false, suspect_reason = NULL
+        WHERE id = $1`,
+      [oldId, newId, supersededAt]
+    );
+    return { linked: true, supersededAt };
+  };
+
+  if (options.db) return run(options.db);
+
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const result = await run(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * The whole supersede chain `id` belongs to, oldest correction first, head last
+ * — the "history remains queryable explicitly" half of §24.2 decision 4.
+ *
+ * Takes any member, not just the head or the tail: the caller of this is a
+ * reader who was handed one memory and wants to know what came before and after
+ * it, and requiring them to already hold the head would mean they had to walk
+ * the chain to ask for the chain.
+ *
+ * Ordered by link distance rather than by `timestamp`. A correction can carry
+ * an older timestamp than the memory it corrects — capture stamps mined
+ * memories with their commit's date, so a repair sourced from an older commit
+ * legitimately sorts before its predecessor — and the chain's meaning is the
+ * link order, not the clock. `timestamp, id` only break ties between memories
+ * that share a depth, which is the merge case below.
+ *
+ * ## Merges, and why the backward walk is seeded from the forward one
+ *
+ * The link is single-valued, so a chain cannot FORK forward — but two separate
+ * memories can be retracted in favour of the SAME correction (`supersede(A, C)`
+ * then `supersede(B, C)` are both legal, and both are the right thing for an
+ * agent that found one correction answering two stale memories). The structure
+ * is therefore a tree that converges on a head, not a line.
+ *
+ * A naive implementation walks back from the requested id and forward from it,
+ * and unions the two. That returns `[A, C]` for `listSupersedeChain(A)` — `B`
+ * is invisible, even though `A` and `B` were retracted by the same correction
+ * and a reader asking "what did we believe before this" should see both. So the
+ * backward walk is seeded from every id the FORWARD walk reached, which pulls
+ * in the other branches of whatever the chain converges on, at the depth their
+ * successor implies. `listSupersedeChain` then returns the same set from every
+ * member, which is what its "takes any member" contract claims.
+ *
+ * Returns `[]` for an unknown id, and a single-element array for a memory that
+ * neither supersedes nor is superseded — so a caller can render "history" the
+ * same way regardless.
+ */
+export async function listSupersedeChain(id: string): Promise<Experience[]> {
+  const { rows } = await getPool().query<ExperienceRow & { depth: number }>(
+    `WITH RECURSIVE forward(id, depth) AS (
+         SELECT id, 0 FROM experiences WHERE id = $1
+       UNION
+         SELECT e.superseded_by, f.depth + 1
+           FROM experiences e JOIN forward f ON e.id = f.id
+          WHERE e.superseded_by IS NOT NULL AND f.depth < ${MAX_CHAIN_DEPTH}
+     ),
+     chain(id, depth) AS (
+         SELECT id, depth FROM forward
+       UNION
+         SELECT e.id, c.depth - 1
+           FROM experiences e JOIN chain c ON e.superseded_by = c.id
+          WHERE c.depth > -${MAX_CHAIN_DEPTH}
+     )
+     SELECT ${EXPERIENCE_COLUMNS_QUALIFIED}, c.depth
+       FROM experiences e JOIN chain c ON e.id = c.id
+      ORDER BY c.depth, e."timestamp", e.id`,
+    [id]
+  );
+  return rows.map(rowToExperience);
+}
+
+/**
+ * The current answer for a memory: follow `superseded_by` to the chain head.
+ *
+ * Returns the memory itself when nothing has replaced it, and `undefined` for
+ * an unknown id. This is the lookup a caller holding a remembered id (a scout
+ * report, a log line, an older context bundle) needs — that id keeps naming the
+ * retracted text forever, and `getExperienceById` would hand it back with no
+ * hint that it has been corrected.
+ */
+export async function getSupersedeHead(id: string): Promise<Experience | undefined> {
+  const { rows } = await getPool().query<ExperienceRow>(
+    `WITH RECURSIVE forward(id, depth) AS (
+         SELECT id, 0 FROM experiences WHERE id = $1
+       UNION ALL
+         SELECT e.superseded_by, f.depth + 1
+           FROM experiences e JOIN forward f ON e.id = f.id
+          WHERE e.superseded_by IS NOT NULL AND f.depth < ${MAX_CHAIN_DEPTH}
+     )
+     SELECT ${EXPERIENCE_COLUMNS}
+       FROM experiences e
+      WHERE e.id = (SELECT id FROM forward ORDER BY depth DESC LIMIT 1)`,
+    [id]
+  );
+  const row = rows[0];
+  return row ? rowToExperience(row) : undefined;
 }

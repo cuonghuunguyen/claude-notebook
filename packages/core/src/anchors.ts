@@ -38,6 +38,18 @@ export const ANCHOR_SYMBOL_SEPARATOR = "#";
  */
 export const POSSIBLY_STALE_FLAG = "possibly-stale — verify before trusting";
 
+/**
+ * What a reader should DO about a possibly-stale memory (ROADMAP.md M13 (c)).
+ *
+ * Split from `POSSIBLY_STALE_FLAG` rather than folded into it: the flag's
+ * wording is fixed by spec.md §24.2.3 and is rendered into machine-read
+ * context (`packages/context`'s `staleness` field), while this is operator
+ * guidance for a human/agent-facing listing. Renderers that emit the flag as a
+ * value must not silently start emitting an instruction as that value.
+ */
+export const REFINE_MEMORY_HINT =
+  "run the `refine-memory` skill to repair it (write a correction) or confirm it";
+
 /** How a commit touched a path. `renamed` carries `previousPath`. */
 export type ChangeKind = "added" | "modified" | "deleted" | "renamed";
 
@@ -300,6 +312,34 @@ export function isPossiblyStale(
   const memoryMs = Date.parse(memoryTimestamp);
   if (Number.isNaN(commitMs) || Number.isNaN(memoryMs)) return false;
   return commitMs > memoryMs;
+}
+
+/**
+ * The instant a memory's staleness is measured FROM (spec.md §24.6 / M13).
+ *
+ * `timestamp` is when the memory was written; `verifiedAt` is when read-repair
+ * last checked it against the code and found it still true. Either one makes
+ * the claim "as of this instant, this memory matched the code", so the newer of
+ * the two is the honest reference — otherwise a verification could never stick:
+ * the commit that triggered the flag stays newer than `timestamp` forever, and
+ * every subsequent read would re-raise the flag the repair just resolved.
+ *
+ * Takes the max rather than preferring `verifiedAt` outright. A `verifiedAt`
+ * older than the memory itself is nonsense a caller could still write (a clock
+ * skew, a replayed verification), and it must not be able to make a memory look
+ * *more* stale than its own write instant already does.
+ */
+export function stalenessAsOf(experience: {
+  timestamp: string;
+  verifiedAt?: string;
+}): string {
+  const { timestamp, verifiedAt } = experience;
+  if (!verifiedAt) return timestamp;
+  const verifiedMs = Date.parse(verifiedAt);
+  const writtenMs = Date.parse(timestamp);
+  if (Number.isNaN(verifiedMs)) return timestamp;
+  if (Number.isNaN(writtenMs)) return verifiedAt;
+  return verifiedMs > writtenMs ? verifiedAt : timestamp;
 }
 
 /** Human-readable "why is this suspect", recorded on the memory and shown in context. */

@@ -19,6 +19,12 @@
  *   node scripts/self-memory.mjs ask "why ...?"   # query it
  *   node scripts/self-memory.mjs record <json>    # append one experience
  *   node scripts/self-memory.mjs scout <file>     # persist a distilled scout report
+ *   node scripts/self-memory.mjs stale            # re-flag what history overtook
+ *   node scripts/self-memory.mjs suspects [n]     # what read-repair should look at
+ *   node scripts/self-memory.mjs show <id>        # one memory, in full, with its chain
+ *   node scripts/self-memory.mjs verify <id> [at]  # M13: checked, still accurate
+ *   node scripts/self-memory.mjs supersede <file> # M13: checked, here is the correction
+ *   node scripts/self-memory.mjs history <id>     # the whole supersede chain
  *   node scripts/self-memory.mjs stats
  *
  * As of M11 the capture and by-meaning retrieval this script used to hand-roll
@@ -37,7 +43,7 @@ const REPO_ID = "claude-notebook";
 const require = createRequire(path.join(ROOT, "packages/structural/package.json"));
 const { Project } = require("ts-morph");
 
-const [{ extractProject, persistExtraction }, graphStore, retrieval, traversal, pipelineMod, episodic, contextMod, capture, staleness] =
+const [{ extractProject, persistExtraction }, graphStore, retrieval, traversal, pipelineMod, episodic, contextMod, capture, staleness, core] =
   await Promise.all([
     import(path.join(ROOT, "packages/structural/dist/index.js")),
     import(path.join(ROOT, "packages/graph-store/dist/index.js")),
@@ -48,6 +54,7 @@ const [{ extractProject, persistExtraction }, graphStore, retrieval, traversal, 
     import(path.join(ROOT, "packages/context/dist/index.js")),
     import(path.join(ROOT, "packages/capture/dist/index.js")),
     import(path.join(ROOT, "packages/staleness/dist/index.js")),
+    import(path.join(ROOT, "packages/core/dist/index.js")),
   ]);
 
 const { closePool, getPool, runMigrations } = graphStore;
@@ -192,7 +199,11 @@ async function ask(question) {
         .slice(0, 10)} · ${hit.reason} (${hit.legs.join("+")}), score ${hit.score.toFixed(4)}_\n`
     );
     if (verdict?.possiblyStale) {
-      console.log(`> **possibly-stale — verify before trusting** (${verdict.reason})\n`);
+      // ROADMAP.md M13 (c): a flag with no next step is what made M12's 24-of-27
+      // flag rate useless. Print the id and the skill that repairs it, so the
+      // dogfooding loop exercises read-repair instead of just noticing rot.
+      console.log(`> **${core.POSSIBLY_STALE_FLAG}** (${verdict.reason})`);
+      console.log(`> ${core.REFINE_MEMORY_HINT} — \`/refine-memory ${k.id}\`\n`);
     }
     console.log(`${k.observation.split("\n").slice(0, 14).join("\n")}\n`);
   }
@@ -261,7 +272,9 @@ async function stale() {
   await runMigrations();
   const result = await staleness.markSuspectFromHistory({ repoDir: ROOT, limit: 500 });
   const { rows } = await getPool().query(
-    'SELECT id, task, suspect_reason FROM experiences WHERE suspect ORDER BY "timestamp" DESC LIMIT 10'
+    `SELECT id, task, suspect_reason FROM experiences
+      WHERE suspect AND superseded_by IS NULL
+      ORDER BY "timestamp" DESC LIMIT 10`
   );
   console.log(
     JSON.stringify(
@@ -271,6 +284,209 @@ async function stale() {
         markedSuspect: result.marked,
         examples: rows.map((r) => `${r.task.slice(0, 60)} :: ${r.suspect_reason}`),
       },
+      null,
+      2
+    )
+  );
+  await closePool();
+}
+
+/**
+ * The read-repair worklist: which memories history has overtaken, with enough
+ * context to go and check one (spec.md §24.2.4 / M13). This is what
+ * `.claude/skills/refine-memory` reads in step 1.
+ *
+ * Ordered oldest-first, not newest-first, deliberately: the oldest suspect
+ * memory has had the most history pile up on top of it and is the most likely
+ * to actually be wrong, which is the opposite of what a "latest first" listing
+ * would surface.
+ */
+async function suspects(limitArg) {
+  const limit = Number(limitArg) > 0 ? Number(limitArg) : 10;
+  const { rows } = await getPool().query(
+    `SELECT id, task, action, anchors, suspect_reason, "timestamp", verified_at
+       FROM experiences
+      WHERE suspect AND superseded_by IS NULL
+      ORDER BY "timestamp" ASC
+      LIMIT $1`,
+    [limit]
+  );
+  console.log(
+    JSON.stringify(
+      rows.map((r) => ({
+        id: r.id,
+        task: r.task,
+        source: r.action,
+        written: r.timestamp.toISOString().slice(0, 10),
+        verifiedAt: r.verified_at?.toISOString().slice(0, 10),
+        anchors: (r.anchors ?? []).map((a) => (a.symbol ? `${a.path}#${a.symbol}` : a.path)),
+        why: r.suspect_reason,
+      })),
+      null,
+      2
+    )
+  );
+  await closePool();
+}
+
+/** One memory in full, plus its supersede chain — step 2 of the refine skill. */
+async function show(id) {
+  if (!id) throw new Error("usage: self-memory.mjs show <experience-id>");
+  const chain = await episodic.memoryHistory(id);
+  const target = chain.find((e) => e.id === id);
+  if (!target) {
+    console.log(JSON.stringify({ error: `no such memory: ${id}` }));
+    await closePool();
+    return;
+  }
+  console.log(
+    JSON.stringify(
+      {
+        id: target.id,
+        task: target.task,
+        source: target.action,
+        timestamp: target.timestamp,
+        verifiedAt: target.verifiedAt,
+        suspect: target.suspect,
+        suspectReason: target.suspectReason,
+        supersededBy: target.supersededBy,
+        anchors: target.anchors,
+        confidence: target.confidence,
+        chain: chain.map((e) => e.id),
+        observation: target.observation,
+        lessons: target.lessons,
+      },
+      null,
+      2
+    )
+  );
+  await closePool();
+}
+
+/**
+ * Read-repair outcome A: the memory was checked against the code and is still
+ * accurate. Clears M12's suspect mark and stamps the check instant, so the
+ * read-time staleness test stops re-deriving the same verdict from the same
+ * commit (see `stalenessAsOf`).
+ */
+async function verify(id, asOf) {
+  if (!id) throw new Error("usage: self-memory.mjs verify <experience-id> [read-instant-iso]");
+  // The instant the code was READ, not the instant this write lands. A refine
+  // run reads the anchors, thinks, and writes minutes later; stamping the write
+  // time would silently claim to have verified against commits that landed in
+  // between, and those commits could then never re-raise the flag. The skill
+  // captures `date -u +%FT%TZ` before it starts reading and passes it here.
+  // Defaults to now, which is only correct for an instantaneous check.
+  const verifiedAt = asOf ? new Date(asOf).toISOString() : new Date().toISOString();
+  if (Number.isNaN(Date.parse(verifiedAt))) throw new Error(`unparseable instant: ${asOf}`);
+  const ok = await episodic.recordVerification(id, verifiedAt);
+  console.log(JSON.stringify({ id, verified: ok, verifiedAt, stampedFrom: asOf ? "read-instant" : "now" }));
+  await closePool();
+}
+
+/**
+ * Read-repair outcome B: the memory was wrong, and here is the correction.
+ *
+ * Takes a JSON file rather than inline JSON for the same reason `scout` does —
+ * a real correction is multi-paragraph prose that does not survive a shell
+ * argument intact.
+ *
+ *   { "supersedes": "<id>", "task": "...", "observation": "...",
+ *     "anchors": ["packages/x/src/y.ts"], "lessons": ["..."], "confidence": 0.8 }
+ *
+ * `anchors` may be omitted to inherit the superseded memory's own — a
+ * correction is about the same code by definition.
+ *
+ * The embedding is written straight after the memory, not left to the next
+ * `sync`: the vector leg is one of three in by-meaning retrieval, and a
+ * correction that only two legs can see is a correction that ranks below the
+ * memory it replaced.
+ */
+async function supersede(file) {
+  if (!file) throw new Error("usage: self-memory.mjs supersede <path-to-correction.json>");
+  const input = JSON.parse(await readFile(path.resolve(ROOT, file), "utf-8"));
+  if (!input.supersedes) throw new Error("correction must name the memory it `supersedes`");
+
+  if (!input.task) throw new Error(`correction for ${input.supersedes} needs a \`task\``);
+  if (!input.observation) {
+    throw new Error(`correction for ${input.supersedes} needs an \`observation\``);
+  }
+
+  // `parseAnchor`, not a bare path: an entry may be `path#symbol`, and
+  // `path.resolve` would swallow the `#` into the path — silently making a
+  // symbol-scoped correction impossible to express through this CLI even though
+  // the Anchor type and the staleness matcher both support one.
+  const anchors = input.anchors
+    ? input.anchors.map((a) => {
+        const parsed = core.parseAnchor(a);
+        return { ...parsed, path: path.relative(ROOT, path.resolve(ROOT, parsed.path)) };
+      })
+    : undefined;
+  // Only looked up when the caller re-anchored. When they did NOT, the node
+  // bindings are inherited from the superseded memory (which is right — same
+  // code); when they DID, the resolved set is passed even if it is empty, so a
+  // correction cannot end up silently bound to the old memory's symbols after
+  // being explicitly pointed somewhere else.
+  const { rows } = anchors
+    ? await getPool().query(
+        "SELECT id FROM nodes WHERE repo_id = $1 AND type = 'file' AND path = ANY($2::text[])",
+        [REPO_ID, anchors.map((a) => path.resolve(ROOT, a.path))]
+      )
+    : { rows: [] };
+
+  const { experience, superseded } = await episodic.recordSupersedingExperience({
+    supersedes: input.supersedes,
+    task: input.task,
+    observation: input.observation,
+    action: input.action ?? `refine-memory: corrects ${input.supersedes}`,
+    result: input.result,
+    lessons: input.lessons ?? [input.observation],
+    relatedNodes: anchors ? rows.map((r) => r.id) : undefined,
+    anchors,
+    confidence: input.confidence ?? 0.8,
+  });
+
+  // Same text shape capture embeds its mined memories with, so the vector leg
+  // ranks a correction on the same footing as everything else in the corpus.
+  await graphStore.upsertExperienceEmbedding(
+    experience.id,
+    await retrieval.createFakeEmbedder().embed(capture.embeddedText(experience))
+  );
+
+  console.log(
+    JSON.stringify(
+      {
+        recorded: experience.id,
+        supersedes: superseded.id,
+        // What the CORRECTION ended up with, not what this call resolved —
+        // both are inherited from the superseded memory when omitted, and
+        // reporting the resolved count would print 0 for the common case.
+        anchors: experience.anchors?.length ?? 0,
+        boundTo: experience.relatedNodes.length,
+        // True when BOTH bindings came from the superseded memory — which is
+        // the same condition, since they are inherited together.
+        inheritedBindings: anchors === undefined,
+      },
+      null,
+      2
+    )
+  );
+  await closePool();
+}
+
+/** The whole supersede chain for one memory, oldest first — "what did we believe before". */
+async function history(id) {
+  if (!id) throw new Error("usage: self-memory.mjs history <experience-id>");
+  const chain = await episodic.memoryHistory(id);
+  console.log(
+    JSON.stringify(
+      chain.map((e) => ({
+        id: e.id,
+        timestamp: e.timestamp,
+        supersededBy: e.supersededBy,
+        task: e.task,
+        observation: e.observation.split("\n").slice(0, 6).join("\n"),
+      })),
       null,
       2
     )
@@ -308,11 +524,18 @@ const commands = {
   record: () => record(rest.join(" ")),
   scout: () => scout(rest[0]),
   stale,
+  suspects: () => suspects(rest[0]),
+  show: () => show(rest[0]),
+  verify: () => verify(rest[0], rest[1]),
+  supersede: () => supersede(rest[0]),
+  history: () => history(rest[0]),
   stats,
 };
 const run = commands[cmd];
 if (!run) {
-  console.error("usage: self-memory.mjs <sync|ask|record|scout|stale|stats>");
+  console.error(
+    "usage: self-memory.mjs <sync|ask|record|scout|stale|suspects|show|verify|supersede|history|stats>"
+  );
   process.exit(1);
 }
 run().catch((err) => {

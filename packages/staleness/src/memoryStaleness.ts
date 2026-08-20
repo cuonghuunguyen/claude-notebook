@@ -27,6 +27,7 @@ import {
   isPossiblyStale,
   matchAnchors,
   newestChangeDate,
+  stalenessAsOf,
   suspectReason,
   type Anchor,
   type ChangedPath,
@@ -124,9 +125,13 @@ export async function flagPossiblyStale(
     // `matchAnchors` builds the rename map from the whole change list, so an
     // anchor is followed through renames that happened inside the window.
     const matched = matchAnchors(anchors, changes);
-    const newerThanMemory = matched.filter((change) =>
-      isPossiblyStale(experience.timestamp, change.date)
-    );
+    // `stalenessAsOf`, not `experience.timestamp` (spec.md §24.6 / M13): once
+    // read-repair has checked a memory against the code and found it accurate,
+    // the commits it checked *past* must stop re-raising the flag — otherwise
+    // the repair is undone by the next read and "confirm it" is a no-op.
+    // Commits made after the verification still flag it.
+    const asOf = stalenessAsOf(experience);
+    const newerThanMemory = matched.filter((change) => isPossiblyStale(asOf, change.date));
     const lastCommitDate = newestChangeDate(newerThanMemory);
     const foundHere = newerThanMemory.length > 0;
     // Either source counts. `experience.suspect` is a persisted verdict from a

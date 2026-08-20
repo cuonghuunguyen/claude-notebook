@@ -114,6 +114,10 @@ node scripts/self-memory.mjs sync              # structure + our own git history
 node scripts/self-memory.mjs ask "why ...?"    # code files + the reasoning behind them
 node scripts/self-memory.mjs scout report.json # persist a distilled scout report
 node scripts/self-memory.mjs stale             # M12: re-flag what history has overtaken
+node scripts/self-memory.mjs suspects          # M13: the read-repair worklist
+node scripts/self-memory.mjs verify <id>       # M13: checked it, still accurate
+node scripts/self-memory.mjs supersede fix.json# M13: checked it, here is the correction
+node scripts/self-memory.mjs history <id>      # M13: what we used to believe
 node scripts/self-memory.mjs stats
 ```
 
@@ -138,10 +142,19 @@ line numbers, never node ids) and staleness is git-driven: `sync` and `stale`
 flag any memory whose anchored paths a *newer* commit touched, and `ask` tags it
 `possibly-stale — verify before trusting` in the context it hands you. A flagged
 memory is still returned — the flag is a warning, not a filter, because
-`WHY_MEMORY_SPIKE.md` priced missing context in agent turns too. Repairing a
-flagged memory (rather than just noticing it) is M13. Anchors are text, so all
-of this works identically for SQL, YAML, docs and any language — nothing here
-parses anything (`packages/staleness`).
+`WHY_MEMORY_SPIKE.md` priced missing context in agent turns too. Anchors are
+text, so all of this works identically for SQL, YAML, docs and any language —
+nothing here parses anything (`packages/staleness`).
+
+Since M13 a flag can be **settled** rather than just noticed. `ask` prints
+`/refine-memory <id>` under every flagged hit; that skill reads the anchored
+files and the commits since, then either records a correction that *supersedes*
+the memory (retrieval returns chain heads from then on; the old text stays
+queryable via `history`) or confirms it and clears the mark. Read the base rate
+before you use it: on this repo M12 flags ~27 of 31 memories, because capture
+anchors a mined memory to every file its commit touched. A flag means a file
+changed, never that the memory is wrong — check before you correct, and never
+verify to clear a backlog (`.claude/skills/refine-memory/SKILL.md`, spec §24.6).
 
 `sync` is idempotent — it skips commits already recorded, so re-run it after
 merging. It mines the **whole** repo, not just `packages/`: the commits that

@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { Experience } from "@cognitive-memory/core";
-import { appendEvent, getPool, recordExperience as storeExperience } from "@cognitive-memory/graph-store";
+import {
+  appendEvent,
+  getPool,
+  recordExperience as storeExperience,
+  type Queryable,
+  type TransactionClient,
+} from "@cognitive-memory/graph-store";
 
 /**
  * `id`/`timestamp` are generated here rather than required from the caller
@@ -26,7 +32,27 @@ export type RecordExperienceInput = Omit<Experience, "id" | "timestamp"> &
  * promotion pipeline (packages/semantic) reasons over the full history, not
  * a single "current" record.
  */
-export async function recordExperience(input: RecordExperienceInput): Promise<Experience> {
+export async function recordExperience(
+  input: RecordExperienceInput,
+  /**
+   * A caller-managed transaction to join, instead of opening one here.
+   *
+   * Same pattern (and same reason) as graph-store's `Queryable` parameters:
+   * M13's read-repair records a correction and links it to the memory it
+   * replaces, and those two writes must land together — a correction without
+   * its link is a second competing answer, not a missing detail. Passing the
+   * caller's client keeps this on ONE connection rather than borrowing a second
+   * one that would then wait on the first's row locks.
+   *
+   * Typed as a client rather than `Queryable` deliberately: `Queryable` is also
+   * satisfied by the pool, and passing the pool would silently mean "no BEGIN,
+   * possibly two different connections" — the exact non-atomicity this
+   * parameter exists to prevent.
+   *
+   * Omitted ⇒ unchanged behaviour: this function owns the transaction.
+   */
+  db?: TransactionClient
+): Promise<Experience> {
   const { writerSession, ...rest } = input;
   const experience: Experience = {
     ...rest,
@@ -38,11 +64,21 @@ export async function recordExperience(input: RecordExperienceInput): Promise<Ex
   // ExperienceRecorded event must commit together, or a failure between the
   // two would leave a real experience with no corresponding event —
   // undetectable until a rebuild-from-events replay silently drops it.
+  const write = async (queryable: Queryable): Promise<Experience> => {
+    const saved = await storeExperience(experience, queryable, { writerSession });
+    await appendEvent(
+      { eventType: "ExperienceRecorded", payload: { experience: saved } },
+      queryable
+    );
+    return saved;
+  };
+
+  if (db) return write(db);
+
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
-    const saved = await storeExperience(experience, client, { writerSession });
-    await appendEvent({ eventType: "ExperienceRecorded", payload: { experience: saved } }, client);
+    const saved = await write(client);
     await client.query("COMMIT");
     return saved;
   } catch (err) {

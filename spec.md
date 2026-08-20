@@ -1168,3 +1168,56 @@ retention signal.
   timestamps already answer "what did we believe at time X" by walking a
   chain; tiers answer the different question bi-temporality doesn't —
   what is worth keeping and ranking up. (ROADMAP M16.)
+
+### 24.6 Read-Repair Mechanics (realizes §24.2 decision 4 — ROADMAP M13)
+
+§24.2 decision 4 fixed the semantics: "a refine step re-checks a retrieved
+memory against the current code/history and, if stale, writes a corrected
+memory superseding the old one. Retrieval returns chain heads by default."
+This section records the four choices M13 had to make to build that, so
+they are decided rather than re-derived. It extends §24.2.3 and realizes
+§13's conflict resolution; it relitigates nothing.
+
+1. **The link points forward: `superseded_by` on the retired memory.**
+   Not `supersedes` on the correction. Both express the same relation, but
+   the question on the hot path is "is this row still the current answer?",
+   asked of every candidate row in three search legs. Forward, that is a
+   null test on the row already being scanned; backward, it is an anti-join.
+   A single forward column also makes chains non-forking by construction —
+   one memory, one successor, one column to name it in — so "chain head"
+   is well defined as `superseded_by IS NULL` without a uniqueness
+   constraint.
+
+2. **Superseded memories are excluded from ALL default retrieval, not just
+   by-meaning.** By-node, by-task and the three search legs share one
+   visibility predicate with §18's cold rule. A retracted memory still
+   reachable through a side door is retracted in name only — and by-node /
+   by-task are what `runPipeline` and the promotion pipeline read. History
+   stays queryable by explicit opt-in (`includeSuperseded`) and by walking
+   a chain from any member; nothing is deleted, ever.
+
+3. **Verification is an instant, not a flag.** §24.2.3's staleness verdict
+   is *recomputed from git at read time* as well as persisted at sync
+   time, so read-repair's "I checked; it is still accurate" outcome cannot
+   be expressed by clearing `suspect`: the commit that raised the flag
+   stays newer than the memory's write instant forever, and the next read
+   re-derives the identical verdict. A memory therefore carries
+   `verified_at`, and the staleness test measures from
+   `max(timestamp, verified_at)`. This is not suppression — commits made
+   after the verification flag the memory again, which is the point.
+
+4. **A supersede is eventful; a verification is not.** §14's event log
+   gains `ExperienceSuperseded`. The test applied is what a
+   rebuild-from-events would do without it: dropping a supersede link puts
+   *retracted knowledge back into the default retrieval path*, so the
+   rebuilt graph answers questions with claims the system has withdrawn.
+   Dropping a `verified_at` merely re-raises a flag, which is conservative
+   and self-healing — the same test `cold` (§18) and `suspect` (§24.2.3)
+   already fail, and the reason neither of them is eventful either.
+
+**Where repair happens is unchanged from §24.2.3: at read time, driven by
+a caller.** There is no background refine pass and none is planned. The
+step only has the information it needs when something is actually reading
+the code the memory describes, and M12's measured 24-of-27 flag rate on
+this repository means an unattended pass would be mostly rewriting
+memories that were never wrong.

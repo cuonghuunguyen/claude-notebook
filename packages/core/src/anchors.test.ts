@@ -12,6 +12,7 @@ import {
   newestChangeDate,
   parseAnchor,
   renameMapFrom,
+  stalenessAsOf,
   suspectReason,
   type Anchor,
   type ChangedPath,
@@ -343,5 +344,55 @@ describe("suspectReason", () => {
 
   it("degrades to the flag text when there is nothing to name", () => {
     expect(suspectReason([])).toContain("possibly-stale");
+  });
+});
+
+/**
+ * spec.md §24.6 / M13: the instant staleness is measured from.
+ *
+ * These are the cases that decide whether read-repair's "still accurate"
+ * outcome means anything at all — if `stalenessAsOf` ever returns the write
+ * instant for a verified memory, `flagPossiblyStale` re-raises the flag the
+ * repair just cleared on the very next read.
+ */
+describe("stalenessAsOf", () => {
+  const written = "2026-01-01T00:00:00Z";
+
+  it("is the write instant when the memory was never verified", () => {
+    expect(stalenessAsOf({ timestamp: written })).toBe(written);
+  });
+
+  it("moves to the verification instant once read-repair has checked it", () => {
+    const verified = "2026-03-01T00:00:00Z";
+    expect(stalenessAsOf({ timestamp: written, verifiedAt: verified })).toBe(verified);
+  });
+
+  it("makes a commit older than the verification stop counting as stale-making", () => {
+    const verified = "2026-03-01T00:00:00Z";
+    const commitBetween = "2026-02-01T00:00:00Z";
+    // The whole point: this commit IS newer than the memory, and would flag it
+    // forever without the verification stamp.
+    expect(isPossiblyStale(written, commitBetween)).toBe(true);
+    expect(isPossiblyStale(stalenessAsOf({ timestamp: written, verifiedAt: verified }), commitBetween)).toBe(
+      false
+    );
+  });
+
+  it("still flags a commit made AFTER the verification — verifying is not suppressing", () => {
+    const verified = "2026-03-01T00:00:00Z";
+    const commitAfter = "2026-04-01T00:00:00Z";
+    expect(
+      isPossiblyStale(stalenessAsOf({ timestamp: written, verifiedAt: verified }), commitAfter)
+    ).toBe(true);
+  });
+
+  it("never lets a verification OLDER than the memory make it look more stale", () => {
+    // Clock skew or a replayed verification. Taking the max rather than
+    // preferring verifiedAt is what stops this from re-aging the memory.
+    expect(stalenessAsOf({ timestamp: written, verifiedAt: "2025-01-01T00:00:00Z" })).toBe(written);
+  });
+
+  it("falls back to the write instant when the verification stamp is unparseable", () => {
+    expect(stalenessAsOf({ timestamp: written, verifiedAt: "not-a-date" })).toBe(written);
   });
 });

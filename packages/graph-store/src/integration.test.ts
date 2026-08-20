@@ -17,7 +17,7 @@ import {
   markEdgesStaleForNode,
   upsertEdgeByTriple,
 } from "./edges.js";
-import { queryExperiencesByNode, recordExperience } from "./experiences.js";
+import { queryExperiencesByNode, recordExperience, supersedeExperience } from "./experiences.js";
 import { appendEvent, listEventsSince } from "./events.js";
 import { replayEvents, wipeMaterializedGraph } from "./materializer.js";
 
@@ -433,6 +433,30 @@ d("graph-store integration", () => {
     });
     await appendEvent({ eventType: "ExperienceRecorded", payload: { experience } });
 
+    // A correction that retracts it (spec.md §24.6 / M13). This is the case
+    // that forced `ExperienceSuperseded` into §14's event vocabulary: a replay
+    // that could not reconstruct the link would put a memory the system has
+    // WITHDRAWN back into the default retrieval path — the rebuilt graph would
+    // answer with retracted knowledge, not merely lose metadata.
+    const correction = await recordExperience({
+      id: randomUUID(),
+      task: experience.task,
+      observation: "Correction: B's behavior changed back",
+      relatedNodes: [fromId, toId],
+      confidence: 0.8,
+      timestamp: now,
+    });
+    await appendEvent({ eventType: "ExperienceRecorded", payload: { experience: correction } });
+    const link = await supersedeExperience(experience.id, correction.id);
+    await appendEvent({
+      eventType: "ExperienceSuperseded",
+      payload: {
+        oldId: experience.id,
+        newId: correction.id,
+        supersededAt: link.supersededAt,
+      },
+    });
+
     // Omit fields the materializer can't reproduce byte-for-byte on
     // replay: createdAt/updatedAt are server-generated via `now()` on
     // every write (see nodes.ts/edges.ts — never taken from the caller's
@@ -449,10 +473,10 @@ d("graph-store integration", () => {
     const preNodeA = normalizeNode(await getNodeById(fromId));
     const preNodeB = normalizeNode(await getNodeById(toId));
     const preEdge = normalizeEdge(await getEdgeByTriple(fromId, toId, "calls"));
-    const preExperiences = (await queryExperiencesByNode(fromId, { includeCold: true })).map((e) => ({
-      ...e,
-      timestamp: undefined,
-    }));
+    const preExperiences = (
+      await queryExperiencesByNode(fromId, { includeCold: true, includeSuperseded: true })
+    ).map((e) => ({ ...e, timestamp: undefined, supersededAt: undefined }));
+    const preHeads = (await queryExperiencesByNode(fromId, { includeCold: true })).map((e) => e.id);
 
     await wipeMaterializedGraph();
     await replayEvents(await listEventsSince(replayFromId));
@@ -460,10 +484,10 @@ d("graph-store integration", () => {
     const postNodeA = normalizeNode(await getNodeById(fromId));
     const postNodeB = normalizeNode(await getNodeById(toId));
     const postEdge = normalizeEdge(await getEdgeByTriple(fromId, toId, "calls"));
-    const postExperiences = (await queryExperiencesByNode(fromId, { includeCold: true })).map((e) => ({
-      ...e,
-      timestamp: undefined,
-    }));
+    const postExperiences = (
+      await queryExperiencesByNode(fromId, { includeCold: true, includeSuperseded: true })
+    ).map((e) => ({ ...e, timestamp: undefined, supersededAt: undefined }));
+    const postHeads = (await queryExperiencesByNode(fromId, { includeCold: true })).map((e) => e.id);
 
     expect(postNodeA).toEqual(preNodeA);
     expect(postNodeA?.name).toBe("aRenamed"); // the CodeChanged replay actually applied, not just the original SymbolAdded
@@ -471,5 +495,10 @@ d("graph-store integration", () => {
     expect(postEdge).toEqual(preEdge);
     expect(postEdge?.status).toBe("invalid"); // the RelationInvalidated replay actually applied
     expect(postExperiences).toEqual(preExperiences);
+    // The supersede link came back with them: the retracted memory is still
+    // out of the default path after the rebuild, not resurrected by it.
+    expect(postHeads).toEqual(preHeads);
+    expect(postHeads).toContain(correction.id);
+    expect(postHeads).not.toContain(experience.id);
   });
 });

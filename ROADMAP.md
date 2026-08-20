@@ -26,7 +26,7 @@ This checklist is the source of truth for what's done — see
   and the M10 section note below)
 - [x] M11 — Knowledge Layer as Product (by-meaning retrieval + capture — git-history mining AND session scout-report distillation — shipped into `packages/`)
 - [x] M12 — Text Anchors & Commit-Triggered Staleness (git replaces the AST for anchoring and staleness)
-- [ ] M13 — Refine-Memory Skill (read-repair + `supersedes` links)
+- [x] M13 — Refine-Memory Skill (read-repair + `supersedes` links)
 - [x] M14 — Knowledge-Link Edges (spike: memory-to-memory traversal, go/no-go on a measured win) — **outcome: NO-GO on integrating; `follows_up` a hard no. See BENCHMARKS.md**
 - [ ] M15 — Decommission the Structural Graph (gated on M11–M14 outcomes)
 - [x] M16 — Memory Tiers: short/mid/long-term with access-driven promotion (extends §7/§18)
@@ -41,6 +41,7 @@ migrations/
   0001_init.sql
   0004_experiences_content_search.sql   # M11: knowledge is searchable by its own content
   0006_experience_anchors.sql           # M12: text anchors + commit-triggered staleness
+  0007_supersede_chains.sql             # M13: supersede links + verification stamps
 packages/
   core/                       # shared types (Node, Edge, Provenance, Experience) mirrored from spec.md §3-§8
   graph-store/                # Postgres client, migration runner, typed CRUD for nodes/edges/experiences/events
@@ -491,6 +492,23 @@ structural node ids, and staleness is driven by git, not by AST diffing.
 - Integration: supersede chain of length 3 returns only the head.
 - Dogfood evidence in the PR: the skill run against one genuinely stale
   memory in this repo's own graph, before/after shown.
+
+**Shipped.** Migration 0007 adds `superseded_by` / `superseded_at` /
+`verified_at`; one shared visibility predicate excludes superseded memories
+from *every* experience query (not only the by-meaning legs), with
+`includeSuperseded` for explicit history; `packages/episodic`'s
+`recordSupersedingExperience` writes the correction and its link in one
+transaction; `.claude/skills/refine-memory` is the read-repair protocol and
+`self-memory.mjs` gained `suspects` / `show` / `verify` / `supersede` /
+`history` for it to drive.
+
+One decision M13 had to make that the criteria above do not name, recorded
+in spec.md §24.6: **verification is an instant, not a flag**. §24.2.3's
+verdict is recomputed from git at read time as well as persisted, so
+"just clear the mark if accurate" cannot be a flag flip — the commit that
+raised it stays newer than the memory forever and the next read re-derives
+the same verdict. A memory carries `verified_at` and staleness measures from
+`max(timestamp, verified_at)`.
 
 ## M14 — Knowledge-Link Edges (spike — go/no-go, not a feature) (spec §24)
 

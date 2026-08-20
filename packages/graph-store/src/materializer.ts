@@ -1,6 +1,6 @@
 import { getPool } from "./db.js";
 import { markEdgeInvalid, markEdgesStaleForNode, upsertEdgeByTriple } from "./edges.js";
-import { recordExperience } from "./experiences.js";
+import { recordExperience, supersedeExperience } from "./experiences.js";
 import type { MemoryEvent } from "./events.js";
 import { listEventsSince } from "./events.js";
 import { markNodeDeleted, upsertNode } from "./nodes.js";
@@ -63,6 +63,19 @@ async function applyEvent(event: MemoryEvent): Promise<void> {
     case "ExperienceRecorded": {
       const { experience } = event.payload as { experience: Parameters<typeof recordExperience>[0] };
       await recordExperience(experience);
+      return;
+    }
+    case "ExperienceSuperseded": {
+      // Idempotent by construction: `supersedeExperience` treats a link that
+      // already points at the same successor as a no-op, so replaying the same
+      // event twice (or replaying onto a database that already has the link)
+      // is safe rather than an error.
+      const { oldId, newId, supersededAt } = event.payload as {
+        oldId: string;
+        newId: string;
+        supersededAt?: string;
+      };
+      await supersedeExperience(oldId, newId, { supersededAt });
       return;
     }
     case "ExperiencePromoted":

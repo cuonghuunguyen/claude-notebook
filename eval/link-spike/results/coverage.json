@@ -1,0 +1,48 @@
+{
+  "coverage": {
+    "corpusRevision": "870433f3",
+    "commitsScanned": 376,
+    "memoryCommits": 137,
+    "candidateLinks": 338,
+    "candidateLinksByRelation": {
+      "reverts": 4,
+      "shares_issue": 41,
+      "follows_up": 293
+    },
+    "memoryToMemoryLinks": 113,
+    "memoryToMemoryByRelation": {
+      "reverts": 1,
+      "shares_issue": 33,
+      "follows_up": 79
+    },
+    "memoriesWithAtLeastOneLink": 0.6934306569343066
+  },
+  "precision": {
+    "reverts": {
+      "labelled": 1,
+      "related": 1,
+      "precision": 1
+    },
+    "shares_issue": {
+      "labelled": 12,
+      "related": 12,
+      "precision": 1
+    },
+    "follows_up": {
+      "labelled": 12,
+      "related": 0,
+      "precision": 0
+    },
+    "overall": {
+      "labelled": 25,
+      "related": 13,
+      "precision": 0.52
+    },
+    "populationWeighted": {
+      "note": "per-relation precision re-weighted by each relation's share of the memory-to-memory edge population; this is the number to quote as the miner's precision",
+      "edges": 113,
+      "estimatedRelatedEdges": 34,
+      "precision": 0.301
+    }
+  }
+}

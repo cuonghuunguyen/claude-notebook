@@ -27,7 +27,7 @@ This checklist is the source of truth for what's done — see
 - [x] M11 — Knowledge Layer as Product (by-meaning retrieval + capture — git-history mining AND session scout-report distillation — shipped into `packages/`)
 - [ ] M12 — Text Anchors & Commit-Triggered Staleness (git replaces the AST for anchoring and staleness)
 - [ ] M13 — Refine-Memory Skill (read-repair + `supersedes` links)
-- [ ] M14 — Knowledge-Link Edges (spike: memory-to-memory traversal, go/no-go on a measured win)
+- [x] M14 — Knowledge-Link Edges (spike: memory-to-memory traversal, go/no-go on a measured win) — **outcome: NO-GO on integrating; `follows_up` a hard no. See BENCHMARKS.md**
 - [ ] M15 — Decommission the Structural Graph (gated on M11–M14 outcomes)
 - [ ] M16 — Memory Tiers: short/mid/long-term with access-driven promotion (extends §7/§18)
 
@@ -513,6 +513,39 @@ method.
 - A written go/no-go in `BENCHMARKS.md` with the measured before/after. A
   null result is a valid outcome: log it honestly and do NOT integrate
   traversal into the pipeline — per the repo rule, no fabricated rows.
+
+**Outcome (shipped 2026-08-20, spike lives in `eval/link-spike`): NO-GO.**
+Nothing was integrated into `packages/` or `runPipeline`, and no migration was
+added. The measured result, in full, is the go/no-go section of
+`BENCHMARKS.md`; the short version:
+
+- Budget-fair A/B (K=5, 10 two-slot questions, corpus `colinhacks/zod @
+  870433f3`): by-meaning 0.60 → linked 1-hop **0.90** bothSlots. A
+  random-rewired control spending the *same* budget stays at 0.60 across 6
+  seeds, so the neighbour's identity — not the extra memory — is what acts.
+- But only 3 of 10 questions flip (sign test **p = 0.125**), and in **all
+  three** the by-meaning context already cited the missing commit's PR number
+  in prose. The win is automatic dereference of an existing pointer plus a
+  ~3× budget saving, **not** recovery of knowledge absent from the source.
+  M14's strong hypothesis is therefore unsupported on this corpus.
+- Hand-checked precision (25 labelled pairs): `reverts` 1.00 (n=1),
+  `shares_issue` 1.00 (n=12), `follows_up` **0.00 (n=12)**. `follows_up` is
+  70% of all mined edges and contributes nothing to the A/B either — a
+  strong-relations-only arm matches the full one. Do not build it. Quote the
+  **population-weighted 0.301**, not the 0.52 stratified mean.
+- The two surviving relations cover only **27%** of memories (vs 69% for all
+  three), and `shares_issue` alone is 26.3% of that — `reverts` contributes a
+  single edge. A sparse high-precision layer, not general traversal.
+- Two threats an independent review pass found, which are why this is a no-go
+  rather than a narrow go: no gold slot sits at by-meaning ranks **3-6**, so
+  the slots the link arm displaces were worthless *by construction* and the
+  "equal budget" trade-off was never actually priced; and the baseline ran with
+  **0 embeddings**, i.e. 2 of `queryByMeaning`'s 3 legs. Both are written up as
+  T1/T2 in BENCHMARKS.md with the fix each would need.
+
+**Consequence for M15:** treat M14 as *no evidence for* a memory-graph
+traversal layer. It is not evidence against by-meaning retrieval, and it does
+not by itself justify keeping the structural graph either.
 
 ## M15 — Decommission the Structural Graph (gated on M11–M14) (spec §24)
 

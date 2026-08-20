@@ -1,0 +1,160 @@
+{
+  "corpus": "colinhacks/zod @ 870433f3, scope packages/zod/src/v4, 400-commit window (376 commits after capture's /tests/ filter, 137 of them recorded as memories)",
+  "sample": "results/sample.json (seeded, 12 per relation; the reverts pool held only 1 memory-to-memory edge, so that stratum is 1)",
+  "labeller": "the M14 session agent, by reading both commits' full messages with `git show -s` — not by reading the miner's own evidence string",
+  "criterion": "related = true when one commit's content EXPLAINS, CAUSES, UNDOES or DIRECTLY EXTENDS the other's — i.e. a reader who retrieved one memory is better off being shown the other. Merely sharing a file, a release train or a theme is false.",
+  "labels": [
+    {
+      "pair": "23edf484->91a7d0d1",
+      "relation": "reverts",
+      "related": true,
+      "why": "23edf484 is the literal revert of 91a7d0d1 (base64 whitespace rejection), and its body explains the revert was procedural — the change had landed on main by accident. Neither half is recoverable from the working tree."
+    },
+
+    {
+      "pair": "c9ec89e0->9f0a3d81",
+      "relation": "shares_issue",
+      "related": true,
+      "why": "c9ec89e0 removes the $constructor seal and the per-key WeakSet that 9f0a3d81 (#6429) introduced, and says so in its first sentence. Undoes the mechanism, keeps the behaviour."
+    },
+    {
+      "pair": "7378e7cd->3d93a7d5",
+      "relation": "shares_issue",
+      "related": true,
+      "why": "7378e7cd states 'mac arrived with #5440 (MAC validation) and was missing from 49 [locales]'. 3d93a7d5 is #5440 — the later commit exists to close a gap the earlier one opened."
+    },
+    {
+      "pair": "6074828e->611bd762",
+      "relation": "shares_issue",
+      "related": true,
+      "why": "6074828e's body reverts 'fix(mini): correct merge signature (closes #6302)' off its branch with 'they belong in their own PRs'; 611bd762 is that split-out PR closing #6302. The pair IS the split."
+    },
+    {
+      "pair": "c2be4f81->b6066b3e",
+      "relation": "shares_issue",
+      "related": true,
+      "why": "b6066b3e aligned object and tuple optionality via the optout flag; c2be4f81 continues the same optin/optout generalisation and cites #5661. Consecutive steps in one redesign."
+    },
+    {
+      "pair": "584b1089->91a7d0d1",
+      "relation": "shares_issue",
+      "related": true,
+      "why": "Byte-identical body and file set: 91a7d0d1 is the copy pushed to main by accident, 584b1089 the same change landed through its PR. Strictly the same change."
+    },
+    {
+      "pair": "4d6b5cd3->6074828e",
+      "relation": "shares_issue",
+      "related": true,
+      "why": "6074828e reverted 'fix: handle BigInt default values in toJSONSchema (closes #6209)' off its branch to land separately; 4d6b5cd3 is that separate landing, routing unrepresentable defaults through the hook. The pair is the split."
+    },
+    {
+      "pair": "9d20fdc3->02c2baf7",
+      "relation": "shares_issue",
+      "related": true,
+      "why": "9d20fdc3 opens '#5929 replaced preprocess()'s return type … so the annotated preprocessor argument stopped reaching z.input'. 02c2baf7 is #5929. Regression caused by."
+    },
+    {
+      "pair": "bd6619c0->fd074106",
+      "relation": "shares_issue",
+      "related": true,
+      "why": "fd074106 reordered override ahead of the unrepresentable error to escape the all-or-nothing 'any'; bd6619c0 (#6380) adds the function form of unrepresentable for the same limitation and cites #6391. Consecutive steps in one design."
+    },
+    {
+      "pair": "78b523f0->973b1b44",
+      "relation": "shares_issue",
+      "related": true,
+      "why": "Per 2abc9e05: '#6409 and #6133 landed seven minutes apart taking opposite lines'. 973b1b44 is #6409 and 78b523f0 is #6133 — reading one without the other gives a false picture of what the emitter does."
+    },
+    {
+      "pair": "c2be4f81->1cab6938",
+      "relation": "shares_issue",
+      "related": true,
+      "why": "1cab6938 introduced the payload flag ($ZodCatch marking a substitution); c2be4f81 fixes handlePipeResult dropping that flag across a pipe boundary and cites #5939 for it. Direct extension."
+    },
+    {
+      "pair": "eb4682c9->2abc9e05",
+      "relation": "shares_issue",
+      "related": true,
+      "why": "2abc9e05 is the docs commit written because nothing near the emitter recorded that objectProcessor reads static optin; eb4682c9 is the tuple-side application of exactly that decision. Same decision, two commits."
+    },
+    {
+      "pair": "9f0a3d81->b1077f05",
+      "relation": "shares_issue",
+      "related": true,
+      "why": "9f0a3d81's first line: 'Fixes two regressions from #6415'. b1077f05 is #6415. Textbook regression-caused-by."
+    },
+
+    {
+      "pair": "fbe8ad1b->02c2baf7",
+      "relation": "follows_up",
+      "related": false,
+      "why": "catchProcessor rethrow gating vs pipe optin inheritance. Same file, three days apart; neither message references the other."
+    },
+    {
+      "pair": "ca246d26->92f47984",
+      "relation": "follows_up",
+      "related": false,
+      "why": "A datetime alternation-branch fix and a repo-wide comment-style lint chore. The chore touched nearly every file, which is exactly why it links to everything."
+    },
+    {
+      "pair": "87ffeb0f->898c4461",
+      "relation": "follows_up",
+      "related": false,
+      "why": "The optin ladder's middle rung vs deduplicating two URL-validation implementations. Both edit compile.ts within four hours; neither explains the other."
+    },
+    {
+      "pair": "a1904fc2->0a76f3d7",
+      "relation": "follows_up",
+      "related": false,
+      "why": "Reporting a date origin on range issues has nothing to do with adding z.creditCard(). Shared checks.ts is a hot-file coincidence."
+    },
+    {
+      "pair": "faf33a28->7708d447",
+      "relation": "follows_up",
+      "related": false,
+      "why": "Surfacing @deprecated on re-exported aliases vs lazy ZodError construction. Shared classic/errors.ts, unrelated content."
+    },
+    {
+      "pair": "9a7ecc35->0a76f3d7",
+      "relation": "follows_up",
+      "related": false,
+      "why": "RFC 3339 numeric offsets in the date-time mapping vs the creditCard format. Same day, same area of the tree, different problems."
+    },
+    {
+      "pair": "a38ab4a8->fa77a4d7",
+      "relation": "follows_up",
+      "related": false,
+      "why": "A discriminated-union propValues fix vs the introduction of z.compile. a38ab4a8 touches compile.ts only because compile.ts exists; the compile feature does not explain the discriminator rule."
+    },
+    {
+      "pair": "92f47984->784e5c26",
+      "relation": "follows_up",
+      "related": false,
+      "why": "Comment-style lint chore vs making the default import tree-shake locales. Unrelated."
+    },
+    {
+      "pair": "4c27fe87->c8f06d36",
+      "relation": "follows_up",
+      "related": false,
+      "why": "Both improve English error messages and both edit locales/en.ts hours apart, but they fix different issues (xor multi-match wording vs infinite-number wording). Thematic adjacency, not one thread."
+    },
+    {
+      "pair": "e25b68e1->f238fbd2",
+      "relation": "follows_up",
+      "related": false,
+      "why": "Tree-shaking three dead declarations vs removing exponential backtracking from the emoji regex. Shared regexes.ts only."
+    },
+    {
+      "pair": "2a5164f5->0a76f3d7",
+      "relation": "follows_up",
+      "related": false,
+      "why": "RFC 1035 domain length limits vs the creditCard format. Shared regexes.ts, 1.3h apart, unrelated."
+    },
+    {
+      "pair": "3c2dee9e->d6ca12ae",
+      "relation": "follows_up",
+      "related": false,
+      "why": "instanceof property checks vs recursive getter inference in discriminatedUnion. Shared core/api.ts, unrelated."
+    }
+  ]
+}

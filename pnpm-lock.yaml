@@ -64,6 +64,34 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  eval/link-spike:
+    dependencies:
+      '@cognitive-memory/capture':
+        specifier: workspace:*
+        version: link:../../packages/capture
+      '@cognitive-memory/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@cognitive-memory/episodic':
+        specifier: workspace:*
+        version: link:../../packages/episodic
+      '@cognitive-memory/graph-store':
+        specifier: workspace:*
+        version: link:../../packages/graph-store
+      '@cognitive-memory/retrieval':
+        specifier: workspace:*
+        version: link:../../packages/retrieval
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
   eval/retrieval:
     dependencies:
       '@cognitive-memory/core':

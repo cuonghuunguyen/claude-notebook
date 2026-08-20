@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "outDir": "dist", "rootDir": "src" },
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/capture" },
+    { "path": "../../packages/graph-store" },
+    { "path": "../../packages/retrieval" },
+    { "path": "../../packages/episodic" }
+  ],
+  "include": ["src"]
+}

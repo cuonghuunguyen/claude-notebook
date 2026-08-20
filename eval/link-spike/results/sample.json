@@ -1,0 +1,890 @@
+{
+  "coverage": {
+    "corpusRevision": "870433f3",
+    "commitsScanned": 376,
+    "memoryCommits": 137,
+    "candidateLinks": 338,
+    "candidateLinksByRelation": {
+      "reverts": 4,
+      "shares_issue": 41,
+      "follows_up": 293
+    },
+    "memoryToMemoryLinks": 113,
+    "memoryToMemoryByRelation": {
+      "reverts": 1,
+      "shares_issue": 33,
+      "follows_up": 79
+    },
+    "memoriesWithAtLeastOneLink": 0.6934306569343066
+  },
+  "sampledPerRelation": 12,
+  "sample": [
+    {
+      "pair": "23edf484->91a7d0d1",
+      "relation": "reverts",
+      "evidence": "\"This reverts commit 91a7d0d1e0d3c8338e9fd92cf819cded87e8973f\" in 23edf484 (\"Revert \"fix(v4): reject whitespace in z.base64() to close atob bypass\"\")",
+      "later": {
+        "sha": "23edf484",
+        "date": "2026-04-28T09:51:16-07:00",
+        "subject": "Revert \"fix(v4): reject whitespace in z.base64() to close atob bypass\"",
+        "body": "This reverts commit 91a7d0d1e0d3c8338e9fd92cf819cded87e8973f.\n\nThat commit landed on main accidentally — it was meant to be pushed to a\nnew branch but the worktree's upstream tracking pointed at main, so the\npush went there. Reverting so the change can go through a normal PR.\nThe work is preserved on the `base64-whitespace` branch and will be\nre-applied via PR.",
+        "files": [
+          "packages/zod/src/v4/core/schemas.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "91a7d0d1",
+        "date": "2026-04-28T09:44:36-07:00",
+        "subject": "fix(v4): reject whitespace in z.base64() to close atob bypass",
+        "body": "atob() strips ASCII whitespace before validating, which let strings like\n\"123 \" sneak past the length-mod-4 short-circuit in isValidBase64. Reject\nwhitespace explicitly before the length check so the runtime matches the\nstrict regex we already advertise via bag.patterns / contentEncoding.\n\nRefs #5865.",
+        "files": [
+          "packages/zod/src/v4/core/schemas.ts"
+        ]
+      }
+    },
+    {
+      "pair": "4d6b5cd3->6074828e",
+      "relation": "shares_issue",
+      "evidence": "both cite #6209: 4d6b5cd3 (\"fix(json-schema): route unrepresentable default values through `unrepresentable`\") and 6074828e (\"fix(v4): make fromJSONSchema propertyNames compose with the other object keywords (#6411)\")",
+      "later": {
+        "sha": "4d6b5cd3",
+        "date": "2026-08-16T15:14:36-07:00",
+        "subject": "fix(json-schema): route unrepresentable default values through `unrepresentable`",
+        "body": "A bigint `.default()` crashed `toJSONSchema` with a raw `JSON.stringify` TypeError before any hook could run. `defaultProcessor` was the one unrepresentable site that never called `handleUnrepresentable`, so neither `override` nor an `unrepresentable` handler could reach it — the only way through was patching `_zod.def.defaultValue`.\n\nDetect a bigint anywhere in the default value and route it thro…",
+        "files": [
+          "packages/zod/src/v4/core/json-schema-processors.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "6074828e",
+        "date": "2026-08-13T19:31:40-07:00",
+        "subject": "fix(v4): make fromJSONSchema propertyNames compose with the other object keywords (#6411)",
+        "body": "* fix: handle BigInt default values in toJSONSchema (closes #6209)\n\n* fix: support format hostname in fromJSONSchema (closes #6304)\n\n* fix(mini): correct merge signature to accept a plain shape (closes #6302)\n\n* fix(fromJSONSchema): propertyNames enum keys should not be required (closes #6323)\n\n* chore: remove scratch file\n\n* Revert the unrelated fixes stacked on this branch\n\nThis branch carried f…",
+        "files": [
+          "packages/zod/src/v4/classic/from-json-schema.ts"
+        ]
+      }
+    },
+    {
+      "pair": "9d20fdc3->02c2baf7",
+      "relation": "shares_issue",
+      "evidence": "both cite #5929: 9d20fdc3 (\"fix(v4): preserve z.preprocess input narrowing (#5967)\") and 02c2baf7 (\"Make z.preprocess defer optionality to inner schema (#5929)\")",
+      "later": {
+        "sha": "9d20fdc3",
+        "date": "2026-08-13T23:38:38+05:30",
+        "subject": "fix(v4): preserve z.preprocess input narrowing (#5967)",
+        "body": "#5929 replaced `preprocess()`'s return type `ZodPipe<ZodTransform<A, B>, U>` with\n`ZodPreprocess<U>`, which pins `def.in` to a bare `$ZodTransform`. Its `I` slot\ndefaulted to `unknown`, so `$ZodPipeInternals` derived the pipe input as `unknown`\nand the annotated preprocessor argument stopped reaching `z.input`.\n\nThread the argument type through as a second generic on `$ZodPreprocess` and its\ndef/i…",
+        "files": [
+          "packages/zod/src/v4/classic/schemas.ts",
+          "packages/zod/src/v4/core/schemas.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "02c2baf7",
+        "date": "2026-05-01T12:35:16-07:00",
+        "subject": "Make z.preprocess defer optionality to inner schema (#5929)",
+        "body": "* Make z.preprocess defer optionality to inner schema (#5917)\n\n`z.preprocess(fn, schema)` desugared to `pipe(transform(fn), schema)`,\nso the resulting pipe's `optin` was inherited from `ZodTransform`\n(undefined) instead of from the inner schema. When the inner schema was\nitself optional and the preprocess sat as an object property, the\nobject compiler took the `!isOptionalIn` branch and synthesize…",
+        "files": [
+          "packages/zod/src/v4/classic/schemas.ts",
+          "packages/zod/src/v4/core/json-schema-processors.ts",
+          "packages/zod/src/v4/core/schemas.ts",
+          "packages/zod/src/v4/core/to-json-schema.ts"
+        ]
+      }
+    },
+    {
+      "pair": "c9ec89e0->9f0a3d81",
+      "relation": "shares_issue",
+      "evidence": "both cite #6429: c9ec89e0 (\"perf(core): drop the seal and the per-key WeakSet from the lazy internals (#6435)\") and 9f0a3d81 (\"fix(core): restore defineLazy semantics lost in the internals move (#6429)\")",
+      "later": {
+        "sha": "c9ec89e0",
+        "date": "2026-08-19T07:36:41-07:00",
+        "subject": "perf(core): drop the seal and the per-key WeakSet from the lazy internals (#6435)",
+        "body": "* perf(core): drop the seal and the per-key WeakSet from the lazy internals\n\n#6429 restored two behaviours with two mechanisms: a $constructor-level\nseal, so a derived constructor could replace what its base installed on\nthe shared prototype, and a WeakSet per key to break recursive reads.\nBoth cost bundle size, which lands hardest on zod/mini.\n\nOverride only has to be legal inside a single init c…",
+        "files": [
+          "packages/zod/src/v4/core/core.ts",
+          "packages/zod/src/v4/core/util.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "9f0a3d81",
+        "date": "2026-08-16T20:34:52-07:00",
+        "subject": "fix(core): restore defineLazy semantics lost in the internals move (#6429)",
+        "body": "Fixes two regressions from #6415. A derived constructor could no longer override what its base installed on the shared `_zod` prototype, so `z.exactOptional(...)` carried a stray `undefined` in `values` and `z.templateLiteral` accepted input it should reject. And a value resolved through a recursion break was memoized, freezing whichever node was visited first at its mid-construction value.\n\nA pro…",
+        "files": [
+          "packages/zod/src/v4/core/core.ts",
+          "packages/zod/src/v4/core/util.ts"
+        ]
+      }
+    },
+    {
+      "pair": "7378e7cd->3d93a7d5",
+      "relation": "shares_issue",
+      "evidence": "both cite #5440: 7378e7cd (\"fix(locales): backfill the mac and Sizable.map gaps, and pin dictionary parity (#6427)\") and 3d93a7d5 (\"feat: MAC address validation in v4 and mini (#5440)\")",
+      "later": {
+        "sha": "7378e7cd",
+        "date": "2026-08-16T19:25:28-07:00",
+        "subject": "fix(locales): backfill the mac and Sizable.map gaps, and pin dictionary parity (#6427)",
+        "body": "Three keys had drifted the same way credit_card did in #6424: a feature\nshipped en and never backfilled the rest. Sizable.map arrived with #5316\n(ZodMap sizing) and was missing from 43 of 60 locales; mac arrived with #5440\n(MAC validation) and was missing from 49; Hebrew alone also lacked uuidv4,\nuuidv6 and template_literal.\n\nOnly some of that is user-visible, and the distinction is worth recordin…",
+        "files": [
+          "packages/zod/src/v4/locales/ar.ts",
+          "packages/zod/src/v4/locales/az.ts",
+          "packages/zod/src/v4/locales/be.ts",
+          "packages/zod/src/v4/locales/bg.ts",
+          "packages/zod/src/v4/locales/ca.ts",
+          "packages/zod/src/v4/locales/cs.ts",
+          "packages/zod/src/v4/locales/da.ts",
+          "packages/zod/src/v4/locales/de.ts",
+          "packages/zod/src/v4/locales/eo.ts",
+          "packages/zod/src/v4/locales/es.ts",
+          "packages/zod/src/v4/locales/fa.ts",
+          "packages/zod/src/v4/locales/fi.ts",
+          "packages/zod/src/v4/locales/fr-CA.ts",
+          "packages/zod/src/v4/locales/fr.ts",
+          "packages/zod/src/v4/locales/he.ts",
+          "packages/zod/src/v4/locales/hr.ts",
+          "packages/zod/src/v4/locales/hu.ts",
+          "packages/zod/src/v4/locales/hy.ts",
+          "packages/zod/src/v4/locales/id.ts",
+          "packages/zod/src/v4/locales/is.ts",
+          "packages/zod/src/v4/locales/it.ts",
+          "packages/zod/src/v4/locales/ja.ts",
+          "packages/zod/src/v4/locales/ka.ts",
+          "packages/zod/src/v4/locales/km.ts",
+          "packages/zod/src/v4/locales/ko.ts",
+          "packages/zod/src/v4/locales/lt.ts",
+          "packages/zod/src/v4/locales/mk.ts",
+          "packages/zod/src/v4/locales/ms.ts",
+          "packages/zod/src/v4/locales/nl.ts",
+          "packages/zod/src/v4/locales/nn.ts",
+          "packages/zod/src/v4/locales/no.ts",
+          "packages/zod/src/v4/locales/ota.ts",
+          "packages/zod/src/v4/locales/pl.ts",
+          "packages/zod/src/v4/locales/ps.ts",
+          "packages/zod/src/v4/locales/ru.ts",
+          "packages/zod/src/v4/locales/sl.ts",
+          "packages/zod/src/v4/locales/sv.ts",
+          "packages/zod/src/v4/locales/ta.ts",
+          "packages/zod/src/v4/locales/th.ts",
+          "packages/zod/src/v4/locales/tk.ts",
+          "packages/zod/src/v4/locales/tr.ts",
+          "packages/zod/src/v4/locales/uk.ts",
+          "packages/zod/src/v4/locales/ur.ts",
+          "packages/zod/src/v4/locales/vi.ts",
+          "packages/zod/src/v4/locales/yo.ts",
+          "packages/zod/src/v4/locales/zh-CN.ts",
+          "packages/zod/src/v4/locales/zh-TW.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "3d93a7d5",
+        "date": "2025-11-17T22:48:14-07:00",
+        "subject": "feat: MAC address validation in v4 and mini (#5440)",
+        "body": "* feat: add z.mac() and ZodMAC\n\n* feat: reject nonstandard and 64-bit mac addrs\n\n* test: MAC addr validation\n\n* docs: add z.mac()\n\n* feat(mini): add z.mac()\n\n* fix: tighten z.mac() test cases\n\n* Add delimiter, drop version\n\n---------\n\nCo-authored-by: Colin McDonnell <colinmcd94@gmail.com>",
+        "files": [
+          "packages/zod/src/v4/classic/schemas.ts",
+          "packages/zod/src/v4/core/api.ts",
+          "packages/zod/src/v4/core/regexes.ts",
+          "packages/zod/src/v4/core/schemas.ts",
+          "packages/zod/src/v4/locales/en.ts",
+          "packages/zod/src/v4/mini/schemas.ts"
+        ]
+      }
+    },
+    {
+      "pair": "6074828e->611bd762",
+      "relation": "shares_issue",
+      "evidence": "both cite #6302: 6074828e (\"fix(v4): make fromJSONSchema propertyNames compose with the other object keywords (#6411)\") and 611bd762 (\"fix(mini): make merge() take an object schema, matching classic (#6404)\")",
+      "later": {
+        "sha": "6074828e",
+        "date": "2026-08-13T19:31:40-07:00",
+        "subject": "fix(v4): make fromJSONSchema propertyNames compose with the other object keywords (#6411)",
+        "body": "* fix: handle BigInt default values in toJSONSchema (closes #6209)\n\n* fix: support format hostname in fromJSONSchema (closes #6304)\n\n* fix(mini): correct merge signature to accept a plain shape (closes #6302)\n\n* fix(fromJSONSchema): propertyNames enum keys should not be required (closes #6323)\n\n* chore: remove scratch file\n\n* Revert the unrelated fixes stacked on this branch\n\nThis branch carried f…",
+        "files": [
+          "packages/zod/src/v4/classic/from-json-schema.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "611bd762",
+        "date": "2026-08-13T18:26:39-07:00",
+        "subject": "fix(mini): make merge() take an object schema, matching classic (#6404)",
+        "body": "zod/mini's merge() declared a schema-to-schema overload but forwarded to\nutil.extend(), which requires a plain shape. The call that typechecked threw,\nand the call that ran was a type error.\n\nPoint the body at util.merge() so the declared signature is true, and return\nU's config rather than T's, matching classic's merge(). The deprecation note\nnow points at z.extend(A, B.shape), the same escape ha…",
+        "files": [
+          "packages/zod/src/v4/core/util.ts",
+          "packages/zod/src/v4/mini/schemas.ts"
+        ]
+      }
+    },
+    {
+      "pair": "c2be4f81->b6066b3e",
+      "relation": "shares_issue",
+      "evidence": "both cite #5661: c2be4f81 (\"fix(v4): generalize optin/fallback to transform; restore preprocess on absent keys (#5941)\") and b6066b3e (\"fix(v4): align object and tuple optionality handling (#5661)\")",
+      "later": {
+        "sha": "c2be4f81",
+        "date": "2026-05-04T00:01:17-07:00",
+        "subject": "fix(v4): generalize optin/fallback to transform; restore preprocess on absent keys (#5941)",
+        "body": "* fix(v4): propagate fallback flag through pipe boundaries\n\n`$ZodCatch` sets a payload flag when its `catchValue` substitutes so an\nouter `$ZodOptional` can clobber the recovery value with `undefined`\n(per #5939). But `handlePipeResult` was building a fresh payload for the\nright side of the pipe without copying the flag, so any chain like\n`catch().transform()...optional()` lost it — `optional` cou…",
+        "files": [
+          "packages/zod/src/v4/classic/schemas.ts",
+          "packages/zod/src/v4/core/schemas.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "b6066b3e",
+        "date": "2026-04-30T03:57:06+09:00",
+        "subject": "fix(v4): align object and tuple optionality handling (#5661)",
+        "body": "* fix(v4): apply trailing tuple defaults via optout flag\n\nTuple elements with `.default()` / `.prefault()` were silently dropped\nwhen the input array was shorter than the tuple, because the parser\nskipped any item past `input.length` whose slot was within `optStart`.\n\nGate the skip on `optout === \"optional\"` instead. That distinguishes\nschemas that produce `undefined` for missing input (`.optional…",
+        "files": [
+          "packages/zod/src/v4/core/schemas.ts"
+        ]
+      }
+    },
+    {
+      "pair": "bd6619c0->fd074106",
+      "relation": "shares_issue",
+      "evidence": "both cite #6391: bd6619c0 (\"feat(json-schema): accept a function for `unrepresentable` (#6380)\") and fd074106 (\"feat(json-schema): run `override` before the unrepresentable error (#6391)\")",
+      "later": {
+        "sha": "bd6619c0",
+        "date": "2026-08-13T11:44:53-07:00",
+        "subject": "feat(json-schema): accept a function for `unrepresentable` (#6380)",
+        "body": "Adds a function form to `unrepresentable`, so a caller can substitute a JSON Schema for a specific type while every other unrepresentable type still throws.\n\n```ts\nz.toJSONSchema(z.object({ createdAt: z.date(), id: z.bigint() }), {\n  unrepresentable: ({ zodSchema }) =>\n    zodSchema._zod.def.type === \"date\" ? { type: \"string\", format: \"date-time\" } : \"throw\",\n});\n// createdAt => { type: \"string\", …",
+        "files": [
+          "packages/zod/src/v4/core/json-schema-generator.ts",
+          "packages/zod/src/v4/core/json-schema-processors.ts",
+          "packages/zod/src/v4/core/to-json-schema.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "fd074106",
+        "date": "2026-08-12T22:46:44-07:00",
+        "subject": "feat(json-schema): run `override` before the unrepresentable error (#6391)",
+        "body": "Representing a single unrepresentable type meant setting `unrepresentable: \"any\"` and losing the error for every other one — `z.date()` could be mapped to a date-time string only by also letting `z.map()`, `z.symbol()` and the rest silently become `{}`. The docs told you to do exactly this.\n\nThe ordering was never deliberate. `override` has run in the emit phase since the first Zod 4 commit becaus…",
+        "files": [
+          "packages/zod/src/v4/core/json-schema-processors.ts",
+          "packages/zod/src/v4/core/to-json-schema.ts"
+        ]
+      }
+    },
+    {
+      "pair": "78b523f0->973b1b44",
+      "relation": "shares_issue",
+      "evidence": "both cite #6409: 78b523f0 (\"fix(json-schema): keep preprocess object properties required in input mode (#6133)\") and 973b1b44 (\"fix(v4): strip output-typed catch values from the input JSON Schema (#6409)\")",
+      "later": {
+        "sha": "78b523f0",
+        "date": "2026-08-16T23:24:52+02:00",
+        "subject": "fix(json-schema): keep preprocess object properties required in input mode (#6133)",
+        "body": "* fix(json-schema): keep preprocess object properties required in input mode\n\n`z.preprocess(fn, inner)` builds a pipe whose `in` is a transform. A bare\ntransform reports `optin: \"optional\"` (needed so the preprocessor still runs\non absent keys at parse time), and ZodPipe inherits `optin` from its `in`, so\nthe object processor marked preprocessed properties as not-required in\n`toJSONSchema(..., { i…",
+        "files": [
+          "packages/zod/src/v4/core/json-schema-processors.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "973b1b44",
+        "date": "2026-08-16T14:17:47-07:00",
+        "subject": "fix(v4): strip output-typed catch values from the input JSON Schema (#6409)",
+        "body": "`catch` was missing from `isTransforming`, so the `io: \"input\"` guard never fired for a `ZodCatch` and its output-typed fallback leaked onto the input schema as `default`. Same bug #4557 removed for `.default()`; catch was the only wrapper still shadowing an inner transform. Output mode and optionality are unchanged.",
+        "files": [
+          "packages/zod/src/v4/core/to-json-schema.ts"
+        ]
+      }
+    },
+    {
+      "pair": "c2be4f81->1cab6938",
+      "relation": "shares_issue",
+      "evidence": "both cite #5939: c2be4f81 (\"fix(v4): generalize optin/fallback to transform; restore preprocess on absent keys (#5941)\") and 1cab6938 (\"fix(v4): restore catch handling for absent object keys (#5937) (#5939)\")",
+      "later": {
+        "sha": "c2be4f81",
+        "date": "2026-05-04T00:01:17-07:00",
+        "subject": "fix(v4): generalize optin/fallback to transform; restore preprocess on absent keys (#5941)",
+        "body": "* fix(v4): propagate fallback flag through pipe boundaries\n\n`$ZodCatch` sets a payload flag when its `catchValue` substitutes so an\nouter `$ZodOptional` can clobber the recovery value with `undefined`\n(per #5939). But `handlePipeResult` was building a fresh payload for the\nright side of the pipe without copying the flag, so any chain like\n`catch().transform()...optional()` lost it — `optional` cou…",
+        "files": [
+          "packages/zod/src/v4/classic/schemas.ts",
+          "packages/zod/src/v4/core/schemas.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "1cab6938",
+        "date": "2026-05-03T14:38:02-07:00",
+        "subject": "fix(v4): restore catch handling for absent object keys (#5937) (#5939)",
+        "body": "`z.X.catch(...)` previously deferred its `optin` to the inner schema, so\nwhen v4.4.0 tightened object parsing to reject absent keys whose schema\nisn't `optin === \"optional\"`, fields like `z.preprocess(...).catch([])`\nstarted failing on `{}` even though the catch handler should fire.\n\nThis restores the v4.3.x behavior by marking `$ZodCatch` as\n`optin === \"optional\"` unconditionally. Catch always ha…",
+        "files": [
+          "packages/zod/src/v4/core/schemas.ts"
+        ]
+      }
+    },
+    {
+      "pair": "eb4682c9->2abc9e05",
+      "relation": "shares_issue",
+      "evidence": "both cite #6133: eb4682c9 (\"fix(json-schema): resolve tuple minItems past transform and catch in input mode (#6418)\") and 2abc9e05 (\"docs: note that the JSON Schema emitter reads static optin (#6417)\")",
+      "later": {
+        "sha": "eb4682c9",
+        "date": "2026-08-16T15:44:29-07:00",
+        "subject": "fix(json-schema): resolve tuple minItems past transform and catch in input mode (#6418)",
+        "body": "* fix(json-schema): resolve tuple minItems past transform and catch in input mode\n\n#6133 routed objectProcessor's `required` list through `inputOptin` so an input\nJSON Schema describes the declared input type rather than the runtime `optin`\nflag. tupleProcessor's `minItems` tail scan was left reading the runtime flag,\nso the same divergence stayed live for tuples:\n\n  z.toJSONSchema(z.tuple([z.stri…",
+        "files": [
+          "packages/zod/src/v4/core/json-schema-processors.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "2abc9e05",
+        "date": "2026-08-16T15:15:26-07:00",
+        "subject": "docs: note that the JSON Schema emitter reads static optin (#6417)",
+        "body": "* docs: note that the JSON Schema emitter reads static optin\n\n`objectProcessor` is the one consumer of `optin` that has to read the static\ndeclaration rather than the runtime flag, because `io: \"input\"` describes the\ndeclared input type. Nothing near the emitter said so, and #6409 and #6133\nlanded seven minutes apart taking opposite lines on the two halves of that\nquestion: #6409 stripped an outpu…",
+        "files": [
+          "packages/zod/src/v4/core/json-schema-processors.ts"
+        ]
+      }
+    },
+    {
+      "pair": "9f0a3d81->b1077f05",
+      "relation": "shares_issue",
+      "evidence": "both cite #6415: 9f0a3d81 (\"fix(core): restore defineLazy semantics lost in the internals move (#6429)\") and b1077f05 (\"perf(memory): install derived internals on a per-constructor prototype (#6415)\")",
+      "later": {
+        "sha": "9f0a3d81",
+        "date": "2026-08-16T20:34:52-07:00",
+        "subject": "fix(core): restore defineLazy semantics lost in the internals move (#6429)",
+        "body": "Fixes two regressions from #6415. A derived constructor could no longer override what its base installed on the shared `_zod` prototype, so `z.exactOptional(...)` carried a stray `undefined` in `values` and `z.templateLiteral` accepted input it should reject. And a value resolved through a recursion break was memoized, freezing whichever node was visited first at its mid-construction value.\n\nA pro…",
+        "files": [
+          "packages/zod/src/v4/core/core.ts",
+          "packages/zod/src/v4/core/util.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "b1077f05",
+        "date": "2026-08-16T18:29:41-07:00",
+        "subject": "perf(memory): install derived internals on a per-constructor prototype (#6415)",
+        "body": "Moves lazily-derived `_zod` internals (`values`, `pattern`, `optin`, `optout`, `propValues`) onto a per-constructor prototype instead of installing an accessor on every instance.\n\nWrapper schemas shrink the most: `.nullable()`/`.readonly()` 2.4 KB to 665 B, `.optional()` 1.9 KB to 694 B. Construction of `.optional()` is ~1.96x faster; parse is unchanged. Costs +77 B classic and +13 B mini gzipped.",
+        "files": [
+          "packages/zod/src/v4/core/core.ts",
+          "packages/zod/src/v4/core/schemas.ts",
+          "packages/zod/src/v4/core/util.ts"
+        ]
+      }
+    },
+    {
+      "pair": "584b1089->91a7d0d1",
+      "relation": "shares_issue",
+      "evidence": "both cite #5865: 584b1089 (\"fix(v4): reject whitespace in z.base64() to close atob bypass (#5888)\") and 91a7d0d1 (\"fix(v4): reject whitespace in z.base64() to close atob bypass\")",
+      "later": {
+        "sha": "584b1089",
+        "date": "2026-04-28T10:05:01-07:00",
+        "subject": "fix(v4): reject whitespace in z.base64() to close atob bypass (#5888)",
+        "body": "atob() strips ASCII whitespace before validating, which let strings like\n\"123 \" sneak past the length-mod-4 short-circuit in isValidBase64. Reject\nwhitespace explicitly before the length check so the runtime matches the\nstrict regex we already advertise via bag.patterns / contentEncoding.\n\nRefs #5865.",
+        "files": [
+          "packages/zod/src/v4/core/schemas.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "91a7d0d1",
+        "date": "2026-04-28T09:44:36-07:00",
+        "subject": "fix(v4): reject whitespace in z.base64() to close atob bypass",
+        "body": "atob() strips ASCII whitespace before validating, which let strings like\n\"123 \" sneak past the length-mod-4 short-circuit in isValidBase64. Reject\nwhitespace explicitly before the length check so the runtime matches the\nstrict regex we already advertise via bag.patterns / contentEncoding.\n\nRefs #5865.",
+        "files": [
+          "packages/zod/src/v4/core/schemas.ts"
+        ]
+      }
+    },
+    {
+      "pair": "ca246d26->92f47984",
+      "relation": "follows_up",
+      "evidence": "ca246d26 (\"fix(v4): drop empty alternation branch from datetime pattern (#6439)\") touched packages/zod/src/v4/core/regexes.ts 2.8d after 92f47984 (\"chore: fail on stacked line comments\")",
+      "later": {
+        "sha": "ca246d26",
+        "date": "2026-08-19T09:10:06-07:00",
+        "subject": "fix(v4): drop empty alternation branch from datetime pattern (#6439)",
+        "body": "`z.iso.datetime({ local: true })` built its timezone suffix by pushing an\nempty string into the alternation list, so the emitted pattern carried a\ngratuitous empty branch: `(?:Z|)`, or `(?:Z||OFF)` alongside `offset`. Make\nthe group optional instead. v3 already did this correctly.\n\nAccepted language is unchanged for every flag combination.",
+        "files": [
+          "packages/zod/src/v4/core/regexes.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "92f47984",
+        "date": "2026-08-16T15:07:06-07:00",
+        "subject": "chore: fail on stacked line comments",
+        "body": "Lines have no maximum width in this repo — the editor wraps for display — so\na paragraph broken across several `//` lines is just a hard wrap, and hard\nwraps break search, diffs and editing. `pnpm check:comments` now fails on\nthem, with `--fix` to join the offenders. Wired into pre-commit and the CI\nlint job.\n\nBiome 1.9.4 has no such rule and no plugin support, so this is a standalone\ncheck. It re…",
+        "files": [
+          "packages/zod/src/v4/classic/external.ts",
+          "packages/zod/src/v4/classic/from-json-schema.ts",
+          "packages/zod/src/v4/classic/schemas.ts",
+          "packages/zod/src/v4/core/core.ts",
+          "packages/zod/src/v4/core/errors.ts",
+          "packages/zod/src/v4/core/json-schema-generator.ts",
+          "packages/zod/src/v4/core/json-schema-processors.ts",
+          "packages/zod/src/v4/core/memoizer.ts",
+          "packages/zod/src/v4/core/regexes.ts",
+          "packages/zod/src/v4/core/schemas.ts",
+          "packages/zod/src/v4/core/to-json-schema.ts",
+          "packages/zod/src/v4/core/util.ts",
+          "packages/zod/src/v4/core/visit.ts",
+          "packages/zod/src/v4/index.ts",
+          "packages/zod/src/v4/mini/schemas.ts"
+        ]
+      }
+    },
+    {
+      "pair": "87ffeb0f->898c4461",
+      "relation": "follows_up",
+      "evidence": "87ffeb0f (\"fix(v4): an absent key on the middle rung supplies nothing (#6434)\") touched packages/zod/src/v4/core/compile.ts 3.9h after 898c4461 (\"refactor(v4): give the runtime and compiled code one URL implementation\")",
+      "later": {
+        "sha": "87ffeb0f",
+        "date": "2026-08-19T11:53:24-07:00",
+        "subject": "fix(v4): an absent key on the middle rung supplies nothing (#6434)",
+        "body": "* fix(v4): an absent key on the middle rung supplies nothing\n\nThe optin ladder defines \"optional\" as \"the container may omit it;\nnothing is supplied in its place\". An absent key whose schema declares\nthat rung was still assigned whatever the schema made of `undefined`,\nso `z.object({ a: z.coerce.string().exactOptional() }).parse({})`\nreturned `{ a: \"undefined\" }`.\n\nGate on the ladder at the one pl…",
+        "files": [
+          "packages/zod/src/v4/core/compile.ts",
+          "packages/zod/src/v4/core/schemas.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "898c4461",
+        "date": "2026-08-19T07:57:15-07:00",
+        "subject": "refactor(v4): give the runtime and compiled code one URL implementation",
+        "body": "`parseValidURL` was a SECOND implementation of URL validation, called only\nfrom `compile.ts`. `$ZodURL` never used it. That is the thing this design\nexists to prevent: a compiled path that can drift from the runtime. IPv6\nand CIDRv6 were already done correctly — one predicate, both callers — and\nURL now matches them.\n\n`urlCanParse` goes with it. Nothing required `URL.canParse`; it was chosen\nto sk…",
+        "files": [
+          "packages/zod/src/v4/core/compile.ts",
+          "packages/zod/src/v4/core/schemas.ts"
+        ]
+      }
+    },
+    {
+      "pair": "a1904fc2->0a76f3d7",
+      "relation": "follows_up",
+      "evidence": "a1904fc2 (\"fix(v4): report date origin for numeric min/max bounds (#6129)\") touched packages/zod/src/v4/core/checks.ts 1.4h after 0a76f3d7 (\"feat(v4): add z.creditCard() string format (#5931)\")",
+      "later": {
+        "sha": "a1904fc2",
+        "date": "2026-08-13T23:06:08+02:00",
+        "subject": "fix(v4): report date origin for numeric min/max bounds (#6129)",
+        "body": "The origin on a range issue is now derived from the value being validated rather than the bound, so `z.date().min(<timestamp>)` reports `origin: \"date\"` instead of `\"number\"`. Matches what the multiple_of, length and size checks already do, and covers `zod/v4-mini`, where there is no .min()/.max() to patch.\n\nCloses #5980",
+        "files": [
+          "packages/zod/src/v4/core/checks.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "0a76f3d7",
+        "date": "2026-08-13T21:42:56+02:00",
+        "subject": "feat(v4): add z.creditCard() string format (#5931)",
+        "body": "Adds `z.creditCard()` to Zod and Zod Mini. Closes #4039.\n\nValidation is shape plus [Luhn](https://en.wikipedia.org/wiki/Luhn_algorithm): 12–19 digits, optionally separated by single spaces or single hyphens, with a valid checksum. The issuer is not identified.\n\nThat last part is the main change from the original version of this PR, which ran an allowlist of seven issuer regexes between the shape c…",
+        "files": [
+          "packages/zod/src/v4/classic/from-json-schema.ts",
+          "packages/zod/src/v4/classic/schemas.ts",
+          "packages/zod/src/v4/core/api.ts",
+          "packages/zod/src/v4/core/checks.ts",
+          "packages/zod/src/v4/core/regexes.ts",
+          "packages/zod/src/v4/core/schemas.ts",
+          "packages/zod/src/v4/locales/ar.ts",
+          "packages/zod/src/v4/locales/az.ts",
+          "packages/zod/src/v4/locales/be.ts",
+          "packages/zod/src/v4/locales/bg.ts",
+          "packages/zod/src/v4/locales/ca.ts",
+          "packages/zod/src/v4/locales/cs.ts",
+          "packages/zod/src/v4/locales/da.ts",
+          "packages/zod/src/v4/locales/de.ts",
+          "packages/zod/src/v4/locales/el.ts",
+          "packages/zod/src/v4/locales/en.ts",
+          "packages/zod/src/v4/locales/eo.ts",
+          "packages/zod/src/v4/locales/es.ts",
+          "packages/zod/src/v4/locales/fa.ts",
+          "packages/zod/src/v4/locales/fi.ts",
+          "packages/zod/src/v4/locales/fr-CA.ts",
+          "packages/zod/src/v4/locales/fr.ts",
+          "packages/zod/src/v4/locales/he.ts",
+          "packages/zod/src/v4/locales/hr.ts",
+          "packages/zod/src/v4/locales/hu.ts",
+          "packages/zod/src/v4/locales/hy.ts",
+          "packages/zod/src/v4/locales/id.ts",
+          "packages/zod/src/v4/locales/is.ts",
+          "packages/zod/src/v4/locales/it.ts",
+          "packages/zod/src/v4/locales/ja.ts",
+          "packages/zod/src/v4/locales/ka.ts",
+          "packages/zod/src/v4/locales/km.ts",
+          "packages/zod/src/v4/locales/ko.ts",
+          "packages/zod/src/v4/locales/lt.ts",
+          "packages/zod/src/v4/locales/mk.ts",
+          "packages/zod/src/v4/locales/ms.ts",
+          "packages/zod/src/v4/locales/nl.ts",
+          "packages/zod/src/v4/locales/no.ts",
+          "packages/zod/src/v4/locales/ota.ts",
+          "packages/zod/src/v4/locales/pl.ts",
+          "packages/zod/src/v4/locales/ps.ts",
+          "packages/zod/src/v4/locales/pt.ts",
+          "packages/zod/src/v4/locales/ro.ts",
+          "packages/zod/src/v4/locales/ru.ts",
+          "packages/zod/src/v4/locales/sl.ts",
+          "packages/zod/src/v4/locales/sv.ts",
+          "packages/zod/src/v4/locales/ta.ts",
+          "packages/zod/src/v4/locales/th.ts",
+          "packages/zod/src/v4/locales/tr.ts",
+          "packages/zod/src/v4/locales/uk.ts",
+          "packages/zod/src/v4/locales/ur.ts",
+          "packages/zod/src/v4/locales/uz.ts",
+          "packages/zod/src/v4/locales/vi.ts",
+          "packages/zod/src/v4/locales/yo.ts",
+          "packages/zod/src/v4/locales/zh-CN.ts",
+          "packages/zod/src/v4/locales/zh-TW.ts",
+          "packages/zod/src/v4/mini/schemas.ts"
+        ]
+      }
+    },
+    {
+      "pair": "faf33a28->7708d447",
+      "relation": "follows_up",
+      "evidence": "faf33a28 (\"fix: surface @deprecated on re-exported compat aliases (#6072)\") touched packages/zod/src/v4/classic/errors.ts 27.5h after 7708d447 (\"perf(v4): lazy ZodError construction (#6316)\")",
+      "later": {
+        "sha": "faf33a28",
+        "date": "2026-08-14T05:42:18+06:00",
+        "subject": "fix: surface @deprecated on re-exported compat aliases (#6072)",
+        "body": "* fix: surface @deprecated on re-exported compat aliases\n\nJSDoc `@deprecated` placed on `export { X as Y }` / `export type { X as Y }`\nspecifiers is dropped when the alias is re-exported again, so IDEs never\nflagged `ZodTypeAny`, `ZodSchema`, `Schema`, `TypeOf`, `Infer`,\n`ZodFirstPartySchemaTypes`, `ZodFlattenedError`, `ZodFormattedError`,\n`ZodErrorMap`, `_max` or `_min` as deprecated. Declare eac…",
+        "files": [
+          "packages/zod/src/v4/classic/compat.ts",
+          "packages/zod/src/v4/classic/errors.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "7708d447",
+        "date": "2026-08-12T22:12:27+02:00",
+        "subject": "perf(v4): lazy ZodError construction (#6316)",
+        "body": "Defer $ZodError construction work that a failing safeParse almost never\nconsumes. The message was an eager pretty-printed JSON dump of every issue;\nit is now an own accessor computed and cached on first read, with a setter\npreserving plain-assignment semantics. The classic helper methods\n(format/flatten/addIssue/addIssues/isEmpty) and toString move from nine\nper-instance property definitions to la…",
+        "files": [
+          "packages/zod/src/v4/classic/errors.ts",
+          "packages/zod/src/v4/core/errors.ts"
+        ]
+      }
+    },
+    {
+      "pair": "9a7ecc35->0a76f3d7",
+      "relation": "follows_up",
+      "evidence": "9a7ecc35 (\"fix(json-schema): accept RFC 3339 numeric offsets in date-time format (#6298)\") touched packages/zod/src/v4/classic/from-json-schema.ts 0.4h after 0a76f3d7 (\"feat(v4): add z.creditCard() string format (#5931)\")",
+      "later": {
+        "sha": "9a7ecc35",
+        "date": "2026-08-13T22:08:56+02:00",
+        "subject": "fix(json-schema): accept RFC 3339 numeric offsets in date-time format (#6298)",
+        "body": "JSON Schema defines `date-time` against the RFC 3339 `date-time` production, which permits either `Z` or a numeric UTC offset. The mapping used `z.iso.datetime()`, whose default `offset: false` accepts only `Z`, so the generated schema was stricter than the JSON Schema it came from — and a schema round-tripping through `toJSONSchema` silently lost offset support.\n\nPassing `offset: true` accepts bo…",
+        "files": [
+          "packages/zod/src/v4/classic/from-json-schema.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "0a76f3d7",
+        "date": "2026-08-13T21:42:56+02:00",
+        "subject": "feat(v4): add z.creditCard() string format (#5931)",
+        "body": "Adds `z.creditCard()` to Zod and Zod Mini. Closes #4039.\n\nValidation is shape plus [Luhn](https://en.wikipedia.org/wiki/Luhn_algorithm): 12–19 digits, optionally separated by single spaces or single hyphens, with a valid checksum. The issuer is not identified.\n\nThat last part is the main change from the original version of this PR, which ran an allowlist of seven issuer regexes between the shape c…",
+        "files": [
+          "packages/zod/src/v4/classic/from-json-schema.ts",
+          "packages/zod/src/v4/classic/schemas.ts",
+          "packages/zod/src/v4/core/api.ts",
+          "packages/zod/src/v4/core/checks.ts",
+          "packages/zod/src/v4/core/regexes.ts",
+          "packages/zod/src/v4/core/schemas.ts",
+          "packages/zod/src/v4/locales/ar.ts",
+          "packages/zod/src/v4/locales/az.ts",
+          "packages/zod/src/v4/locales/be.ts",
+          "packages/zod/src/v4/locales/bg.ts",
+          "packages/zod/src/v4/locales/ca.ts",
+          "packages/zod/src/v4/locales/cs.ts",
+          "packages/zod/src/v4/locales/da.ts",
+          "packages/zod/src/v4/locales/de.ts",
+          "packages/zod/src/v4/locales/el.ts",
+          "packages/zod/src/v4/locales/en.ts",
+          "packages/zod/src/v4/locales/eo.ts",
+          "packages/zod/src/v4/locales/es.ts",
+          "packages/zod/src/v4/locales/fa.ts",
+          "packages/zod/src/v4/locales/fi.ts",
+          "packages/zod/src/v4/locales/fr-CA.ts",
+          "packages/zod/src/v4/locales/fr.ts",
+          "packages/zod/src/v4/locales/he.ts",
+          "packages/zod/src/v4/locales/hr.ts",
+          "packages/zod/src/v4/locales/hu.ts",
+          "packages/zod/src/v4/locales/hy.ts",
+          "packages/zod/src/v4/locales/id.ts",
+          "packages/zod/src/v4/locales/is.ts",
+          "packages/zod/src/v4/locales/it.ts",
+          "packages/zod/src/v4/locales/ja.ts",
+          "packages/zod/src/v4/locales/ka.ts",
+          "packages/zod/src/v4/locales/km.ts",
+          "packages/zod/src/v4/locales/ko.ts",
+          "packages/zod/src/v4/locales/lt.ts",
+          "packages/zod/src/v4/locales/mk.ts",
+          "packages/zod/src/v4/locales/ms.ts",
+          "packages/zod/src/v4/locales/nl.ts",
+          "packages/zod/src/v4/locales/no.ts",
+          "packages/zod/src/v4/locales/ota.ts",
+          "packages/zod/src/v4/locales/pl.ts",
+          "packages/zod/src/v4/locales/ps.ts",
+          "packages/zod/src/v4/locales/pt.ts",
+          "packages/zod/src/v4/locales/ro.ts",
+          "packages/zod/src/v4/locales/ru.ts",
+          "packages/zod/src/v4/locales/sl.ts",
+          "packages/zod/src/v4/locales/sv.ts",
+          "packages/zod/src/v4/locales/ta.ts",
+          "packages/zod/src/v4/locales/th.ts",
+          "packages/zod/src/v4/locales/tr.ts",
+          "packages/zod/src/v4/locales/uk.ts",
+          "packages/zod/src/v4/locales/ur.ts",
+          "packages/zod/src/v4/locales/uz.ts",
+          "packages/zod/src/v4/locales/vi.ts",
+          "packages/zod/src/v4/locales/yo.ts",
+          "packages/zod/src/v4/locales/zh-CN.ts",
+          "packages/zod/src/v4/locales/zh-TW.ts",
+          "packages/zod/src/v4/mini/schemas.ts"
+        ]
+      }
+    },
+    {
+      "pair": "a38ab4a8->fa77a4d7",
+      "relation": "follows_up",
+      "evidence": "a38ab4a8 (\"fix(core): an omittable discriminator claims undefined (#6432)\") touched packages/zod/src/v4/core/compile.ts 43.8h after fa77a4d7 (\"feat(v4): z.compile — ahead-of-time schema compilation (#6085)\")",
+      "later": {
+        "sha": "a38ab4a8",
+        "date": "2026-08-19T07:37:06-07:00",
+        "subject": "fix(core): an omittable discriminator claims undefined (#6432)",
+        "body": "* fix(core): an omittable discriminator claims undefined\n\nA key whose schema accepts absence reads back as undefined at the\ndiscriminated-union lookup, so propValues has to claim undefined for it.\nTwo options that can both omit the key are then correctly rejected as\nnot discriminable, matching how TypeScript refuses to narrow\n`{ k?: \"a\" } | { k?: \"c\" }` on `k === undefined`, and a single\nomittable…",
+        "files": [
+          "packages/zod/src/v4/core/compile.ts",
+          "packages/zod/src/v4/core/schemas.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "fa77a4d7",
+        "date": "2026-08-17T11:46:25-07:00",
+        "subject": "feat(v4): z.compile — ahead-of-time schema compilation (#6085)",
+        "body": "Compiles a schema into a specialized validator ahead of time, with identical results and identical errors.\n\nTwo entry points: `z.compile(schema)` returns a compiled clone and throws on anything it cannot model, while `import \"zod/compile\"` enables compilation globally and falls back silently. Compilation is off by default; both the default and compile-mode vitest projects run the full suite, and a…",
+        "files": [
+          "packages/zod/src/v4/classic/external.ts",
+          "packages/zod/src/v4/classic/schemas.ts",
+          "packages/zod/src/v4/core/api.ts",
+          "packages/zod/src/v4/core/compile.ts",
+          "packages/zod/src/v4/core/core.ts",
+          "packages/zod/src/v4/core/index.ts",
+          "packages/zod/src/v4/core/memoizer.ts",
+          "packages/zod/src/v4/core/schemas.ts",
+          "packages/zod/src/v4/core/util.ts",
+          "packages/zod/src/v4/mini/external.ts",
+          "packages/zod/src/v4/mini/schemas.ts"
+        ]
+      }
+    },
+    {
+      "pair": "92f47984->784e5c26",
+      "relation": "follows_up",
+      "evidence": "92f47984 (\"chore: fail on stacked line comments\") touched packages/zod/src/v4/index.ts 2.9d after 784e5c26 (\"fix(v4): let bundlers tree-shake locales out of the default import (#6384)\")",
+      "later": {
+        "sha": "92f47984",
+        "date": "2026-08-16T15:07:06-07:00",
+        "subject": "chore: fail on stacked line comments",
+        "body": "Lines have no maximum width in this repo — the editor wraps for display — so\na paragraph broken across several `//` lines is just a hard wrap, and hard\nwraps break search, diffs and editing. `pnpm check:comments` now fails on\nthem, with `--fix` to join the offenders. Wired into pre-commit and the CI\nlint job.\n\nBiome 1.9.4 has no such rule and no plugin support, so this is a standalone\ncheck. It re…",
+        "files": [
+          "packages/zod/src/v4/classic/external.ts",
+          "packages/zod/src/v4/classic/from-json-schema.ts",
+          "packages/zod/src/v4/classic/schemas.ts",
+          "packages/zod/src/v4/core/core.ts",
+          "packages/zod/src/v4/core/errors.ts",
+          "packages/zod/src/v4/core/json-schema-generator.ts",
+          "packages/zod/src/v4/core/json-schema-processors.ts",
+          "packages/zod/src/v4/core/memoizer.ts",
+          "packages/zod/src/v4/core/regexes.ts",
+          "packages/zod/src/v4/core/schemas.ts",
+          "packages/zod/src/v4/core/to-json-schema.ts",
+          "packages/zod/src/v4/core/util.ts",
+          "packages/zod/src/v4/core/visit.ts",
+          "packages/zod/src/v4/index.ts",
+          "packages/zod/src/v4/mini/schemas.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "784e5c26",
+        "date": "2026-08-13T17:03:47-07:00",
+        "subject": "fix(v4): let bundlers tree-shake locales out of the default import (#6384)",
+        "body": "`export default z` made the default export a fresh namespace value rather than a\nre-export of the `z` binding. Rollup and Webpack both property-shake a re-exported\nnamespace, but fall back to including everything when it is reached through a default\nexport — so `import z from \"zod\"` pulled all 53 locale modules into the bundle.\n\nMeasured against the built package with a trivial `z.object({...})` c…",
+        "files": [
+          "packages/zod/src/v4/classic/index.ts",
+          "packages/zod/src/v4/index.ts"
+        ]
+      }
+    },
+    {
+      "pair": "4c27fe87->c8f06d36",
+      "relation": "follows_up",
+      "evidence": "4c27fe87 (\"fix(v4): give z.xor() a distinct error when multiple options match (#6376)\") touched packages/zod/src/v4/locales/en.ts 3.5h after c8f06d36 (\"fix(v4): clarify infinite number errors (#5906)\")",
+      "later": {
+        "sha": "4c27fe87",
+        "date": "2026-08-13T17:18:29-07:00",
+        "subject": "fix(v4): give z.xor() a distinct error when multiple options match (#6376)",
+        "body": "* fix(v4): give z.xor() a distinct error when multiple options match (#6342)\n\nAn exclusive union that failed because *several* options matched emitted\n`invalid_union` with `errors: []` and `inclusive: false`, and the English\nerror map had no case for it — so the message was a bare \"Invalid input\"\nwith nothing pointing at the overlap.\n\nThe issue now carries `matches`, the indices of the options tha…",
+        "files": [
+          "packages/zod/src/v4/core/errors.ts",
+          "packages/zod/src/v4/core/schemas.ts",
+          "packages/zod/src/v4/locales/en.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "c8f06d36",
+        "date": "2026-08-13T13:46:00-07:00",
+        "subject": "fix(v4): clarify infinite number errors (#5906)",
+        "body": "`z.number()` is finite-by-default in v4, so `Infinity` fails with an `invalid_type` issue — but the English message read \"Invalid input: expected number, received number\", which names the same type on both sides and tells the user nothing. `$ZodNumber` already writes a precise `received` onto the issue; the locale ignored it and recomputed `util.parsedType(issue.input)`, which returns plain `\"numb…",
+        "files": [
+          "packages/zod/src/v4/core/schemas.ts",
+          "packages/zod/src/v4/locales/en.ts"
+        ]
+      }
+    },
+    {
+      "pair": "fbe8ad1b->02c2baf7",
+      "relation": "follows_up",
+      "evidence": "fbe8ad1b (\"fix(v4): allow dynamic `.catch()` under `unrepresentable: \"any\"` (#5273) (#5925)\") touched packages/zod/src/v4/core/json-schema-processors.ts 2.9d after 02c2baf7 (\"Make z.preprocess defer optionality to inner schema (#5929)\")",
+      "later": {
+        "sha": "fbe8ad1b",
+        "date": "2026-05-04T18:52:41+02:00",
+        "subject": "fix(v4): allow dynamic `.catch()` under `unrepresentable: \"any\"` (#5273) (#5925)",
+        "body": "`catchProcessor` evaluates `def.catchValue(undefined)` to derive a static `default`. When the callback inspects its `ctx` argument it throws, and `z.toJSONSchema()` surfaced that as a hard error even when the caller opted into lossy conversion.\n\nGate the rethrow on `unrepresentable === \"throw\"`. Under `\"any\"`, skip the `default` and fall through with the inner schema (already populated by the prec…",
+        "files": [
+          "packages/zod/src/v4/core/json-schema-processors.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "02c2baf7",
+        "date": "2026-05-01T12:35:16-07:00",
+        "subject": "Make z.preprocess defer optionality to inner schema (#5929)",
+        "body": "* Make z.preprocess defer optionality to inner schema (#5917)\n\n`z.preprocess(fn, schema)` desugared to `pipe(transform(fn), schema)`,\nso the resulting pipe's `optin` was inherited from `ZodTransform`\n(undefined) instead of from the inner schema. When the inner schema was\nitself optional and the preprocess sat as an object property, the\nobject compiler took the `!isOptionalIn` branch and synthesize…",
+        "files": [
+          "packages/zod/src/v4/classic/schemas.ts",
+          "packages/zod/src/v4/core/json-schema-processors.ts",
+          "packages/zod/src/v4/core/schemas.ts",
+          "packages/zod/src/v4/core/to-json-schema.ts"
+        ]
+      }
+    },
+    {
+      "pair": "e25b68e1->f238fbd2",
+      "relation": "follows_up",
+      "evidence": "e25b68e1 (\"perf(v4): let three dead declarations tree-shake under esbuild (#6381)\") touched packages/zod/src/v4/core/regexes.ts 3.7d after f238fbd2 (\"fix: remove exponential backtracking from the emoji regex (#6347)\")",
+      "later": {
+        "sha": "e25b68e1",
+        "date": "2026-08-12T12:02:35-07:00",
+        "subject": "perf(v4): let three dead declarations tree-shake under esbuild (#6381)",
+        "body": "Three declarations survived tree-shaking into every minimal bundle despite being\nunreachable: the ISO `date` regex, `NUMBER_FORMAT_RANGES`, and `$brand` (plus\n`$output`/`$input` in registries.ts). All esbuild-specific — rollup already dropped\nthem, and rollup output is byte-identical before and after.\n\n`date` was `@__PURE__ new RegExp(`^${dateSource}$`)`; esbuild will not drop an\nannotated call wh…",
+        "files": [
+          "packages/zod/src/v4/core/core.ts",
+          "packages/zod/src/v4/core/regexes.ts",
+          "packages/zod/src/v4/core/registries.ts",
+          "packages/zod/src/v4/core/util.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "f238fbd2",
+        "date": "2026-08-08T18:12:01-07:00",
+        "subject": "fix: remove exponential backtracking from the emoji regex (#6347)",
+        "body": "`\\p{Extended_Pictographic}` and `\\p{Emoji_Component}` overlap on U+1F9B0-U+1F9B3,\nso `^(A|B)+$` had to re-explore 2^n ways of attributing the consumed characters\nwhenever the overall match failed. A ~100 byte string of those code points\nfollowed by any non-emoji character stalled the event loop for seconds; each\nadditional character roughly doubled it.\n\nCollapsing the alternation into a single cha…",
+        "files": [
+          "packages/zod/src/v4/core/regexes.ts"
+        ]
+      }
+    },
+    {
+      "pair": "2a5164f5->0a76f3d7",
+      "relation": "follows_up",
+      "evidence": "2a5164f5 (\"fix(v4): enforce RFC 1035 length limits in regexes.domain (#6035)\") touched packages/zod/src/v4/core/regexes.ts 1.3h after 0a76f3d7 (\"feat(v4): add z.creditCard() string format (#5931)\")",
+      "later": {
+        "sha": "2a5164f5",
+        "date": "2026-08-14T00:01:10+03:00",
+        "subject": "fix(v4): enforce RFC 1035 length limits in regexes.domain (#6035)",
+        "body": "Adds the RFC 1035 length limits that `regexes.hostname` already enforced: a 253-character total via a leading lookahead, and a 63-character cap on the TLD label. Non-TLD labels were already capped at 63 by the existing quantifier.\n\nAlso syncs the two literal copies of the pattern — the docs callout and the `httpurl` test comment — and pins the 253-character boundary from both sides.\n\nCloses #5965.…",
+        "files": [
+          "packages/zod/src/v4/core/regexes.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "0a76f3d7",
+        "date": "2026-08-13T21:42:56+02:00",
+        "subject": "feat(v4): add z.creditCard() string format (#5931)",
+        "body": "Adds `z.creditCard()` to Zod and Zod Mini. Closes #4039.\n\nValidation is shape plus [Luhn](https://en.wikipedia.org/wiki/Luhn_algorithm): 12–19 digits, optionally separated by single spaces or single hyphens, with a valid checksum. The issuer is not identified.\n\nThat last part is the main change from the original version of this PR, which ran an allowlist of seven issuer regexes between the shape c…",
+        "files": [
+          "packages/zod/src/v4/classic/from-json-schema.ts",
+          "packages/zod/src/v4/classic/schemas.ts",
+          "packages/zod/src/v4/core/api.ts",
+          "packages/zod/src/v4/core/checks.ts",
+          "packages/zod/src/v4/core/regexes.ts",
+          "packages/zod/src/v4/core/schemas.ts",
+          "packages/zod/src/v4/locales/ar.ts",
+          "packages/zod/src/v4/locales/az.ts",
+          "packages/zod/src/v4/locales/be.ts",
+          "packages/zod/src/v4/locales/bg.ts",
+          "packages/zod/src/v4/locales/ca.ts",
+          "packages/zod/src/v4/locales/cs.ts",
+          "packages/zod/src/v4/locales/da.ts",
+          "packages/zod/src/v4/locales/de.ts",
+          "packages/zod/src/v4/locales/el.ts",
+          "packages/zod/src/v4/locales/en.ts",
+          "packages/zod/src/v4/locales/eo.ts",
+          "packages/zod/src/v4/locales/es.ts",
+          "packages/zod/src/v4/locales/fa.ts",
+          "packages/zod/src/v4/locales/fi.ts",
+          "packages/zod/src/v4/locales/fr-CA.ts",
+          "packages/zod/src/v4/locales/fr.ts",
+          "packages/zod/src/v4/locales/he.ts",
+          "packages/zod/src/v4/locales/hr.ts",
+          "packages/zod/src/v4/locales/hu.ts",
+          "packages/zod/src/v4/locales/hy.ts",
+          "packages/zod/src/v4/locales/id.ts",
+          "packages/zod/src/v4/locales/is.ts",
+          "packages/zod/src/v4/locales/it.ts",
+          "packages/zod/src/v4/locales/ja.ts",
+          "packages/zod/src/v4/locales/ka.ts",
+          "packages/zod/src/v4/locales/km.ts",
+          "packages/zod/src/v4/locales/ko.ts",
+          "packages/zod/src/v4/locales/lt.ts",
+          "packages/zod/src/v4/locales/mk.ts",
+          "packages/zod/src/v4/locales/ms.ts",
+          "packages/zod/src/v4/locales/nl.ts",
+          "packages/zod/src/v4/locales/no.ts",
+          "packages/zod/src/v4/locales/ota.ts",
+          "packages/zod/src/v4/locales/pl.ts",
+          "packages/zod/src/v4/locales/ps.ts",
+          "packages/zod/src/v4/locales/pt.ts",
+          "packages/zod/src/v4/locales/ro.ts",
+          "packages/zod/src/v4/locales/ru.ts",
+          "packages/zod/src/v4/locales/sl.ts",
+          "packages/zod/src/v4/locales/sv.ts",
+          "packages/zod/src/v4/locales/ta.ts",
+          "packages/zod/src/v4/locales/th.ts",
+          "packages/zod/src/v4/locales/tr.ts",
+          "packages/zod/src/v4/locales/uk.ts",
+          "packages/zod/src/v4/locales/ur.ts",
+          "packages/zod/src/v4/locales/uz.ts",
+          "packages/zod/src/v4/locales/vi.ts",
+          "packages/zod/src/v4/locales/yo.ts",
+          "packages/zod/src/v4/locales/zh-CN.ts",
+          "packages/zod/src/v4/locales/zh-TW.ts",
+          "packages/zod/src/v4/mini/schemas.ts"
+        ]
+      }
+    },
+    {
+      "pair": "3c2dee9e->d6ca12ae",
+      "relation": "follows_up",
+      "evidence": "3c2dee9e (\"Add properties checks for instanceof schemas (#5912)\") touched packages/zod/src/v4/core/api.ts 2.9h after d6ca12ae (\"fix(v4): infer recursive getter options in discriminatedUnion (#6422)\")",
+      "later": {
+        "sha": "3c2dee9e",
+        "date": "2026-08-19T11:53:42-07:00",
+        "subject": "Add properties checks for instanceof schemas (#5912)",
+        "body": "* Add properties checks for instanceof schemas\n\n* Revert \"Add properties checks for instanceof schemas\"\n\nReplaced by a plain z.properties(shape) helper that returns an array of\nordinary $ZodCheckProperty checks. The dedicated $ZodCheckProperties check\ntype had no case in core/compile.ts, so any schema using it dropped off the\nAOT fast path, and SupportedCheck there is a hand-listed union so nothin…",
+        "files": [
+          "packages/zod/src/v4/classic/checks.ts",
+          "packages/zod/src/v4/core/api.ts",
+          "packages/zod/src/v4/mini/checks.ts"
+        ]
+      },
+      "earlier": {
+        "sha": "d6ca12ae",
+        "date": "2026-08-19T08:57:52-07:00",
+        "subject": "fix(v4): infer recursive getter options in discriminatedUnion (#6422)",
+        "body": "* fix(v4): infer recursive getter options in discriminatedUnion\n\nThe option bound resolved each option's `input` to check that it carried the\ndiscriminator. That forces TypeScript to evaluate the input while checking the\ncall, which is circular for an option whose input references the union itself —\nso a mutually-recursive getter schema collapsed the whole union to `any` and\nemitted ts7022/ts2615,…",
+        "files": [
+          "packages/zod/src/v4/classic/schemas.ts",
+          "packages/zod/src/v4/core/api.ts",
+          "packages/zod/src/v4/core/schemas.ts",
+          "packages/zod/src/v4/mini/schemas.ts"
+        ]
+      }
+    }
+  ]
+}

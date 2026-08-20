@@ -1,0 +1,1147 @@
+{
+  "corpus": {
+    "repo": "/tmp/zod",
+    "revision": "870433f3",
+    "scope": "packages/zod/src/v4",
+    "commitsScanned": 376,
+    "candidateLinks": 338
+  },
+  "budget": {
+    "k": 5,
+    "seedCount": 3,
+    "embedder": "lexical-only"
+  },
+  "all": {
+    "byMeaning": {
+      "questions": 10,
+      "bothSlots": 6,
+      "bothSlotsRate": 0.6,
+      "slotRecall": 0.8,
+      "meanReturned": 5,
+      "totalLinksUsed": 0
+    },
+    "linked": {
+      "questions": 10,
+      "bothSlots": 9,
+      "bothSlotsRate": 0.9,
+      "slotRecall": 0.95,
+      "meanReturned": 5,
+      "totalLinksUsed": 18
+    },
+    "strongLinked": {
+      "questions": 10,
+      "bothSlots": 9,
+      "bothSlotsRate": 0.9,
+      "slotRecall": 0.95,
+      "meanReturned": 5,
+      "totalLinksUsed": 10
+    },
+    "randomControl": {
+      "questions": 10,
+      "bothSlots": 6,
+      "bothSlotsRate": 0.6,
+      "slotRecall": 0.8,
+      "meanReturned": 5,
+      "totalLinksUsed": 20
+    },
+    "unbudgeted": {
+      "questions": 10,
+      "bothSlots": 9,
+      "bothSlotsRate": 0.9,
+      "slotRecall": 0.95,
+      "meanReturned": 13.3,
+      "totalLinksUsed": 83
+    }
+  },
+  "goldPairLinked": {
+    "byMeaning": {
+      "questions": 8,
+      "bothSlots": 5,
+      "bothSlotsRate": 0.625,
+      "slotRecall": 0.813,
+      "meanReturned": 5,
+      "totalLinksUsed": 0
+    },
+    "linked": {
+      "questions": 8,
+      "bothSlots": 8,
+      "bothSlotsRate": 1,
+      "slotRecall": 1,
+      "meanReturned": 5,
+      "totalLinksUsed": 14
+    },
+    "strongLinked": {
+      "questions": 8,
+      "bothSlots": 8,
+      "bothSlotsRate": 1,
+      "slotRecall": 1,
+      "meanReturned": 5,
+      "totalLinksUsed": 9
+    },
+    "randomControl": {
+      "questions": 8,
+      "bothSlots": 5,
+      "bothSlotsRate": 0.625,
+      "slotRecall": 0.813,
+      "meanReturned": 5,
+      "totalLinksUsed": 16
+    },
+    "unbudgeted": {
+      "questions": 8,
+      "bothSlots": 8,
+      "bothSlotsRate": 1,
+      "slotRecall": 1,
+      "meanReturned": 13.375,
+      "totalLinksUsed": 67
+    }
+  },
+  "goldPairNotLinked": {
+    "byMeaning": {
+      "questions": 2,
+      "bothSlots": 1,
+      "bothSlotsRate": 0.5,
+      "slotRecall": 0.75,
+      "meanReturned": 5,
+      "totalLinksUsed": 0
+    },
+    "linked": {
+      "questions": 2,
+      "bothSlots": 1,
+      "bothSlotsRate": 0.5,
+      "slotRecall": 0.75,
+      "meanReturned": 5,
+      "totalLinksUsed": 4
+    },
+    "strongLinked": {
+      "questions": 2,
+      "bothSlots": 1,
+      "bothSlotsRate": 0.5,
+      "slotRecall": 0.75,
+      "meanReturned": 5,
+      "totalLinksUsed": 1
+    },
+    "randomControl": {
+      "questions": 2,
+      "bothSlots": 1,
+      "bothSlotsRate": 0.5,
+      "slotRecall": 0.75,
+      "meanReturned": 5,
+      "totalLinksUsed": 4
+    },
+    "unbudgeted": {
+      "questions": 2,
+      "bothSlots": 1,
+      "bothSlotsRate": 0.5,
+      "slotRecall": 0.75,
+      "meanReturned": 13,
+      "totalLinksUsed": 16
+    }
+  },
+  "perQuestion": [
+    {
+      "id": "base64-whitespace",
+      "linkedByMiner": true,
+      "gold": [
+        "the fix=91a7d0d1|584b1089",
+        "the revert=23edf484"
+      ],
+      "byMeaning": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 0,
+        "shas": [
+          "23edf484",
+          "584b1089",
+          "91a7d0d1",
+          "b6066b3e",
+          "0a76f3d7"
+        ]
+      },
+      "linked": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 0,
+        "shas": [
+          "23edf484",
+          "584b1089",
+          "91a7d0d1",
+          "b6066b3e",
+          "0a76f3d7"
+        ]
+      },
+      "strongLinked": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 0,
+        "shas": [
+          "23edf484",
+          "584b1089",
+          "91a7d0d1",
+          "b6066b3e",
+          "0a76f3d7"
+        ]
+      },
+      "randomControl": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "23edf484",
+          "584b1089",
+          "91a7d0d1",
+          "44f6a03e",
+          "b9b62c65"
+        ]
+      },
+      "unbudgeted": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 18,
+        "linksUsed": 13,
+        "shas": [
+          "23edf484",
+          "584b1089",
+          "91a7d0d1",
+          "b6066b3e",
+          "0a76f3d7",
+          "c2be4f81",
+          "ccc15144",
+          "3063993a",
+          "611bd762",
+          "a1904fc2",
+          "07b0c3d8",
+          "7378e7cd",
+          "e25b68e1",
+          "2a5164f5",
+          "c8f06d36",
+          "5b34c0ce",
+          "e6c213ec",
+          "9a7ecc35"
+        ]
+      }
+    },
+    {
+      "id": "internals-prototype-move",
+      "linkedByMiner": true,
+      "gold": [
+        "the move=b1077f05",
+        "the regressions it caused=9f0a3d81"
+      ],
+      "byMeaning": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 0,
+        "shas": [
+          "b1077f05",
+          "9f0a3d81",
+          "c2be4f81",
+          "8fcb71a5",
+          "d6ca12ae"
+        ]
+      },
+      "linked": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "b1077f05",
+          "9f0a3d81",
+          "c2be4f81",
+          "c9ec89e0",
+          "b6066b3e"
+        ]
+      },
+      "strongLinked": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "b1077f05",
+          "9f0a3d81",
+          "c2be4f81",
+          "c9ec89e0",
+          "b6066b3e"
+        ]
+      },
+      "randomControl": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "b1077f05",
+          "9f0a3d81",
+          "c2be4f81",
+          "d2243638",
+          "bc17ac9b"
+        ]
+      },
+      "unbudgeted": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 16,
+        "linksUsed": 11,
+        "shas": [
+          "b1077f05",
+          "9f0a3d81",
+          "c2be4f81",
+          "8fcb71a5",
+          "d6ca12ae",
+          "c9ec89e0",
+          "b6066b3e",
+          "02c2baf7",
+          "9d20fdc3",
+          "78b523f0",
+          "1cab6938",
+          "92f47984",
+          "45fdeda5",
+          "fa77a4d7",
+          "f300476d",
+          "3c2dee9e"
+        ]
+      }
+    },
+    {
+      "id": "proto-strict-ordering",
+      "linkedByMiner": true,
+      "gold": [
+        "the __proto__ own-property fix=ead9fcb3",
+        "the .strict() regression fix=e7029aa4"
+      ],
+      "byMeaning": {
+        "bothSlots": false,
+        "slots": [
+          false,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 0,
+        "shas": [
+          "e7029aa4",
+          "d6ca12ae",
+          "4e1720c8",
+          "c2be4f81",
+          "6074828e"
+        ]
+      },
+      "linked": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "e7029aa4",
+          "d6ca12ae",
+          "4e1720c8",
+          "ead9fcb3",
+          "9c540db8"
+        ]
+      },
+      "strongLinked": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "e7029aa4",
+          "d6ca12ae",
+          "4e1720c8",
+          "ead9fcb3",
+          "9c540db8"
+        ]
+      },
+      "randomControl": {
+        "bothSlots": false,
+        "slots": [
+          false,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "e7029aa4",
+          "d6ca12ae",
+          "4e1720c8",
+          "07b0c3d8",
+          "7abe4e51"
+        ]
+      },
+      "unbudgeted": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 16,
+        "linksUsed": 11,
+        "shas": [
+          "e7029aa4",
+          "d6ca12ae",
+          "4e1720c8",
+          "c2be4f81",
+          "6074828e",
+          "ead9fcb3",
+          "9c540db8",
+          "b6066b3e",
+          "02c2baf7",
+          "9d20fdc3",
+          "78b523f0",
+          "1cab6938",
+          "611bd762",
+          "4d6b5cd3",
+          "fa77a4d7",
+          "3c2dee9e"
+        ]
+      }
+    },
+    {
+      "id": "lazy-internals-seal",
+      "linkedByMiner": true,
+      "gold": [
+        "the restore that added them=9f0a3d81",
+        "the perf change that dropped them=c9ec89e0"
+      ],
+      "byMeaning": {
+        "bothSlots": false,
+        "slots": [
+          false,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 0,
+        "shas": [
+          "c9ec89e0",
+          "d6ca12ae",
+          "8fcb71a5",
+          "c2be4f81",
+          "02c2baf7"
+        ]
+      },
+      "linked": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "c9ec89e0",
+          "d6ca12ae",
+          "8fcb71a5",
+          "9f0a3d81",
+          "fa77a4d7"
+        ]
+      },
+      "strongLinked": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 1,
+        "shas": [
+          "c9ec89e0",
+          "d6ca12ae",
+          "8fcb71a5",
+          "9f0a3d81",
+          "c2be4f81"
+        ]
+      },
+      "randomControl": {
+        "bothSlots": false,
+        "slots": [
+          false,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "c9ec89e0",
+          "d6ca12ae",
+          "8fcb71a5",
+          "cede2c63",
+          "285bde7f"
+        ]
+      },
+      "unbudgeted": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 15,
+        "linksUsed": 10,
+        "shas": [
+          "c9ec89e0",
+          "d6ca12ae",
+          "8fcb71a5",
+          "c2be4f81",
+          "02c2baf7",
+          "9f0a3d81",
+          "b6066b3e",
+          "9d20fdc3",
+          "78b523f0",
+          "1cab6938",
+          "fa77a4d7",
+          "28e1ebd8",
+          "3c2dee9e",
+          "fa338a3b",
+          "fbe8ad1b"
+        ]
+      }
+    },
+    {
+      "id": "tuple-input-optin",
+      "linkedByMiner": true,
+      "gold": [
+        "the object-side change=78b523f0",
+        "the tuple-side follow-up=eb4682c9"
+      ],
+      "byMeaning": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 0,
+        "shas": [
+          "eb4682c9",
+          "78b523f0",
+          "2abc9e05",
+          "b6066b3e",
+          "c2be4f81"
+        ]
+      },
+      "linked": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "eb4682c9",
+          "78b523f0",
+          "2abc9e05",
+          "7dd74848",
+          "02c2baf7"
+        ]
+      },
+      "strongLinked": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "eb4682c9",
+          "78b523f0",
+          "2abc9e05",
+          "7dd74848",
+          "02c2baf7"
+        ]
+      },
+      "randomControl": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "eb4682c9",
+          "78b523f0",
+          "2abc9e05",
+          "a1904fc2",
+          "7708d447"
+        ]
+      },
+      "unbudgeted": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 14,
+        "linksUsed": 9,
+        "shas": [
+          "eb4682c9",
+          "78b523f0",
+          "2abc9e05",
+          "b6066b3e",
+          "c2be4f81",
+          "7dd74848",
+          "02c2baf7",
+          "9d20fdc3",
+          "1cab6938",
+          "973b1b44",
+          "45fdeda5",
+          "97edd70a",
+          "92f47984",
+          "4d6b5cd3"
+        ]
+      }
+    },
+    {
+      "id": "mac-locale-gap",
+      "linkedByMiner": true,
+      "gold": [
+        "the feature that opened the gap=3d93a7d5",
+        "the backfill that closed it=7378e7cd"
+      ],
+      "byMeaning": {
+        "bothSlots": false,
+        "slots": [
+          false,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 0,
+        "shas": [
+          "7378e7cd",
+          "536ee3b0",
+          "2849df89",
+          "33d82e6b",
+          "c8f06d36"
+        ]
+      },
+      "linked": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "7378e7cd",
+          "536ee3b0",
+          "2849df89",
+          "3d93a7d5",
+          "ccc15144"
+        ]
+      },
+      "strongLinked": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "7378e7cd",
+          "536ee3b0",
+          "2849df89",
+          "3d93a7d5",
+          "ccc15144"
+        ]
+      },
+      "randomControl": {
+        "bothSlots": false,
+        "slots": [
+          false,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "7378e7cd",
+          "536ee3b0",
+          "2849df89",
+          "61d7bedb",
+          "d43cf19d"
+        ]
+      },
+      "unbudgeted": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 10,
+        "linksUsed": 5,
+        "shas": [
+          "7378e7cd",
+          "536ee3b0",
+          "2849df89",
+          "33d82e6b",
+          "c8f06d36",
+          "3d93a7d5",
+          "ccc15144",
+          "604464c3",
+          "0a76f3d7",
+          "4c27fe87"
+        ]
+      }
+    },
+    {
+      "id": "writeable-shape",
+      "linkedByMiner": true,
+      "gold": [
+        "the classic strict/loose fix=757f0b0f",
+        "the mini + extend/partial extension=fa4a3740"
+      ],
+      "byMeaning": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 0,
+        "shas": [
+          "fa4a3740",
+          "757f0b0f",
+          "d6ca12ae",
+          "8fcb71a5",
+          "b6066b3e"
+        ]
+      },
+      "linked": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "fa4a3740",
+          "757f0b0f",
+          "d6ca12ae",
+          "476ae243",
+          "fa77a4d7"
+        ]
+      },
+      "strongLinked": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 0,
+        "shas": [
+          "fa4a3740",
+          "757f0b0f",
+          "d6ca12ae",
+          "8fcb71a5",
+          "b6066b3e"
+        ]
+      },
+      "randomControl": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "fa4a3740",
+          "757f0b0f",
+          "d6ca12ae",
+          "e8034eba",
+          "0a76f3d7"
+        ]
+      },
+      "unbudgeted": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 9,
+        "linksUsed": 4,
+        "shas": [
+          "fa4a3740",
+          "757f0b0f",
+          "d6ca12ae",
+          "8fcb71a5",
+          "b6066b3e",
+          "c2be4f81",
+          "476ae243",
+          "fa77a4d7",
+          "3c2dee9e"
+        ]
+      }
+    },
+    {
+      "id": "unrepresentable-escape",
+      "linkedByMiner": true,
+      "gold": [
+        "the override reordering=fd074106",
+        "the function form=bd6619c0"
+      ],
+      "byMeaning": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 0,
+        "shas": [
+          "fd074106",
+          "bd6619c0",
+          "d6ca12ae",
+          "4e1720c8",
+          "8fcb71a5"
+        ]
+      },
+      "linked": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "fd074106",
+          "bd6619c0",
+          "d6ca12ae",
+          "b899cd17",
+          "97edd70a"
+        ]
+      },
+      "strongLinked": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 0,
+        "shas": [
+          "fd074106",
+          "bd6619c0",
+          "d6ca12ae",
+          "4e1720c8",
+          "8fcb71a5"
+        ]
+      },
+      "randomControl": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "fd074106",
+          "bd6619c0",
+          "d6ca12ae",
+          "11c9268b",
+          "a106fbe7"
+        ]
+      },
+      "unbudgeted": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 9,
+        "linksUsed": 4,
+        "shas": [
+          "fd074106",
+          "bd6619c0",
+          "d6ca12ae",
+          "4e1720c8",
+          "8fcb71a5",
+          "b899cd17",
+          "97edd70a",
+          "fa77a4d7",
+          "3c2dee9e"
+        ]
+      }
+    },
+    {
+      "id": "prototype-migration",
+      "linkedByMiner": false,
+      "gold": [
+        "the builder-method lazy bind=8fcb71a5",
+        "the full per-schema memory cut=3063993a"
+      ],
+      "byMeaning": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 0,
+        "shas": [
+          "3063993a",
+          "8fcb71a5",
+          "7708d447",
+          "d6ca12ae",
+          "b1077f05"
+        ]
+      },
+      "linked": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "3063993a",
+          "8fcb71a5",
+          "7708d447",
+          "e25b68e1",
+          "92f47984"
+        ]
+      },
+      "strongLinked": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 0,
+        "shas": [
+          "3063993a",
+          "8fcb71a5",
+          "7708d447",
+          "d6ca12ae",
+          "b1077f05"
+        ]
+      },
+      "randomControl": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "3063993a",
+          "8fcb71a5",
+          "7708d447",
+          "019c370f",
+          "a106fbe7"
+        ]
+      },
+      "unbudgeted": {
+        "bothSlots": true,
+        "slots": [
+          true,
+          true
+        ],
+        "returned": 15,
+        "linksUsed": 10,
+        "shas": [
+          "3063993a",
+          "8fcb71a5",
+          "7708d447",
+          "d6ca12ae",
+          "b1077f05",
+          "9f0a3d81",
+          "e25b68e1",
+          "92f47984",
+          "0a76f3d7",
+          "611bd762",
+          "faf33a28",
+          "4c27fe87",
+          "fa77a4d7",
+          "3c2dee9e",
+          "45fdeda5"
+        ]
+      }
+    },
+    {
+      "id": "tuple-minitems-history",
+      "linkedByMiner": false,
+      "gold": [
+        "the original bound=97edd70a",
+        "the input-mode correction=eb4682c9"
+      ],
+      "byMeaning": {
+        "bothSlots": false,
+        "slots": [
+          true,
+          false
+        ],
+        "returned": 5,
+        "linksUsed": 0,
+        "shas": [
+          "97edd70a",
+          "b6066b3e",
+          "d6ca12ae",
+          "f300476d",
+          "b6b12882"
+        ]
+      },
+      "linked": {
+        "bothSlots": false,
+        "slots": [
+          true,
+          false
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "97edd70a",
+          "b6066b3e",
+          "d6ca12ae",
+          "c2be4f81",
+          "bd6619c0"
+        ]
+      },
+      "strongLinked": {
+        "bothSlots": false,
+        "slots": [
+          true,
+          false
+        ],
+        "returned": 5,
+        "linksUsed": 1,
+        "shas": [
+          "97edd70a",
+          "b6066b3e",
+          "d6ca12ae",
+          "c2be4f81",
+          "f300476d"
+        ]
+      },
+      "randomControl": {
+        "bothSlots": false,
+        "slots": [
+          true,
+          false
+        ],
+        "returned": 5,
+        "linksUsed": 2,
+        "shas": [
+          "97edd70a",
+          "b6066b3e",
+          "d6ca12ae",
+          "476ae243",
+          "4c27fe87"
+        ]
+      },
+      "unbudgeted": {
+        "bothSlots": false,
+        "slots": [
+          true,
+          false
+        ],
+        "returned": 11,
+        "linksUsed": 6,
+        "shas": [
+          "97edd70a",
+          "b6066b3e",
+          "d6ca12ae",
+          "f300476d",
+          "b6b12882",
+          "c2be4f81",
+          "bd6619c0",
+          "78b523f0",
+          "fa77a4d7",
+          "3c2dee9e",
+          "9f0a3d81"
+        ]
+      }
+    }
+  ],
+  "returnedShas": {
+    "base64-whitespace": {
+      "byMeaning": "23edf484,584b1089,91a7d0d1,b6066b3e,0a76f3d7",
+      "linked": "23edf484,584b1089,91a7d0d1,b6066b3e,0a76f3d7"
+    },
+    "internals-prototype-move": {
+      "byMeaning": "b1077f05,9f0a3d81,c2be4f81,8fcb71a5,d6ca12ae",
+      "linked": "b1077f05,9f0a3d81,c2be4f81,c9ec89e0*,b6066b3e*"
+    },
+    "proto-strict-ordering": {
+      "byMeaning": "e7029aa4,d6ca12ae,4e1720c8,c2be4f81,6074828e",
+      "linked": "e7029aa4,d6ca12ae,4e1720c8,ead9fcb3*,9c540db8*"
+    },
+    "lazy-internals-seal": {
+      "byMeaning": "c9ec89e0,d6ca12ae,8fcb71a5,c2be4f81,02c2baf7",
+      "linked": "c9ec89e0,d6ca12ae,8fcb71a5,9f0a3d81*,fa77a4d7*"
+    },
+    "tuple-input-optin": {
+      "byMeaning": "eb4682c9,78b523f0,2abc9e05,b6066b3e,c2be4f81",
+      "linked": "eb4682c9,78b523f0,2abc9e05,7dd74848*,02c2baf7*"
+    },
+    "mac-locale-gap": {
+      "byMeaning": "7378e7cd,536ee3b0,2849df89,33d82e6b,c8f06d36",
+      "linked": "7378e7cd,536ee3b0,2849df89,3d93a7d5*,ccc15144*"
+    },
+    "writeable-shape": {
+      "byMeaning": "fa4a3740,757f0b0f,d6ca12ae,8fcb71a5,b6066b3e",
+      "linked": "fa4a3740,757f0b0f,d6ca12ae,476ae243*,fa77a4d7*"
+    },
+    "unrepresentable-escape": {
+      "byMeaning": "fd074106,bd6619c0,d6ca12ae,4e1720c8,8fcb71a5",
+      "linked": "fd074106,bd6619c0,d6ca12ae,b899cd17*,97edd70a*"
+    },
+    "prototype-migration": {
+      "byMeaning": "3063993a,8fcb71a5,7708d447,d6ca12ae,b1077f05",
+      "linked": "3063993a,8fcb71a5,7708d447,e25b68e1*,92f47984*"
+    },
+    "tuple-minitems-history": {
+      "byMeaning": "97edd70a,b6066b3e,d6ca12ae,f300476d,b6b12882",
+      "linked": "97edd70a,b6066b3e,d6ca12ae,c2be4f81*,bd6619c0*"
+    }
+  }
+}

@@ -86,10 +86,26 @@ export async function replayEvents(events: MemoryEvent[]): Promise<void> {
  * sequences — kept off deliberately since `events.id` (bigserial) must NOT
  * be touched by this at all and a blanket RESTART IDENTITY on unrelated
  * tables is one less thing to reason about being safe.
+ *
+ * `experience_accesses` (spec.md §24.5) is in the list for a reason worth
+ * stating: it is read-telemetry, NOT event-sourced. Nothing in the event log
+ * records a retrieval, so a rebuild cannot reconstruct it, and Postgres will
+ * refuse to TRUNCATE `experiences` while a table referencing it is left out
+ * — even an empty one. So a rebuild deliberately returns the corpus to "no
+ * memory has been usefully accessed yet": accesses are dropped and every
+ * `tier`/`distinct_sessions` on the replayed rows comes back at its column
+ * default (`short`/0).
+ *
+ * That is a real consequence, not an oversight, and it is the *consistent*
+ * choice — the alternative (keep the accounting, replay the memories) would
+ * leave a memory sitting in long-term with the confirmed-session rows that
+ * justified it now gone, i.e. a tier no surviving evidence supports. Tiers
+ * re-earn themselves from live traffic instead, which is exactly the signal
+ * §24.5 says a tier is supposed to represent.
  */
 export async function wipeMaterializedGraph(): Promise<void> {
   const pool = getPool();
-  await pool.query(`TRUNCATE TABLE experiences, edges, nodes`);
+  await pool.query(`TRUNCATE TABLE experience_accesses, experiences, edges, nodes`);
 }
 
 /** Full rebuild: wipe the materialized graph, replay every event ever recorded. */

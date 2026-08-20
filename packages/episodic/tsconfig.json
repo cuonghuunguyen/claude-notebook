@@ -4,6 +4,6 @@
     "outDir": "dist",
     "rootDir": "src"
   },
-  "references": [{ "path": "../core" }, { "path": "../graph-store" }, { "path": "../semantic" }, { "path": "../retrieval" }],
+  "references": [{ "path": "../core" }, { "path": "../graph-store" }, { "path": "../semantic" }, { "path": "../retrieval" }, { "path": "../tiers" }],
   "include": ["src"]
 }

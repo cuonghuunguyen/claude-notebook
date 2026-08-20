@@ -216,3 +216,31 @@ export const DEFAULT_TRAVERSAL_BUDGET: TraversalBudget = {
   maxReasoningSteps: 5,
   maxTokens: 8000,
 };
+
+/**
+ * spec.md §24.5 memory tiers. Ordered short → mid → long; a memory is born
+ * short-term at capture and climbs only on *confirmed* cross-session use.
+ *
+ * Lives in core rather than in `packages/tiers` because it is part of the
+ * stored shape of a memory (graph-store persists it, episodic ranks by it),
+ * and core is the one package all three can depend on. The transition *rules*
+ * are `packages/tiers`' business; only the vocabulary is here.
+ */
+export type MemoryTier = "short" | "mid" | "long";
+
+/** Tiers in promotion order — index arithmetic for promote/demote. */
+export const MEMORY_TIERS: readonly MemoryTier[] = ["short", "mid", "long"];
+
+/**
+ * How one (memory, session) access was settled once the session's task
+ * outcome was known — spec.md §24.5's answer to "access is not correctness".
+ *
+ * `provisional` is the state every access lands in at retrieval time; it
+ * never counts toward promotion, so an abandoned session promotes nothing.
+ */
+export type AccessOutcome =
+  | "provisional"
+  | "confirmed"
+  | "rejected"
+  | "unused"
+  | "self";

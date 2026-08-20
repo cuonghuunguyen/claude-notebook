@@ -29,7 +29,7 @@ This checklist is the source of truth for what's done — see
 - [ ] M13 — Refine-Memory Skill (read-repair + `supersedes` links)
 - [x] M14 — Knowledge-Link Edges (spike: memory-to-memory traversal, go/no-go on a measured win) — **outcome: NO-GO on integrating; `follows_up` a hard no. See BENCHMARKS.md**
 - [ ] M15 — Decommission the Structural Graph (gated on M11–M14 outcomes)
-- [ ] M16 — Memory Tiers: short/mid/long-term with access-driven promotion (extends §7/§18)
+- [x] M16 — Memory Tiers: short/mid/long-term with access-driven promotion (extends §7/§18)
 
 Repo layout target:
 

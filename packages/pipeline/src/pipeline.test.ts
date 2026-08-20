@@ -122,6 +122,8 @@ function makeMeaningHit(experience: Experience, score: number): ScoredExperience
   return {
     experience,
     score,
+    contentScore: score,
+    tier: "short",
     legs: ["text"],
     reason: "text_match",
     anchored: experience.relatedNodes.length > 0,

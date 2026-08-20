@@ -1,4 +1,4 @@
-import type { Experience } from "@cognitive-memory/core";
+import type { Experience, MemoryTier } from "@cognitive-memory/core";
 import { getPool, type Queryable } from "./db.js";
 import { toVectorLiteral } from "./vector.js";
 
@@ -14,6 +14,8 @@ interface ExperienceRow {
   confidence: number;
   timestamp: Date;
   cold: boolean;
+  /** spec.md §24.5. Read out onto search hits, never onto `Experience` — tier is storage/ranking metadata, not part of §8's contract. */
+  tier: MemoryTier;
 }
 
 interface ScoredExperienceRow extends ExperienceRow {
@@ -35,18 +37,33 @@ function rowToExperience(row: ExperienceRow): Experience {
   };
 }
 
-const EXPERIENCE_COLUMNS = `id, task, observation, hypothesis, action, result, lessons, related_nodes, confidence, "timestamp", cold`;
+const EXPERIENCE_COLUMNS = `id, task, observation, hypothesis, action, result, lessons, related_nodes, confidence, "timestamp", cold, tier`;
 
 /**
  * Append-only per spec.md §8 — there is deliberately no update/delete
  * export in this module. If you need to "correct" an experience, record a
  * new one; the promotion pipeline (M3) reasons over the full history.
  */
-export async function recordExperience(experience: Experience, db: Queryable = getPool()): Promise<Experience> {
+export interface RecordExperienceOptions {
+  /**
+   * The session recording this memory, when there is one (spec.md §24.5).
+   * Stored so that session's own later retrievals of it settle as `self` and
+   * cannot promote it — the no-self-promotion rule. A mined commit has no
+   * session and leaves this null, which correctly makes every session
+   * distinct from its (nonexistent) writer.
+   */
+  writerSession?: string;
+}
+
+export async function recordExperience(
+  experience: Experience,
+  db: Queryable = getPool(),
+  options: RecordExperienceOptions = {}
+): Promise<Experience> {
   const { rows } = await db.query<ExperienceRow>(
     `
-    INSERT INTO experiences (id, task, observation, hypothesis, action, result, lessons, related_nodes, confidence, "timestamp")
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamptz, now()))
+    INSERT INTO experiences (id, task, observation, hypothesis, action, result, lessons, related_nodes, confidence, "timestamp", writer_session)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamptz, now()), $11)
     RETURNING ${EXPERIENCE_COLUMNS}
     `,
     [
@@ -67,6 +84,7 @@ export async function recordExperience(experience: Experience, db: Queryable = g
       // meaningless — every mined memory would look newer than the history it
       // was mined from.
       experience.timestamp ?? null,
+      options.writerSession ?? null,
     ]
   );
   const row = rows[0];
@@ -152,10 +170,20 @@ export interface ExperienceSearchHit {
   experience: Experience;
   /** Leg-native score. NOT comparable across legs — see episodic's merge. */
   score: number;
+  /**
+   * spec.md §24.5 tier, carried on the hit rather than on the `Experience`.
+   * Ranking needs it (it is a §11 score multiplier) and it is already in the
+   * row, so plumbing it here costs nothing; putting it on `Experience` would
+   * mean changing a spec.md §8 type to carry a retrieval-time concern.
+   *
+   * Every leg returns it, so tier can never become a *filter* by accident:
+   * the searches themselves span all tiers exactly as before.
+   */
+  tier: MemoryTier;
 }
 
 function rowToHit(row: ScoredExperienceRow): ExperienceSearchHit {
-  return { experience: rowToExperience(row), score: row.score };
+  return { experience: rowToExperience(row), score: row.score, tier: row.tier };
 }
 
 /**

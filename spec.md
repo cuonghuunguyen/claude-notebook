@@ -1034,21 +1034,135 @@ retention signal.
   same event (retrieval) that triggers verification, so the hot tier is
   also the freshest tier by construction; the cold tail is handled by
   decay/GC rather than repair effort.
-- **Open problem — access is not correctness.** A plausible-but-wrong
+- **DECIDED (M16) — access is not correctness.** A plausible-but-wrong
   memory that keeps getting retrieved would climb tiers on raw access
-  counts. The promotion signal must therefore be *useful* access, not mere
-  retrieval. The mechanism is deliberately NOT decided yet (no measured
-  winner); M16 must pick from — or beat — these candidates, with a
-  measured justification:
-  1. **Verification-gated promotion**: an access only counts if read-repair
-     (§24.2.4) verified the memory fresh at that access; a stale verdict
-     contributes nothing (the supersession it triggers is the fix).
-  2. **Task-outcome feedback**: the quality gate already records pass/fail
-     bound to changed files at task end — join that back to the memories
-     retrieved during the task, so memories in failing tasks don't promote.
-  3. **Used-vs-ignored signal**: the agent cites which retrieved memories
-     it actually relied on; retrieved-but-repeatedly-ignored is a demotion
-     signal, not a neutral one.
+  counts, and the tier boost would then make it climb faster — a feedback
+  loop whose endpoint is the memory layer's most confident answers being
+  its wrongest ones. The promotion signal is therefore *useful* access,
+  never mere retrieval. Of the three candidates §24.5 originally listed,
+  M16 ships **candidates 2 and 3 composed** — task outcome as the negative
+  signal, reported use as the positive one. Neither alone is sufficient, and
+  the measurement below shows why candidate 2 by itself is not:
+  1. **Verification-gated promotion** — an access counts only if
+     read-repair (§24.2.4) verified the memory fresh at that access.
+     *Not shipped in M16 because read-repair is M13 and not built yet.*
+     Rejected on availability, not on merit: when M13 lands, a stale
+     verdict becomes one more reason to settle an access `rejected`, which
+     needs no schema change.
+  2. **Task-outcome feedback** — **SHIPPED, as the negative half.** The
+     quality gate (`.claude/hooks/quality-gate.sh`) records a real pass/FAIL
+     verdict per finished task. A **failed** task settles every memory it
+     retrieved `rejected`: the task had that context and still went wrong,
+     so none of it earns credit, and no claim is needed about which member
+     was at fault. A **passed** task, on its own, credits nothing — see
+     below, and see the measurement, which is what forced that asymmetry.
+  3. **Used-vs-ignored signal** — **SHIPPED, and REQUIRED for any
+     promotion.** `settleSession`'s `usedExperienceIds` names the memories
+     the session relied on; only those are `confirmed`. Everything else the
+     session retrieved settles `unused` — neutral, not negative, because
+     "the caller did not say" is not evidence against a memory.
+
+  **The two are composed, not alternatives, and the composition is
+  asymmetric on purpose.** Failure is broad (it discredits the whole
+  retrieved set); success is narrow (it credits only what was cited). The
+  measurement below is what settled this: a rule that credits everything a
+  *passing* task retrieved scores identically to raw access counting,
+  because a pass/fail verdict describes the task, not each memory the task
+  happened to retrieve — and most tasks pass. Composing outcome with
+  citation is what makes the signal informative.
+
+  **Fail-closed, twice.** Nothing promotes until an outcome is reported (an
+  abandoned session leaves its accesses `provisional` forever), and nothing
+  promotes unless the caller names it as used. "A good memory promotes once
+  someone reports relying on it" is a strictly cheaper failure than "a
+  wrong memory promotes because the tests were green for unrelated
+  reasons".
+
+  **The unit is the (memory, session) pair**, enforced as the primary key
+  of `experience_accesses` rather than as an assertion — which is what
+  makes "one chatty session cannot self-promote a memory" a property of the
+  data model *for a single caller reusing one honest session id*. An access
+  by the memory's own writer session settles `self`: neutral forever,
+  because a session that writes a memory and reads it back has corroborated
+  nothing.
+
+  **Trust boundary — the PK is not a security control.** `session_id`, the
+  reported outcome, and the accessed-id list are all caller-supplied and
+  unverified, and `applyTierDecisions` is directly callable. Three fabricated
+  session ids will move any memory to long-term. The accounting is designed
+  against *accident* — a chatty process, a self-read, a task that failed —
+  not against a hostile caller, and the primary key should not be read as
+  doing more than that. Anything stronger needs an authenticated notion of a
+  session, which this system does not have and §24.5 does not introduce.
+
+  **Thresholds** (stated, §7-style, so two runs promote identically):
+  short → mid at **1** confirmed distinct session, mid → long at **2**
+  more earned *after* reaching mid (three in total), counted only inside a
+  **90-day** sustained-access window and only from accesses settled
+  strictly after the memory entered its current tier. Requiring fresh
+  credit per tier is what stops one confirmation being counted twice, and
+  what stops an idle-demoted memory being re-promoted by its own ancient
+  credit on the next maintenance pass. Decay windows are 30/90/180 days
+  for short/mid/long; 3 rejected sessions since the last confirmation cost
+  a tier.
+
+  **Measured justification** (`eval/tier-promotion`). Three promotion rules
+  run over one workload, through the same policy function and the same
+  thresholds; the only variable is which accesses earn credit. A labelled
+  subset of the corpus is plausible-but-wrong, and the outcome signal is
+  deliberately **noisy in both directions** — a wrong memory relied on still
+  passes its task 30% of the time, and 10% of clean tasks fail anyway —
+  because a model where task outcome perfectly predicts memory correctness
+  would make the result arithmetic rather than evidence. The metric is
+  *precision*, because §24.5's costs are asymmetric: a sound memory left cold
+  is merely ranked lower, while a wrong memory in long-term is boosted into
+  every future answer.
+
+  | rule | tier distribution | boosted precision | wrong memories boosted | sound boosted |
+  |---|---|---|---|---|
+  | raw retrieval counting | short 0%, mid 1.8%, long 98.3% | 0.887 | 45 | 355 |
+  | task passed (broad) | short 0.3%, mid 5.3%, long 94.5% | 0.887 | 45 | 354 |
+  | task passed + reported use (**shipped**) | short 53.3%, mid 25.5%, long 21.3% | **0.968** | **6** | 181 |
+
+  400-memory corpus, 669 sessions, 45 plausible-but-wrong memories.
+
+  **The middle row is why the design changed.** Crediting everything a
+  *passing* task retrieved is gated, looks principled, and is statistically
+  indistinguishable from not gating at all — identical precision, the same 45
+  wrong memories boosted, and 94.5% of the corpus in long-term. The reason is
+  structural: a pass/fail verdict is a property of the task, not of each
+  memory the task happened to retrieve, and most tasks pass. So a rule built
+  on it alone is raw access counting wearing a gate's clothes — the exact
+  failure ROADMAP M16 calls an automatic review failure, reached by a
+  different route. Requiring the caller to *name* what it relied on cuts wrong
+  promotions from 45 to 6 and empties long-term of them entirely.
+
+  **What this does NOT establish**, stated plainly because the shipped rule's
+  precision is 0.968 and not 1.000: a wrong memory that is genuinely relied on
+  while the tests stay green still earns credit. Outcome-plus-citation is a
+  strong filter, not a correctness oracle, and no signal available in this
+  system today is one. Candidate 1 (verification-gated, needs M13's
+  read-repair) is the one that would attack that residue directly, which is
+  why it is recorded above as deferred on availability rather than rejected.
+
+  **And a caveat on the corpus.** The 400-memory figures are synthetic. Re-run
+  over this repository's own mined history the corpus is 27 memories, which is
+  too small for a precision estimate; what that run does establish is that the
+  shipped `recordRetrievalAccess` + `settleSession` path reproduces the
+  `narrow` arm's predicted tier distribution exactly, i.e. the measurement
+  describes the code that shipped rather than a model of it. The retrieval
+  *workload* in both runs is modelled, not replayed from real traffic — no
+  real access history exists yet, because nothing in the harness reports a
+  session's outcome (see the deployment note below).
+
+  **Deployment status (be explicit about this).** The write-on-read half is
+  wired into `queryByMeaning`, and the promotion half is inert until some
+  caller reports outcomes with citations: with no `usedExperienceIds`
+  producer, every access settles `unused` and nothing is ever promoted. That
+  is the intended fail-closed default, not a bug — but it means M16 ships the
+  tier machinery, the ranking boost, decay, and the schema, with promotion
+  waiting on a citation producer in the agent harness.
+
 - **Relation to bi-temporal designs (Zep/Graphiti)**: deliberately not
   adopted wholesale. Supersede chains + `created_at`/`superseded_at`
   timestamps already answer "what did we believe at time X" by walking a

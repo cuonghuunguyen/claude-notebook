@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { nodeId } from "@cognitive-memory/core";
-import { closePool, getEdgeByTriple, markExperienceCold, runMigrations, upsertNode } from "@cognitive-memory/graph-store";
+import { closePool, getEdgeByTriple, getTierState, markExperienceCold, runMigrations, upsertNode } from "@cognitive-memory/graph-store";
+import { settleSession } from "@cognitive-memory/tiers";
 import { recordObservation } from "@cognitive-memory/semantic";
 import { createFakeEmbedder } from "@cognitive-memory/retrieval";
 import { upsertExperienceEmbedding } from "@cognitive-memory/graph-store";
@@ -229,5 +230,69 @@ d("by-meaning retrieval (spec.md §24.2.1 / ROADMAP.md M11)", () => {
     });
     expect(recorded.timestamp).toBe(past);
     expect((await queryByTask(recorded.task))[0]?.timestamp).toBe(past);
+  });
+  it("performs write-on-read access accounting, and only sessions that REPORT using a memory promote it (spec.md §24.5)", async () => {
+    const marker = `tiers-${randomUUID().slice(0, 8)}`;
+    const recorded = await recordExperience({
+      task: `${marker} why the settle step is separate from the retrieval step`,
+      observation:
+        `${marker}: access accounting lands provisional at retrieval time and is settled ` +
+        `once the task outcome is known, because a retrieval on its own says nothing about ` +
+        `whether the memory was correct.`,
+      relatedNodes: [],
+      confidence: 0.7,
+      writerSession: `${marker}-writer`,
+    });
+    const question = `${marker} why is settle separate from retrieval`;
+
+    // Anonymous retrieval: found, ranked, and accounted for by nothing.
+    expect((await queryByMeaning(question)).map((h) => h.experience.id)).toContain(recorded.id);
+    expect((await getTierState(recorded.id))?.accessCount).toBe(0);
+
+    // Session one retrieves it through the shipped path — the accounting is a
+    // side effect of real retrieval, not something a caller has to remember.
+    const sessionOne = `${marker}-s1`;
+    const hits = await queryByMeaning(question, { session: sessionOne });
+    expect(hits.map((h) => h.experience.id)).toContain(recorded.id);
+    expect(hits[0]?.tier).toBe("short");
+
+    const afterRead = await getTierState(recorded.id);
+    expect(afterRead?.accessCount).toBe(1);
+    expect(afterRead?.lastAccessed).toBeTruthy();
+    expect(afterRead?.tier).toBe("short"); // provisional buys nothing
+
+    // A bare "the task passed" credits nothing (§24.5): the verdict describes
+    // the task, not this memory. The session has to say what it relied on.
+    await settleSession(sessionOne, "confirmed");
+    expect((await getTierState(recorded.id))?.tier).toBe("short");
+    expect((await getTierState(recorded.id))?.confirmedSessions).toBe(0);
+
+    // Same session, now reporting use. Its accesses are already settled
+    // `unused`, so a fresh session is what can still earn credit — which is
+    // itself the point: credit is not retroactive.
+    const sessionOneCiting = `${marker}-s1b`;
+    await queryByMeaning(question, { session: sessionOneCiting });
+    await settleSession(sessionOneCiting, "confirmed", { usedExperienceIds: [recorded.id] });
+    expect((await getTierState(recorded.id))?.tier).toBe("mid");
+
+    // Session two: a genuinely different session, so its confirmation is new
+    // credit — but one more is not yet "sustained", so it stays mid-term.
+    const sessionTwo = `${marker}-s2`;
+    const secondHits = await queryByMeaning(question, { session: sessionTwo });
+    expect(secondHits.find((h) => h.experience.id === recorded.id)?.tier).toBe("mid");
+    await settleSession(sessionTwo, "confirmed", { usedExperienceIds: [recorded.id] });
+
+    const settled = await getTierState(recorded.id);
+    expect(settled).toMatchObject({ tier: "mid", confirmedSessions: 2 });
+
+    // And the third distinct session is what earns long-term.
+    const sessionThree = `${marker}-s3`;
+    await queryByMeaning(question, { session: sessionThree });
+    await settleSession(sessionThree, "confirmed", { usedExperienceIds: [recorded.id] });
+    expect((await getTierState(recorded.id))?.tier).toBe("long");
+
+    // The memory's own writer reading it back is neutral — no credit either way.
+    await queryByMeaning(question, { session: `${marker}-writer` });
+    expect((await getTierState(recorded.id))?.confirmedSessions).toBe(3);
   });
 });

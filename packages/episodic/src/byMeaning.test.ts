@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { Experience } from "@cognitive-memory/core";
+import type { Experience, MemoryTier } from "@cognitive-memory/core";
 import type { ExperienceSearchHit } from "@cognitive-memory/graph-store";
+import { TIER_BOOST } from "@cognitive-memory/tiers";
 import { DEFAULT_LEG_WEIGHTS, fuseLegs, toExperienceTsQuery, type MeaningLeg } from "./byMeaning.js";
 
 function experience(id: string, overrides: Partial<Experience> = {}): Experience {
@@ -15,9 +16,19 @@ function experience(id: string, overrides: Partial<Experience> = {}): Experience
   };
 }
 
-const leg = (name: MeaningLeg, ids: string[], score = 1) => ({
+/** Every hit is short-tier unless a test says otherwise, so the pre-§24.5 fusion assertions stay unaffected by the boost (short's multiplier is 1). */
+const leg = (
+  name: MeaningLeg,
+  ids: string[],
+  score = 1,
+  tierById: Record<string, MemoryTier> = {}
+) => ({
   leg: name,
-  hits: ids.map<ExperienceSearchHit>((id) => ({ experience: experience(id), score })),
+  hits: ids.map<ExperienceSearchHit>((id) => ({
+    experience: experience(id),
+    score,
+    tier: tierById[id] ?? "short",
+  })),
 });
 
 describe("toExperienceTsQuery (spec.md §24.2.1)", () => {
@@ -85,8 +96,8 @@ describe("fuseLegs (spec.md §24.4 — §9's hybrid shape over experience conten
       {
         leg: "text",
         hits: [
-          { experience: experience("anchorless", { relatedNodes: [] }), score: 0.1 },
-          { experience: experience("anchored", { relatedNodes: ["src/a.ts"] }), score: 0.05 },
+          { experience: experience("anchorless", { relatedNodes: [] }), score: 0.1, tier: "short" as const },
+          { experience: experience("anchored", { relatedNodes: ["src/a.ts"] }), score: 0.05, tier: "short" as const },
         ],
       },
     ]);
@@ -97,9 +108,9 @@ describe("fuseLegs (spec.md §24.4 — §9's hybrid shape over experience conten
 
   it("breaks score ties deterministically: newer knowledge first, then id", () => {
     const hits = [
-      { experience: experience("b", { timestamp: "2026-01-01T00:00:00.000Z" }), score: 1 },
-      { experience: experience("a", { timestamp: "2026-01-01T00:00:00.000Z" }), score: 1 },
-      { experience: experience("c", { timestamp: "2026-06-01T00:00:00.000Z" }), score: 1 },
+      { experience: experience("b", { timestamp: "2026-01-01T00:00:00.000Z" }), score: 1, tier: "short" as const },
+      { experience: experience("a", { timestamp: "2026-01-01T00:00:00.000Z" }), score: 1, tier: "short" as const },
+      { experience: experience("c", { timestamp: "2026-06-01T00:00:00.000Z" }), score: 1, tier: "short" as const },
     ];
     // All at rank 0 in their own leg -> identical fused score.
     const fused = fuseLegs([
@@ -123,5 +134,55 @@ describe("fuseLegs (spec.md §24.4 — §9's hybrid shape over experience conten
 
   it("returns nothing when every leg came back empty", () => {
     expect(fuseLegs([leg("text", []), leg("trigram", []), leg("vector", [])])).toEqual([]);
+  });
+});
+
+describe("tier ranking boost (spec.md §24.5: a §11 multiplier, never a filter)", () => {
+  it("applies the tier multiplier to the fused score and reports the unboosted content score alongside it", () => {
+    const fused = fuseLegs([leg("text", ["hot"], 1, { hot: "long" })]);
+    const hit = fused[0]!;
+    expect(hit.tier).toBe("long");
+    expect(hit.contentScore).toBeLessThan(hit.score);
+    expect(hit.score).toBeCloseTo(hit.contentScore * TIER_BOOST.long, 10);
+  });
+
+  it("lets a hot-tier memory overtake a cold one on a near-tie", () => {
+    // Adjacent ranks in the same leg differ by well under the boost cap, so
+    // this is exactly the case tiers are meant to decide: two memories the
+    // content ranking cannot separate, one of which has repeatedly been
+    // useful.
+    const fused = fuseLegs([leg("text", ["cold-first", "hot-second"], 1, { "hot-second": "long" })]);
+    expect(fused.map((h) => h.experience.id)).toEqual(["hot-second", "cold-first"]);
+  });
+
+  it("does NOT let a hot tier overturn a real content-relevance gap — a cold memory that actually answers the question still wins", () => {
+    // 30 ranks apart in the text leg: an RRF score gap far wider than the
+    // 1.25x boost cap can close. §24.5's hard requirement is that retrieval
+    // "must never miss a correct cold memory outright — it may only rank it
+    // lower", and a multiplier with a bounded spread is what makes that
+    // checkable.
+    const ids = Array.from({ length: 31 }, (_, i) => (i === 0 ? "cold-best-match" : `filler-${i}`));
+    ids[30] = "hot-weak-match";
+    const fused = fuseLegs([leg("text", ids, 1, { "hot-weak-match": "long" })], { limit: 31 });
+
+    const cold = fused.find((h) => h.experience.id === "cold-best-match")!;
+    const hot = fused.find((h) => h.experience.id === "hot-weak-match")!;
+    expect(fused[0]?.experience.id).toBe("cold-best-match");
+    expect(hot.score).toBeLessThan(cold.score);
+
+    // Still present at a real position — ranked lower, never filtered out.
+    // It *did* move up (RRF scores are nearly flat in the tail, so a fixed
+    // multiplier crosses more ranks there than near the top; see fuseLegs).
+    // That is the boost doing its job where the content ranking has least to
+    // say, and it is bounded: the boosted score cannot reach the best match's.
+    expect(fused.indexOf(hot)).toBeGreaterThan(0);
+    expect(fused).toHaveLength(31);
+  });
+
+  it("never drops a tier from the result set — every tier is searched and returned", () => {
+    const fused = fuseLegs([
+      leg("text", ["s", "m", "l"], 1, { m: "mid", l: "long" }),
+    ]);
+    expect(fused.map((h) => h.tier).sort()).toEqual(["long", "mid", "short"]);
   });
 });

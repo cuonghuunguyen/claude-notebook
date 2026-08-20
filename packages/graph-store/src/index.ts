@@ -6,3 +6,4 @@ export * from "./vector.js";
 export * from "./experiences.js";
 export * from "./events.js";
 export * from "./materializer.js";
+export * from "./tiers.js";

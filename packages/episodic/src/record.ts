@@ -9,7 +9,16 @@ import { appendEvent, getPool, recordExperience as storeExperience } from "@cogn
  * identity scheme for it.
  */
 export type RecordExperienceInput = Omit<Experience, "id" | "timestamp"> &
-  Partial<Pick<Experience, "id" | "timestamp">>;
+  Partial<Pick<Experience, "id" | "timestamp">> & {
+    /**
+     * The session writing this memory (spec.md §24.5). Recorded so that
+     * session's own later retrievals of it are neutral and cannot promote it:
+     * a session that writes a memory and reads it back has corroborated
+     * nothing. Not part of `Experience` — it describes the write, not the
+     * knowledge — which is why it is an input field rather than a §8 field.
+     */
+    writerSession?: string;
+  };
 
 /**
  * Append-only per spec.md §8: this module deliberately exposes no
@@ -18,8 +27,9 @@ export type RecordExperienceInput = Omit<Experience, "id" | "timestamp"> &
  * a single "current" record.
  */
 export async function recordExperience(input: RecordExperienceInput): Promise<Experience> {
+  const { writerSession, ...rest } = input;
   const experience: Experience = {
-    ...input,
+    ...rest,
     id: input.id ?? randomUUID(),
     timestamp: input.timestamp ?? new Date().toISOString(),
   };
@@ -31,7 +41,7 @@ export async function recordExperience(input: RecordExperienceInput): Promise<Ex
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
-    const saved = await storeExperience(experience, client);
+    const saved = await storeExperience(experience, client, { writerSession });
     await appendEvent({ eventType: "ExperienceRecorded", payload: { experience: saved } }, client);
     await client.query("COMMIT");
     return saved;

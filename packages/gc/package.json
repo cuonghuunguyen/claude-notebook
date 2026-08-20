@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@cognitive-memory/core": "workspace:*",
-    "@cognitive-memory/graph-store": "workspace:*"
+    "@cognitive-memory/graph-store": "workspace:*",
+    "@cognitive-memory/tiers": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

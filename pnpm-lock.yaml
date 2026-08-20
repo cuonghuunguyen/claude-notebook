@@ -148,6 +148,31 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)
 
+  eval/tier-promotion:
+    dependencies:
+      '@cognitive-memory/capture':
+        specifier: workspace:*
+        version: link:../../packages/capture
+      '@cognitive-memory/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@cognitive-memory/graph-store':
+        specifier: workspace:*
+        version: link:../../packages/graph-store
+      '@cognitive-memory/tiers':
+        specifier: workspace:*
+        version: link:../../packages/tiers
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
   eval/traversal-cost:
     dependencies:
       '@cognitive-memory/core':
@@ -277,6 +302,9 @@ importers:
       '@cognitive-memory/retrieval':
         specifier: workspace:*
         version: link:../retrieval
+      '@cognitive-memory/tiers':
+        specifier: workspace:*
+        version: link:../tiers
     devDependencies:
       '@cognitive-memory/semantic':
         specifier: workspace:*
@@ -299,6 +327,9 @@ importers:
       '@cognitive-memory/graph-store':
         specifier: workspace:*
         version: link:../graph-store
+      '@cognitive-memory/tiers':
+        specifier: workspace:*
+        version: link:../tiers
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
@@ -460,6 +491,25 @@ importers:
       '@cognitive-memory/structural':
         specifier: workspace:*
         version: link:../structural
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
+  packages/tiers:
+    dependencies:
+      '@cognitive-memory/core':
+        specifier: workspace:*
+        version: link:../core
+      '@cognitive-memory/graph-store':
+        specifier: workspace:*
+        version: link:../graph-store
+    devDependencies:
       '@types/node':
         specifier: ^22.10.2
         version: 22.20.1

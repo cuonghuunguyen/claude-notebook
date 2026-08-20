@@ -30,7 +30,7 @@
  *     said. RRF only reads each leg's *rank order*, which is the part each leg
  *     is actually authoritative about.
  */
-import type { Experience } from "@cognitive-memory/core";
+import type { Experience, MemoryTier } from "@cognitive-memory/core";
 import {
   searchExperiencesByEmbedding,
   searchExperiencesByFullText,
@@ -38,6 +38,7 @@ import {
   type ExperienceSearchHit,
 } from "@cognitive-memory/graph-store";
 import type { EmbeddingProvider } from "@cognitive-memory/retrieval";
+import { recordRetrievalAccess, tierBoost } from "@cognitive-memory/tiers";
 
 /** Which search leg produced a hit. */
 export type MeaningLeg = "text" | "trigram" | "vector";
@@ -50,8 +51,21 @@ export type MeaningReason =
 
 export interface ScoredExperience {
   experience: Experience;
-  /** Fused rank score. Comparable within one `queryByMeaning` call only. */
+  /**
+   * Final rank score: the fused content score with spec.md §24.5's tier
+   * multiplier applied. Comparable within one `queryByMeaning` call only.
+   */
   score: number;
+  /**
+   * The fused score *before* the tier boost. Kept so the boost stays
+   * auditable — an eval (or a reader) can see exactly how much of a hit's
+   * position came from what it says versus from how often it has been useful,
+   * which is the difference a "boost, never a filter" claim has to be
+   * checkable on.
+   */
+  contentScore: number;
+  /** spec.md §24.5 tier of this memory. Reported; never used to include or exclude. */
+  tier: MemoryTier;
   /** Every leg that returned this experience, in leg order. */
   legs: MeaningLeg[];
   /** §9-style reason tag; `hybrid_match` when more than one leg agreed. */
@@ -108,6 +122,20 @@ export interface QueryByMeaningOptions {
   includeCold?: boolean;
   /** `word_similarity` floor for the trigram leg. Default 0.35. */
   trigramThreshold?: number;
+  /**
+   * Session recording this retrieval, for spec.md §24.5 access accounting.
+   *
+   * Omitted ⇒ the retrieval is anonymous and counts toward nothing. That is
+   * the right default rather than an oversight: the promotion unit is the
+   * *distinct session*, so a caller that cannot name a session has no
+   * distinct-session signal to contribute, and inventing one per call would
+   * turn a single chatty process into an unlimited promotion engine —
+   * precisely the failure §24.5 rules out.
+   *
+   * Accesses recorded here are `provisional`. They move nothing until the
+   * session reports its task outcome via `settleSession`.
+   */
+  session?: string;
   legWeights?: Partial<Record<MeaningLeg, number>>;
   rrfK?: number;
 }
@@ -171,7 +199,7 @@ export function fuseLegs(
 
   const accumulated = new Map<
     string,
-    { experience: Experience; score: number; legs: MeaningLeg[] }
+    { experience: Experience; score: number; legs: MeaningLeg[]; tier: MemoryTier }
   >();
 
   for (const { leg, hits } of legs) {
@@ -187,6 +215,7 @@ export function fuseLegs(
           experience: hit.experience,
           score: contribution,
           legs: [leg],
+          tier: hit.tier,
         });
       }
     });
@@ -195,7 +224,24 @@ export function fuseLegs(
   return [...accumulated.values()]
     .map((entry) => ({
       experience: entry.experience,
-      score: entry.score,
+      // spec.md §24.5: tier is a §11 score multiplier applied AFTER fusion,
+      // not a leg weight and not a filter. After fusion because the legs are
+      // fused by rank, not by score — folding the boost into a leg would
+      // change a hit's rank *within* a leg, which is the one thing each leg is
+      // authoritative about.
+      //
+      // Worth being explicit about what a *multiplier* on an RRF score does,
+      // since it is not rank-uniform: RRF scores are 1/(k+rank+1), which is
+      // steep at the top and nearly flat in the tail. So a fixed 1.25x moves a
+      // top-ranked hit by at most a place or two, and a tail hit by many more.
+      // That is the desirable direction (the boost decides where the content
+      // ranking has least to say) and it is still bounded in the only way
+      // §24.5 requires: a capped multiplier can never lift a weak match to the
+      // top over a genuinely better one, and it can never remove anything.
+      // The unit tests pin both halves.
+      score: entry.score * tierBoost(entry.tier),
+      contentScore: entry.score,
+      tier: entry.tier,
       legs: entry.legs,
       reason:
         entry.legs.length > 1
@@ -242,7 +288,7 @@ export async function queryByMeaning(
     ),
   ]);
 
-  return fuseLegs(
+  const ranked = fuseLegs(
     [
       { leg: "text", hits: text },
       { leg: "trigram", hits: trigram },
@@ -250,6 +296,24 @@ export async function queryByMeaning(
     ],
     { limit: options.limit ?? DEFAULT_LIMIT, legWeights: options.legWeights, rrfK: options.rrfK }
   );
+
+  // Write-on-read (spec.md §24.5), over what the caller actually GETS — the
+  // post-fusion, post-truncation list — not over every row the legs pulled.
+  // A memory that placed 19th in one leg and was never returned was not
+  // "accessed" in any sense a promotion should be able to read.
+  //
+  // `recordRetrievalAccess` swallows its own failures by contract, so this is
+  // awaited rather than fired-and-forgotten: awaiting costs one round trip and
+  // makes the accounting deterministic for callers and tests, while still
+  // never being able to fail the read.
+  if (options.session) {
+    await recordRetrievalAccess(
+      ranked.map((hit) => hit.experience.id),
+      options.session
+    );
+  }
+
+  return ranked;
 }
 
 async function resolveQueryEmbedding(

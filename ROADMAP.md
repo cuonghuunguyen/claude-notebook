@@ -25,7 +25,7 @@ This checklist is the source of truth for what's done — see
   never built** (knowledge-first pivot, human-directed 2026-08-19; see spec §24
   and the M10 section note below)
 - [x] M11 — Knowledge Layer as Product (by-meaning retrieval + capture — git-history mining AND session scout-report distillation — shipped into `packages/`)
-- [ ] M12 — Text Anchors & Commit-Triggered Staleness (git replaces the AST for anchoring and staleness)
+- [x] M12 — Text Anchors & Commit-Triggered Staleness (git replaces the AST for anchoring and staleness)
 - [ ] M13 — Refine-Memory Skill (read-repair + `supersedes` links)
 - [x] M14 — Knowledge-Link Edges (spike: memory-to-memory traversal, go/no-go on a measured win) — **outcome: NO-GO on integrating; `follows_up` a hard no. See BENCHMARKS.md**
 - [ ] M15 — Decommission the Structural Graph (gated on M11–M14 outcomes)
@@ -40,6 +40,7 @@ docker-compose.yml            # local Postgres+pgvector for contributors without
 migrations/
   0001_init.sql
   0004_experiences_content_search.sql   # M11: knowledge is searchable by its own content
+  0006_experience_anchors.sql           # M12: text anchors + commit-triggered staleness
 packages/
   core/                       # shared types (Node, Edge, Provenance, Experience) mirrored from spec.md §3-§8
   graph-store/                # Postgres client, migration runner, typed CRUD for nodes/edges/experiences/events
@@ -51,6 +52,8 @@ packages/
   context/                    # M6: subgraph -> compact agent context per spec §17
   pipeline/                   # M9: task -> AgentContext orchestration per spec §22
   capture/                    # M11: git-history mining + scout-report distillation per spec §24.2.1
+  staleness/                  # M12: text anchors + git-driven memory staleness per spec §24.2.2-3
+                              #      (also holds the §12 structural edge verifier, retired with M15)
 eval/                         # M7-adjacent: retrieval/staleness/promotion eval sets, spec §19
 ```
 

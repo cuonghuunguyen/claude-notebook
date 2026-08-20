@@ -16,7 +16,8 @@
  * just a file listing is rejected at the API boundary rather than quietly
  * written and later blamed for polluting retrieval.
  */
-import type { Experience } from "@cognitive-memory/core";
+import type { Anchor, Experience } from "@cognitive-memory/core";
+import { dedupeAnchors, formatAnchor, parseAnchor } from "@cognitive-memory/core";
 import { recordExperience } from "@cognitive-memory/episodic";
 import { upsertExperienceEmbedding } from "@cognitive-memory/graph-store";
 import type { EmbeddingProvider } from "@cognitive-memory/retrieval";
@@ -57,10 +58,17 @@ export interface ScoutReportInput {
    */
   understanding: string;
   /**
-   * Plain-text repo-relative paths the understanding covers (spec.md
-   * §24.2.2). No structural node needs to exist for any of them.
+   * What the understanding covers, as text anchors (spec.md §24.2.2). No
+   * structural node needs to exist for any of them.
+   *
+   * A plain string is a path, or `path#symbol` — the form
+   * `.claude/scout-report.json` uses, since a hook writing JSON by hand should
+   * not have to build objects. An `Anchor` object is accepted directly for
+   * programmatic callers. A scout report is the one capture source that CAN
+   * name a symbol: unlike the git miner (which sees only name-status), the
+   * agent writing it actually read the code.
    */
-  anchors: string[];
+  anchors: Array<string | Anchor>;
   /** Short takeaways. Defaults to `[understanding]`, matching the git miner. */
   lessons?: string[];
   /** How the task the report came out of ended, if it ended. */
@@ -127,7 +135,14 @@ export function assertSynthesizedUnderstanding(understanding: string): void {
  */
 export async function recordScoutReport(input: ScoutReportInput): Promise<Experience> {
   assertSynthesizedUnderstanding(input.understanding);
-  if (input.anchors.length === 0) {
+  const anchors = dedupeAnchors(
+    input.anchors
+      .map((anchor) => (typeof anchor === "string" ? parseAnchor(anchor) : anchor))
+      // A blank path is not an anchor — it would make the memory look checkable
+      // while matching no file, which is worse than being honestly unanchored.
+      .filter((anchor) => anchor.path.trim().length > 0)
+  );
+  if (anchors.length === 0) {
     throw new Error(
       "Scout report needs at least one anchor path — an unanchored memory can " +
         "never be checked against the code it describes (spec.md §24.2.3)."
@@ -142,7 +157,11 @@ export async function recordScoutReport(input: ScoutReportInput): Promise<Experi
     lessons: input.lessons ?? [input.understanding.trim()],
     // Plain text anchors, deliberately: spec.md §24.4 — new knowledge binds to
     // text anchors, not node ids. Nothing dereferences these as node ids.
-    relatedNodes: [...new Set(input.anchors)],
+    // Mirrored into `relatedNodes` in text form for the same reason the git
+    // miner does it (see `captureGitHistory`): that column is what
+    // `packages/gc` reads, and M15 is what retires it.
+    relatedNodes: anchors.map(formatAnchor),
+    anchors,
     confidence: input.confidence ?? DEFAULT_CONFIDENCE,
   });
 

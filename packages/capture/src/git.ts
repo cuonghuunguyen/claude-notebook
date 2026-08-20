@@ -13,7 +13,7 @@
  * `eval/why-spike` already wrote, so promoting this into a package does not
  * orphan the memories either of them recorded.
  */
-import type { Experience } from "@cognitive-memory/core";
+import type { Anchor, Experience } from "@cognitive-memory/core";
 import { recordExperience } from "@cognitive-memory/episodic";
 import {
   getExperienceById,
@@ -78,12 +78,16 @@ export interface CaptureGitHistoryResult {
  * `Experience`, skipping any commit already recorded.
  *
  * Anchors are the commit's own repo-relative paths as plain text (spec.md
- * §24.2.2 / §24.4). They go in `relatedNodes`, which migration 0001
- * deliberately made a non-foreign-key jsonb array precisely so it can hold
- * references to things the graph does not contain — so a memory is retrievable
- * and inspectable with no structural node in existence. M12 replaces this with
- * the typed `Anchor[]` column and adds the `{ path, symbol }` pair plus
- * commit-triggered staleness; M11 only needs the text half.
+ * §24.2.2 / §24.4) — so a memory is retrievable and inspectable with no
+ * structural node in existence.
+ *
+ * Since M12 they are written to the typed `anchors` column (migration 0006) AND
+ * still mirrored into `relatedNodes`. The mirror is not redundancy for its own
+ * sake: `relatedNodes` is where `options.resolveNodeIds` puts structural node
+ * ids, and `packages/gc`'s §18 cold-eligibility scan reads that column. Writing
+ * paths only to `anchors` would silently change which memories `packages/gc`
+ * considers, which is not this milestone's decision to make — M15 retires
+ * `relatedNodes` along with the structural graph.
  *
  * One consequence worth stating out loud: `packages/gc` decides §18 cold
  * eligibility by asking whether every entry in `relatedNodes` has a durable
@@ -137,6 +141,12 @@ export async function captureGitHistory(
       action,
       lessons: [lesson],
       relatedNodes: anchors,
+      // Typed text anchors (spec.md §24.2.2 / M12), path-only: a commit's
+      // name-status tells us which FILES it touched, not which symbols, and
+      // inferring the symbol would need the parser §24.2 point 7 keeps off this
+      // path. `symbol` is for capture sources that genuinely know one — a scout
+      // report written by an agent that read the code.
+      anchors: commit.files.map((path): Anchor => ({ path })),
       confidence: options.confidence ?? DEFAULT_CONFIDENCE,
       timestamp: commit.date || undefined,
     });

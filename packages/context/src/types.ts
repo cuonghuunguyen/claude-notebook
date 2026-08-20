@@ -40,6 +40,17 @@ export interface ExperienceSummary {
   task: string;
   lessons: string[];
   result?: string;
+  /**
+   * `POSSIBLY_STALE_FLAG` when a commit has touched this memory's anchored
+   * paths since it was recorded (spec.md §24.2.3), otherwise absent.
+   *
+   * The memory is still here — that is the point. §24.2.3 flags, never drops,
+   * because `WHY_MEMORY_SPIKE.md` measured missing context as its own cost.
+   * The agent reads the warning and decides whether to verify.
+   */
+  staleness?: string;
+  /** Which change raised the flag, e.g. `modified src/parse.ts in a1b2c3d4`. */
+  stalenessReason?: string;
 }
 
 export interface SourceFileSummary {

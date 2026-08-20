@@ -37,7 +37,7 @@ const REPO_ID = "claude-notebook";
 const require = createRequire(path.join(ROOT, "packages/structural/package.json"));
 const { Project } = require("ts-morph");
 
-const [{ extractProject, persistExtraction }, graphStore, retrieval, traversal, pipelineMod, episodic, contextMod, capture] =
+const [{ extractProject, persistExtraction }, graphStore, retrieval, traversal, pipelineMod, episodic, contextMod, capture, staleness] =
   await Promise.all([
     import(path.join(ROOT, "packages/structural/dist/index.js")),
     import(path.join(ROOT, "packages/graph-store/dist/index.js")),
@@ -47,6 +47,7 @@ const [{ extractProject, persistExtraction }, graphStore, retrieval, traversal, 
     import(path.join(ROOT, "packages/episodic/dist/index.js")),
     import(path.join(ROOT, "packages/context/dist/index.js")),
     import(path.join(ROOT, "packages/capture/dist/index.js")),
+    import(path.join(ROOT, "packages/staleness/dist/index.js")),
   ]);
 
 const { closePool, getPool, runMigrations } = graphStore;
@@ -100,6 +101,12 @@ async function sync() {
   const mined = result.mined;
   const added = result.recorded;
 
+  // spec.md §24.2.3 / M12: now that history has been mined, flag the memories
+  // that history has since overtaken. Runs after capture, not before: a commit
+  // mined in this same pass must not flag the memory it just created (capture
+  // stamps the commit's own date, and the test is strictly-newer).
+  const suspect = await staleness.markSuspectFromHistory({ repoDir: ROOT, limit: 500 });
+
   console.log(
     JSON.stringify(
       {
@@ -112,6 +119,11 @@ async function sync() {
         experiencesAdded: added,
         knowledgeMs: Date.now() - t1,
         indexedFiles: idByPath.size,
+        staleness: {
+          changedPaths: suspect.changedPaths,
+          candidates: suspect.candidates,
+          markedSuspect: suspect.marked,
+        },
       },
       null,
       2
@@ -150,9 +162,19 @@ async function ask(question) {
       },
     },
     contextOptions: { maxSourceFiles: 8 },
+    // spec.md §24.2.3 / M12: one git lookup, so a memory the history has
+    // overtaken arrives tagged rather than silently trusted.
+    stalenessRepoDir: ROOT,
   });
 
   const knowledge = await askKnowledge(question);
+  // The by-meaning listing below is a second query, so it does not inherit the
+  // pipeline's verdicts — re-flag it against the same history so what is
+  // printed matches what the context says.
+  const knowledgeVerdicts = await staleness.flagPossiblyStale(
+    knowledge.map((h) => h.experience),
+    { repoDir: ROOT }
+  );
 
   console.log(`## Code (${context.sourceFiles.length} files)\n`);
   for (const f of context.sourceFiles) console.log(`- ${path.relative(ROOT, f.path)}`);
@@ -161,13 +183,17 @@ async function ask(question) {
   if (knowledge.length === 0) {
     console.log("(nothing recorded for this — run `sync`, or the question may be new ground)");
   }
-  for (const hit of knowledge) {
+  for (const [i, hit] of knowledge.entries()) {
     const k = hit.experience;
+    const verdict = knowledgeVerdicts[i];
     console.log(
       `### ${k.task}\n_${k.action ?? "unknown source"} · ${new Date(k.timestamp)
         .toISOString()
         .slice(0, 10)} · ${hit.reason} (${hit.legs.join("+")}), score ${hit.score.toFixed(4)}_\n`
     );
+    if (verdict?.possiblyStale) {
+      console.log(`> **possibly-stale — verify before trusting** (${verdict.reason})\n`);
+    }
     console.log(`${k.observation.split("\n").slice(0, 14).join("\n")}\n`);
   }
   await closePool();
@@ -188,9 +214,18 @@ async function record(json) {
     result: input.result,
     lessons: input.lessons ?? [input.observation],
     relatedNodes: rows.map((r) => r.id),
+    // spec.md §24.2.2 / M12: also bind to the changed files as text anchors.
+    // Node ids alone would leave these memories permanently unfalsifiable —
+    // a node id names a symbol, so §24.2.3's staleness pass has nothing to ask
+    // git about. The quality gate writes here on every task, so without this
+    // the fastest-rotting memories in the system would be the ones staleness
+    // could never reach.
+    anchors: files.map((f) => ({ path: path.relative(ROOT, path.resolve(ROOT, f)) })),
     confidence: input.confidence ?? 0.7,
   });
-  console.log(JSON.stringify({ id: saved.id, boundTo: rows.length }));
+  console.log(
+    JSON.stringify({ id: saved.id, boundTo: rows.length, anchors: saved.anchors?.length ?? 0 })
+  );
   await closePool();
 }
 
@@ -214,6 +249,32 @@ async function scout(file) {
     embedder: retrieval.createFakeEmbedder(),
   });
   console.log(JSON.stringify({ id: saved.id, anchors: saved.relatedNodes.length }));
+  await closePool();
+}
+
+/**
+ * Runs spec.md §24.2.3's sync-time staleness pass on its own, without
+ * re-mining. Useful after a merge: `sync` does this too, but this is the cheap
+ * half when no new commits are worth capturing as knowledge.
+ */
+async function stale() {
+  await runMigrations();
+  const result = await staleness.markSuspectFromHistory({ repoDir: ROOT, limit: 500 });
+  const { rows } = await getPool().query(
+    'SELECT id, task, suspect_reason FROM experiences WHERE suspect ORDER BY "timestamp" DESC LIMIT 10'
+  );
+  console.log(
+    JSON.stringify(
+      {
+        changedPaths: result.changedPaths,
+        candidates: result.candidates,
+        markedSuspect: result.marked,
+        examples: rows.map((r) => `${r.task.slice(0, 60)} :: ${r.suspect_reason}`),
+      },
+      null,
+      2
+    )
+  );
   await closePool();
 }
 
@@ -246,11 +307,12 @@ const commands = {
   ask: () => ask(rest.join(" ")),
   record: () => record(rest.join(" ")),
   scout: () => scout(rest[0]),
+  stale,
   stats,
 };
 const run = commands[cmd];
 if (!run) {
-  console.error("usage: self-memory.mjs <sync|ask|record|scout|stats>");
+  console.error("usage: self-memory.mjs <sync|ask|record|scout|stale|stats>");
   process.exit(1);
 }
 run().catch((err) => {

@@ -97,13 +97,24 @@ describe("fuseLegs (spec.md §24.4 — §9's hybrid shape over experience conten
         leg: "text",
         hits: [
           { experience: experience("anchorless", { relatedNodes: [] }), score: 0.1, tier: "short" as const },
-          { experience: experience("anchored", { relatedNodes: ["src/a.ts"] }), score: 0.05, tier: "short" as const },
+          {
+            experience: experience("anchored", { relatedNodes: ["src/a.ts"] }),
+            score: 0.05,
+            tier: "short" as const,
+          },
+          // M12: the typed `anchors` column counts too, on its own.
+          {
+            experience: experience("typed-anchor", { anchors: [{ path: "src/b.ts" }] }),
+            score: 0.04,
+            tier: "short" as const,
+          },
         ],
       },
     ]);
     expect(fused[0]?.experience.id).toBe("anchorless");
     expect(fused[0]?.anchored).toBe(false);
     expect(fused[1]?.anchored).toBe(true);
+    expect(fused[2]?.anchored).toBe(true);
   });
 
   it("breaks score ties deterministically: newer knowledge first, then id", () => {

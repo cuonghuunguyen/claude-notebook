@@ -1,4 +1,5 @@
 import type { Node } from "@cognitive-memory/core";
+import { POSSIBLY_STALE_FLAG } from "@cognitive-memory/core";
 import type {
   AgentContext,
   BuildContextOptions,
@@ -94,6 +95,15 @@ export function buildContext(subgraph: Subgraph, task: string, options: BuildCon
       task: e.task,
       lessons: e.lessons ?? [],
       result: e.result,
+      // spec.md §24.2.3. Read straight off the memory rather than computed
+      // here: `buildContext` does no I/O by contract (§17, "no new LLM call
+      // required"), and deciding staleness needs a git lookup. Whoever assembled
+      // the subgraph owns that — `packages/staleness`'s `flagPossiblyStale` at
+      // read time, or the persisted sync-time verdict. Either way this stays
+      // pure templating.
+      ...(e.suspect
+        ? { staleness: POSSIBLY_STALE_FLAG, stalenessReason: e.suspectReason }
+        : {}),
     }));
 
   return { task, subsystems, relationships, invariants, experiences, sourceFiles };

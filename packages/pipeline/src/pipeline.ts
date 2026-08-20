@@ -6,6 +6,7 @@ import { queryByMeaning, queryByNode } from "@cognitive-memory/episodic";
 import { getNodesByIds } from "@cognitive-memory/graph-store";
 import type { EmbeddingProvider } from "@cognitive-memory/retrieval";
 import { retrieveSeeds } from "@cognitive-memory/retrieval";
+import { flagPossiblyStale, type StalenessVerdict } from "@cognitive-memory/staleness";
 import type { TraversalResult } from "@cognitive-memory/traversal";
 import { traverse } from "@cognitive-memory/traversal";
 import type { PipelineOptions, PipelineResult } from "./types.js";
@@ -82,6 +83,49 @@ function interleaveExperiences(
 }
 
 /**
+ * spec.md §24.2.3's read-time staleness pass over exactly the memories that
+ * are about to become context.
+ *
+ * Runs once, on the merged list, rather than once per memory source: it is a
+ * single git walk for the whole batch (`flagPossiblyStale`), and running it
+ * twice would double the git cost while producing the same verdicts.
+ *
+ * Placed after the experience budget is applied, not before. Staleness is not a
+ * ranking signal — a flagged memory is still returned (§24.2.3) — so checking
+ * memories that were never going to fit in the context would only widen the
+ * `--since` window and slow the walk down.
+ */
+async function applyStaleness(
+  experiences: Experience[],
+  options: PipelineOptions
+): Promise<{ experiences: Experience[]; staleness: StalenessVerdict[] }> {
+  if (!options.stalenessRepoDir || experiences.length === 0) {
+    return { experiences, staleness: [] };
+  }
+  let verdicts: StalenessVerdict[];
+  try {
+    verdicts = await flagPossiblyStale(experiences, {
+      repoDir: options.stalenessRepoDir,
+      limit: options.stalenessCommitLimit,
+    });
+  } catch {
+    // Staleness is an advisory annotation, and an annotation must not be able
+    // to break the thing it annotates. `stalenessRepoDir` pointing at a
+    // non-repository, a repo with no commits yet, `git` missing from PATH, or a
+    // `--name-status` dump past execFile's maxBuffer would otherwise turn every
+    // retrieval into a hard failure — losing the memory entirely, which
+    // §24.2.3 treats as the more expensive error than an unverified memory.
+    // Degrades to "no verdicts", i.e. exactly the no-checkout behaviour.
+    return { experiences, staleness: [] };
+  }
+  // `flagPossiblyStale` returns one verdict per input in input order and
+  // re-emits the memory with `suspect` set, so mapping straight through keeps
+  // the context's experience order (and therefore `buildContext`'s truncation)
+  // exactly as it was.
+  return { experiences: verdicts.map((v) => v.experience), staleness: verdicts };
+}
+
+/**
  * task -> `AgentContext` (spec.md §22): the composition layer over §9's
  * `retrieveSeeds`, §10's `traverse`, and §17's `buildContext` that no code
  * in the workspace previously provided. See spec.md §22 for the full
@@ -122,13 +166,23 @@ export async function runPipeline(task: string, options: PipelineOptions): Promi
   // say about it" — that conflation is exactly what spec.md §24.3 records as
   // §23's mistake.
   if (seeds.length === 0) {
+    const flagged = await applyStaleness(
+      byMeaningExperiences.slice(0, maxExperiences),
+      options
+    );
     const knowledgeOnly: Subgraph = {
       nodes: [],
       edges: [],
-      experiences: byMeaningExperiences.slice(0, maxExperiences),
+      experiences: flagged.experiences,
     };
     const context = buildContext(knowledgeOnly, task, options.contextOptions);
-    return { context, seeds, traversal: EMPTY_TRAVERSAL_RESULT, byMeaning };
+    return {
+      context,
+      seeds,
+      traversal: EMPTY_TRAVERSAL_RESULT,
+      byMeaning,
+      staleness: flagged.staleness,
+    };
   }
 
   // Step 4.
@@ -163,11 +217,14 @@ export async function runPipeline(task: string, options: PipelineOptions): Promi
   );
   const experiences = interleaveExperiences(byMeaningExperiences, nodeHydrated, maxExperiences);
 
+  // Step 6b: spec.md §24.2.3 — flag what the history has overtaken.
+  const flagged = await applyStaleness(experiences, options);
+
   // Step 7.
-  const subgraph: Subgraph = { nodes, edges: traversal.edges, experiences };
+  const subgraph: Subgraph = { nodes, edges: traversal.edges, experiences: flagged.experiences };
   const context = buildContext(subgraph, task, options.contextOptions);
 
-  return { context, seeds, traversal, byMeaning };
+  return { context, seeds, traversal, byMeaning, staleness: flagged.staleness };
 }
 
 /** Step 2b: spec.md §24.2.1's by-meaning leg, unless the caller turned it off. */

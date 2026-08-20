@@ -10,7 +10,8 @@
     { "path": "../retrieval" },
     { "path": "../traversal" },
     { "path": "../context" },
-    { "path": "../episodic" }
+    { "path": "../episodic" },
+    { "path": "../staleness" }
   ],
   "include": ["src"]
 }

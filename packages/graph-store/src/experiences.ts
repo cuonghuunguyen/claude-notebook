@@ -1,4 +1,5 @@
-import type { Experience, MemoryTier } from "@cognitive-memory/core";
+import type { Anchor, Experience, MemoryTier } from "@cognitive-memory/core";
+import { anchorsFromRelatedNodes } from "@cognitive-memory/core";
 import { getPool, type Queryable } from "./db.js";
 import { toVectorLiteral } from "./vector.js";
 
@@ -11,6 +12,9 @@ interface ExperienceRow {
   result: string | null;
   lessons: string[];
   related_nodes: string[];
+  anchors: Anchor[];
+  suspect: boolean;
+  suspect_reason: string | null;
   confidence: number;
   timestamp: Date;
   cold: boolean;
@@ -32,12 +36,20 @@ function rowToExperience(row: ExperienceRow): Experience {
     result: row.result ?? undefined,
     lessons: row.lessons,
     relatedNodes: row.related_nodes,
+    // A memory written before migration 0006 has an empty `anchors` column but
+    // may well carry paths in `related_nodes` (M11's capture put them there).
+    // Falling back keeps every pre-M12 memory checkable by the §24.2.3
+    // staleness pass instead of silently exempting it — and it is a read-time
+    // derivation, so nothing is rewritten and the fallback stays reversible.
+    anchors: row.anchors.length > 0 ? row.anchors : anchorsFromRelatedNodes(row.related_nodes),
+    suspect: row.suspect,
+    suspectReason: row.suspect_reason ?? undefined,
     confidence: row.confidence,
     timestamp: row.timestamp.toISOString(),
   };
 }
 
-const EXPERIENCE_COLUMNS = `id, task, observation, hypothesis, action, result, lessons, related_nodes, confidence, "timestamp", cold, tier`;
+const EXPERIENCE_COLUMNS = `id, task, observation, hypothesis, action, result, lessons, related_nodes, anchors, suspect, suspect_reason, confidence, "timestamp", cold, tier`;
 
 /**
  * Append-only per spec.md §8 — there is deliberately no update/delete
@@ -62,8 +74,8 @@ export async function recordExperience(
 ): Promise<Experience> {
   const { rows } = await db.query<ExperienceRow>(
     `
-    INSERT INTO experiences (id, task, observation, hypothesis, action, result, lessons, related_nodes, confidence, "timestamp", writer_session)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamptz, now()), $11)
+    INSERT INTO experiences (id, task, observation, hypothesis, action, result, lessons, related_nodes, anchors, confidence, "timestamp", writer_session)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, COALESCE($11::timestamptz, now()), $12)
     RETURNING ${EXPERIENCE_COLUMNS}
     `,
     [
@@ -75,6 +87,9 @@ export async function recordExperience(
       experience.result ?? null,
       JSON.stringify(experience.lessons ?? []),
       JSON.stringify(experience.relatedNodes),
+      // Text anchors (spec.md §24.2.2). `suspect` is deliberately not insertable
+      // — a memory is born trusted, and only the staleness pass may flag it.
+      JSON.stringify(experience.anchors ?? []),
       experience.confidence,
       // Previously omitted, so the column always fell back to its `DEFAULT
       // now()` and every caller-supplied timestamp was silently dropped.
@@ -360,4 +375,102 @@ export async function listExperienceActions(prefix = ""): Promise<string[]> {
     [prefix]
   );
   return rows.map((r) => r.action);
+}
+
+// ---------------------------------------------------------------------------
+// Text anchors + commit-triggered staleness (spec.md §24.2.2-§24.2.3 /
+// ROADMAP.md M12).
+// ---------------------------------------------------------------------------
+
+/**
+ * Memories anchored to any of `paths` — the query the sync-time staleness pass
+ * runs once per batch of changed paths.
+ *
+ * Uses jsonb containment (`anchors @> '[{"path": ...}]'`) so migration 0006's
+ * GIN index does the work. Containment is per-object subset matching, so a
+ * path-level trigger also finds `{ path, symbol }` anchors on that path — which
+ * is exactly M12's file-level trigger semantics, for free.
+ *
+ * `OR` across paths in one statement rather than one statement per path: a
+ * commit range can touch hundreds of files, and the caller wants one round trip.
+ *
+ * The second leg over `related_nodes` is the pre-M12 half, and it is not
+ * optional: every memory M11's capture recorded has its paths ONLY in
+ * `related_nodes`, so an `anchors`-only predicate would make the entire existing
+ * corpus permanently invisible to the staleness pass — the flag would work only
+ * for memories written after this migration. `rowToExperience` already derives
+ * anchors from `related_nodes` on read; this is the same fallback pushed down to
+ * the lookup so those memories are candidates in the first place. It rides
+ * migration 0001's `experiences_related_nodes_idx`, so it costs an index scan,
+ * not a table scan.
+ *
+ * One asymmetry to know about: `related_nodes` holds anchors in *text* form, so
+ * this leg matches a bare path exactly and will not find a legacy
+ * `path#symbol` entry from a path-level trigger. New writes populate `anchors`
+ * where containment handles that case properly; nothing is silently wrong, the
+ * older form is just coarser.
+ *
+ * Cold memories are INCLUDED here, unlike every retrieval query in this module.
+ * §18's cold flag governs what retrieval surfaces by default; it says nothing
+ * about whether a memory is still true. A cold memory that `includeCold` later
+ * brings back must not carry a staleness verdict that silently stopped being
+ * maintained while it was out of the hot path.
+ */
+export async function listExperiencesByAnchorPaths(paths: readonly string[]): Promise<Experience[]> {
+  const distinct = [...new Set(paths.filter((p) => p.trim().length > 0))];
+  if (distinct.length === 0) return [];
+  const { rows } = await getPool().query<ExperienceRow>(
+    `SELECT ${EXPERIENCE_COLUMNS} FROM experiences
+      WHERE anchors @> ANY ($1::jsonb[])
+         OR related_nodes @> ANY ($2::jsonb[])
+      ORDER BY "timestamp" DESC, id`,
+    [
+      distinct.map((path) => JSON.stringify([{ path }])),
+      distinct.map((path) => JSON.stringify([path])),
+    ]
+  );
+  return rows.map(rowToExperience);
+}
+
+/**
+ * Flags memories as suspect (spec.md §24.2.3).
+ *
+ * Not append-only-violating, on the same reasoning `upsertExperienceEmbedding`
+ * documents: this writes a *derived verdict about* the memory, not a correction
+ * to what the memory says. The memory's own text is untouched, and correcting
+ * content remains M13's `supersedes` chain.
+ *
+ * One statement for the whole batch via `unnest`, so marking 300 memories after
+ * a big merge is one round trip rather than 300. Idempotent — re-running the
+ * same sync re-writes the same verdict.
+ */
+export async function markExperiencesSuspect(
+  entries: ReadonlyArray<{ id: string; reason: string }>
+): Promise<number> {
+  if (entries.length === 0) return 0;
+  const { rowCount } = await getPool().query(
+    `UPDATE experiences AS e
+        SET suspect = true, suspect_reason = v.reason
+       FROM unnest($1::text[], $2::text[]) AS v(id, reason)
+      WHERE e.id = v.id`,
+    [entries.map((e) => e.id), entries.map((e) => e.reason)]
+  );
+  return rowCount ?? 0;
+}
+
+/**
+ * Clears the suspect flag on one memory.
+ *
+ * M12 never calls this — nothing in this milestone can establish that a
+ * suspect memory is actually still correct, and pretending otherwise is how a
+ * staleness system starts lying. It exists because M13's read-repair is the
+ * step that CAN establish it (verify against current code, then either clear or
+ * supersede), and leaving the setter without its inverse would make that
+ * milestone's first move a schema change instead of a behaviour change.
+ */
+export async function clearExperienceSuspect(id: string): Promise<void> {
+  await getPool().query(
+    `UPDATE experiences SET suspect = false, suspect_reason = NULL WHERE id = $1`,
+    [id]
+  );
 }

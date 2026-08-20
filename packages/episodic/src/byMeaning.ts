@@ -71,16 +71,22 @@ export interface ScoredExperience {
   /** §9-style reason tag; `hybrid_match` when more than one leg agreed. */
   reason: MeaningReason;
   /**
-   * True when the memory carries at least one anchor of any kind — a text path
-   * (spec.md §24.2.2) or a structural node id. Reported, never required: an
+   * True when the memory carries at least one anchor of any kind — a typed text
+   * anchor (spec.md §24.2.2, the `anchors` column since M12), a legacy text path
+   * in `relatedNodes`, or a structural node id. Reported, never required: an
    * anchorless memory ranks exactly the same, and ranking never reads this.
+   *
+   * Both columns are consulted because either can be populated alone: capture
+   * mirrors into both, but a caller writing straight through `graph-store` may
+   * set only `anchors`, and every pre-M12 memory has only `relatedNodes`.
+   * Reading one column would under-report in one of those two directions.
    *
    * Deliberately NOT "a structural node exists for this memory". Checking that
    * would mean a node lookup per hit, and it is not a question retrieval needs
    * answered — capture anchors every memory to the paths it came from, so in
    * practice this is true for everything mined or scouted. Treat it as "is
-   * there something to check this memory against later" (which is what M12's
-   * staleness pass will need), not as evidence the graph knows about it.
+   * there something to check this memory against later" — which is exactly what
+   * `packages/staleness` needs (M12) — not as evidence the graph knows about it.
    */
   anchored: boolean;
 }
@@ -247,7 +253,8 @@ export function fuseLegs(
         entry.legs.length > 1
           ? ("hybrid_match" as const)
           : REASON_FOR_SINGLE_LEG[entry.legs[0] as MeaningLeg],
-      anchored: entry.experience.relatedNodes.length > 0,
+      anchored:
+        (entry.experience.anchors?.length ?? 0) > 0 || entry.experience.relatedNodes.length > 0,
     }))
     // Ties are real (two experiences can hit the same rank in disjoint legs),
     // so break them deterministically instead of leaving Map order to decide:

@@ -28,7 +28,15 @@ export function renderContext(context: AgentContext): string {
       context.experiences.map((e) => {
         const headline = e.result ?? "(no recorded outcome)";
         const lessonLines = e.lessons.map((lesson) => `  - ${lesson}`);
-        return [`- [${e.task}] ${headline}`, ...lessonLines].join("\n");
+        // The flag goes on the headline, not in a trailing note: an agent
+        // skimming this section reads the first line of each entry, and a
+        // warning it might skip is a warning that does not work (spec.md
+        // §24.2.3). The reason follows in parentheses so "verify" is actionable
+        // — it names the commit to look at.
+        const flag = e.staleness
+          ? ` — **${e.staleness}**${e.stalenessReason ? ` (${e.stalenessReason})` : ""}`
+          : "";
+        return [`- [${e.task}] ${headline}${flag}`, ...lessonLines].join("\n");
       })
     ),
     section(

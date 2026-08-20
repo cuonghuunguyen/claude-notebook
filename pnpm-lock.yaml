@@ -380,6 +380,9 @@ importers:
       '@cognitive-memory/retrieval':
         specifier: workspace:*
         version: link:../retrieval
+      '@cognitive-memory/staleness':
+        specifier: workspace:*
+        version: link:../staleness
       '@cognitive-memory/traversal':
         specifier: workspace:*
         version: link:../traversal

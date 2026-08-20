@@ -18,5 +18,15 @@
     "@types/node": "^22.10.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./fixtureRepo": {
+      "types": "./dist/fixtureRepo.d.ts",
+      "default": "./dist/fixtureRepo.js"
+    }
   }
 }

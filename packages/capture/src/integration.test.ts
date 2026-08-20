@@ -109,6 +109,17 @@ d("git-history capture (spec.md §24.2.1 / ROADMAP.md M11)", () => {
     // spec.md §24.2.3 needs the memory dated by the commit, not by the sync.
     const parse = result.experiences.find((e) => e.relatedNodes.includes("src/parse.ts"));
     expect(parse?.timestamp.slice(0, 10)).toBe("2024-02-03");
+
+    // M12: the same paths also land in the typed `anchors` column, so the
+    // staleness pass can find this memory by anchor rather than by guessing
+    // which `relatedNodes` entries happen to be paths.
+    expect(parse?.anchors).toEqual([{ path: "src/parse.ts" }]);
+    // Path-only, deliberately: `git log --name-status` names files, not
+    // symbols, and inferring one would need the parser spec.md §24.2 point 7
+    // keeps off this path.
+    expect(result.experiences.every((e) => e.anchors?.every((a) => a.symbol === undefined))).toBe(
+      true
+    );
   });
 
   it("re-running over the same history writes nothing new", async () => {
@@ -261,6 +272,11 @@ d("scout-report capture (spec.md §24.2.1 second source class)", () => {
       "packages/traversal/src/traverse.ts",
       "packages/core/src/types.ts",
     ]);
+    // M12: typed anchors alongside the text mirror.
+    expect(recorded.anchors).toEqual([
+      { path: "packages/traversal/src/traverse.ts" },
+      { path: "packages/core/src/types.ts" },
+    ]);
 
     // No structural node exists for either anchor.
     const { rows } = await getPool().query<{ count: string }>(
@@ -275,6 +291,53 @@ d("scout-report capture (spec.md §24.2.1 second source class)", () => {
       { limit: 5 }
     );
     expect(hits.map((h) => h.experience.id)).toContain(recorded.id);
+  });
+
+  it("accepts path#symbol anchors — a scout report is the one source that knows a symbol", async () => {
+    // Unlike the git miner (which sees only name-status), the agent writing a
+    // scout report actually read the code, so spec.md §24.2.2's optional
+    // `symbol` half is reachable here. The string form is what
+    // `.claude/scout-report.json` writes by hand.
+    const recorded = await recordScoutReport({
+      task: `how ${randomUUID().slice(0, 8)} confidence promotion is computed`,
+      understanding:
+        "Confidence is recomputed from provenance on every read rather than stored, so " +
+        "an edge's stage is a derivation and never a column that can drift out of date. " +
+        "The consequence worth knowing is that adding a provenance entry retroactively " +
+        "changes the stage of every edge that shares it, which is intended: the evidence " +
+        "hierarchy is the single source of truth and the stage is only ever a view of it.",
+      anchors: [
+        "packages/semantic/src/confidence.ts#computeConfidence",
+        { path: "packages/semantic/src/edge.ts", symbol: "stageFor" },
+      ],
+      source: "integration-test-symbols",
+    });
+
+    expect(recorded.anchors).toEqual([
+      { path: "packages/semantic/src/confidence.ts", symbol: "computeConfidence" },
+      { path: "packages/semantic/src/edge.ts", symbol: "stageFor" },
+    ]);
+    // Mirrored back into `relatedNodes` in text form, so the column keeps one
+    // consistent representation.
+    expect(recorded.relatedNodes).toEqual([
+      "packages/semantic/src/confidence.ts#computeConfidence",
+      "packages/semantic/src/edge.ts#stageFor",
+    ]);
+  });
+
+  it("refuses a report whose anchors are all blank — an anchor that matches no file is not an anchor", async () => {
+    await expect(
+      recordScoutReport({
+        task: "how something works",
+        understanding:
+          "The promotion pipeline treats every observation as evidence rather than as a " +
+          "fact, so two independent source types are what move an edge from observation " +
+          "to candidate, and a single high-confidence source never can on its own. That " +
+          "is why a structural extraction pass alone leaves everything at observation " +
+          "stage no matter how many files it reads, which surprises people.",
+        anchors: ["", "   "],
+      })
+    ).rejects.toThrow(/anchor/i);
   });
 
   it("refuses a report that is only file locations, before it can pollute retrieval", async () => {

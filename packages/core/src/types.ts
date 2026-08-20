@@ -1,3 +1,5 @@
+import type { Anchor } from "./anchors.js";
+
 // Mirrors spec.md §3-§8. Keep this file and spec.md in sync — this package
 // is the contract every other package in the workspace imports against.
 
@@ -195,6 +197,34 @@ export interface Experience {
   lessons?: string[];
 
   relatedNodes: string[];
+
+  /**
+   * Text anchors this memory binds to (spec.md §24.2.2 / ROADMAP.md M12):
+   * `{ path, symbol? }`, never line numbers, never node ids.
+   *
+   * Alongside `relatedNodes` rather than replacing it, per ROADMAP M12 — the
+   * structural graph is alive until M15 and still writes node ids there. New
+   * knowledge binds here (spec.md §24.4); a pre-M12 memory's paths are read
+   * out of `relatedNodes` by `anchorsFromRelatedNodes`.
+   *
+   * Optional so every existing `Experience` literal in the workspace stays
+   * valid; storage normalizes a missing value to `[]`.
+   */
+  anchors?: Anchor[];
+
+  /**
+   * Set when a commit has touched one of `anchors`' paths since this memory
+   * was recorded (spec.md §24.2.3). Persisted by the sync-time pass, and also
+   * computed at read time from a single git lookup.
+   *
+   * A suspect memory is still returned, always — §24.2.3 is explicit that it
+   * is flagged, never silently dropped, because the why-spike measured missing
+   * context as a real cost too.
+   */
+  suspect?: boolean;
+
+  /** Which change made it suspect, e.g. `modified src/parse.ts in a1b2c3d4`. */
+  suspectReason?: string;
 
   confidence: number;
   timestamp: string;

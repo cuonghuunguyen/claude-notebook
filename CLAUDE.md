@@ -110,9 +110,10 @@ evidence-bar rule itself, not because of how often a cycle gets to run.
 both halves, because the benchmarks showed one without the other is useless:
 
 ```bash
-node scripts/self-memory.mjs sync              # structure + our own git history
+node scripts/self-memory.mjs sync              # structure + our own git history + staleness pass
 node scripts/self-memory.mjs ask "why ...?"    # code files + the reasoning behind them
 node scripts/self-memory.mjs scout report.json # persist a distilled scout report
+node scripts/self-memory.mjs stale             # M12: re-flag what history has overtaken
 node scripts/self-memory.mjs stats
 ```
 
@@ -131,6 +132,16 @@ the next session retrieves it instead of re-deriving it. Store synthesized
 understanding only: `packages/capture` rejects a report that is really a file
 listing, because grep already answers "where is X" in one turn (spec.md §24.2.1,
 measured in `E2E_BENCHMARK_MULTI_REPO.md`).
+
+Since M12 memories also bind to **text anchors** (`{ path, symbol? }` — never
+line numbers, never node ids) and staleness is git-driven: `sync` and `stale`
+flag any memory whose anchored paths a *newer* commit touched, and `ask` tags it
+`possibly-stale — verify before trusting` in the context it hands you. A flagged
+memory is still returned — the flag is a warning, not a filter, because
+`WHY_MEMORY_SPIKE.md` priced missing context in agent turns too. Repairing a
+flagged memory (rather than just noticing it) is M13. Anchors are text, so all
+of this works identically for SQL, YAML, docs and any language — nothing here
+parses anything (`packages/staleness`).
 
 `sync` is idempotent — it skips commits already recorded, so re-run it after
 merging. It mines the **whole** repo, not just `packages/`: the commits that

@@ -2,7 +2,7 @@
   "name": "claude-notebook",
   "private": true,
   "version": "0.1.0",
-  "description": "Codebase Cognitive Memory — structural/semantic/episodic graph memory for coding agents",
+  "description": "Codebase Cognitive Memory — knowledge memory for coding agents: the reasoning behind a codebase, mined from its history and retrieved by meaning",
   "engines": {
     "node": ">=20"
   },
@@ -20,8 +20,5 @@
     "eslint": "^8.57.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": ["tree-sitter", "tree-sitter-python"]
   }
 }

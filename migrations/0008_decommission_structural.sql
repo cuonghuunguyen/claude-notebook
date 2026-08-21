@@ -1,0 +1,65 @@
+-- Decommission the structural graph (spec.md §24, ROADMAP.md M15).
+--
+-- Drops the schema surface that existed only to hold code-symbol nodes and the
+-- edges between them: the `nodes` table, the `edges` table, and every index and
+-- constraint that came with them (`nodes_embedding_hnsw_idx`,
+-- `nodes_name_trgm_idx`, `nodes_path_trgm_idx`, `nodes_repo_path_idx`,
+-- `nodes_status_idx`, `nodes_type_idx`, `edges_from_idx`, `edges_to_idx`,
+-- `edges_relation_idx`, `edges_status_idx`, `edges_triple_uq`, and the two
+-- `edges -> nodes` foreign keys). Postgres removes those with the tables, so
+-- they are named here rather than dropped separately — a DROP INDEX on an index
+-- that belongs to a table being dropped in the same statement is noise, but a
+-- reader deserves the list.
+--
+-- ## Why this is a drop and not a deprecation
+--
+-- Nothing can write these tables any more. `packages/structural` (ts-morph) and
+-- `packages/structural-python` (tree-sitter) were the only producers of a node,
+-- and `packages/semantic` the only producer of an edge; all three were removed
+-- in the same milestone. A table no code can insert into and no code reads is
+-- not a deprecated surface, it is dead weight that every future migration,
+-- backup and `\dt` has to keep stepping over.
+--
+-- The measurement is in `BENCHMARKS.md`: on the same corpus and the same ten
+-- hand-labelled "why" questions, by-meaning retrieval scored MRR 0.85
+-- (lexical-only) / 0.90 (stub embedder) with 501 nodes and 1171 edges present,
+-- and *the same* 0.85 / 0.90 with the tables empty, while the node-gated arm
+-- scored 0.00 in both conditions. The graph was not carrying retrieval; it was
+-- being carried.
+--
+-- ## What is deliberately NOT dropped
+--
+-- `experiences.related_nodes` and its GIN index STAY, and this is the load-
+-- bearing decision in this file.
+--
+-- The column is named for what it held before spec.md §24.2.2 — a list of
+-- structural node ids — which makes "retire the node-gating surface" look like
+-- it should include it. It does not, for two independent reasons:
+--
+--   1. It holds real, current data. Since M11 `packages/capture` mirrors every
+--      memory's text anchors into it, and `listExperiencesByAnchorPaths`
+--      (graph-store) matches on BOTH `anchors` and `related_nodes` precisely so
+--      that memories written before M12 — which have anchors ONLY in
+--      `related_nodes` — remain findable. Dropping the column or its index
+--      would silently make the entire pre-M12 corpus invisible to §24.2.3's
+--      staleness pass, and this repository's own memory graph is largely
+--      pre-M12. `experiences_related_nodes_idx` is what makes that leg an index
+--      scan rather than a table scan, so it is a live index, not a node-gating
+--      one.
+--   2. `experiences` data is preserved by this milestone's contract. Dropping a
+--      populated column is data loss, and node ids in old rows are history:
+--      `anchorsFromRelatedNodes` (packages/core) still recognises and skips
+--      them precisely so a legacy node id is never mistaken for a path.
+--
+-- `events` also stays, with its pre-M15 `SymbolAdded` / `CodeChanged` /
+-- `RelationAdded` / ... rows intact. §14 makes the log the source of truth and
+-- append-only; `materializer.ts` now skips those event types explicitly and
+-- counts the skips, so a rebuild on an old database succeeds instead of
+-- throwing on the first structural event it meets.
+--
+-- Idempotent, like every migration here: `DROP TABLE IF EXISTS`, and `edges`
+-- before `nodes` so the foreign keys go with the referencing table rather than
+-- relying on CASCADE.
+
+DROP TABLE IF EXISTS edges;
+DROP TABLE IF EXISTS nodes;

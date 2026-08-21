@@ -2,20 +2,20 @@
 /**
  * Dogfooding: point this memory system at this repository.
  *
- * Two things go into the graph, because the benchmarks showed one without the
- * other is what made the memory useless:
+ * What goes in is knowledge: this repo's own commits that explain themselves,
+ * recorded as Experiences anchored to the files they touched, plus the scout
+ * reports sessions write back.
  *
- *   structure — every .ts under packages/ and eval/ (ts-morph -> nodes/edges)
- *   knowledge — this repo's own commits that explain themselves, recorded as
- *               Experiences bound to the files they touched
- *
- * `WHY_MEMORY_SPIKE.md` measured the second half as the one that pays: on
- * questions about *why* the code is the way it is, memory cut an agent from
- * 7.7 turns to 1.4 against a baseline that had full git access. Structure
- * alone loses to grep.
+ * It used to be two halves — that, and every `.ts` under `packages/` and
+ * `eval/` extracted into nodes and edges by ts-morph. `WHY_MEMORY_SPIKE.md`
+ * measured which half paid: on questions about *why* the code is the way it is,
+ * memory cut an agent from 7.7 turns to 1.4 against a baseline that had full
+ * git access. `E2E_BENCHMARK_MULTI_REPO.md` measured the other half losing to
+ * grep. M15 removed the losing half (spec.md §24), so `sync` no longer parses
+ * anything — which is also why it now works for a repository in any language.
  *
  * Usage:
- *   node scripts/self-memory.mjs sync             # ingest structure + history
+ *   node scripts/self-memory.mjs sync             # mine history + staleness pass
  *   node scripts/self-memory.mjs ask "why ...?"   # query it
  *   node scripts/self-memory.mjs record <json>    # append one experience
  *   node scripts/self-memory.mjs scout <file>     # persist a distilled scout report
@@ -32,68 +32,38 @@
  * wiring: which repo, which globs, and how the output is printed.
  */
 import { readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+/**
+ * Kept for the `sync` report only. It used to scope the structural graph
+ * (`nodes.repo_id`); memories have never been repo-scoped — a single database
+ * holds one repo's memory today, and scoping them is a separate decision
+ * nothing has needed yet.
+ */
 const REPO_ID = "claude-notebook";
 
-const require = createRequire(path.join(ROOT, "packages/structural/package.json"));
-const { Project } = require("ts-morph");
-
-const [{ extractProject, persistExtraction }, graphStore, retrieval, traversal, pipelineMod, episodic, contextMod, capture, staleness, core] =
-  await Promise.all([
-    import(path.join(ROOT, "packages/structural/dist/index.js")),
-    import(path.join(ROOT, "packages/graph-store/dist/index.js")),
-    import(path.join(ROOT, "packages/retrieval/dist/index.js")),
-    import(path.join(ROOT, "packages/traversal/dist/index.js")),
-    import(path.join(ROOT, "packages/pipeline/dist/index.js")),
-    import(path.join(ROOT, "packages/episodic/dist/index.js")),
-    import(path.join(ROOT, "packages/context/dist/index.js")),
-    import(path.join(ROOT, "packages/capture/dist/index.js")),
-    import(path.join(ROOT, "packages/staleness/dist/index.js")),
-    import(path.join(ROOT, "packages/core/dist/index.js")),
-  ]);
+const [graphStore, pipelineMod, episodic, capture, staleness, core] = await Promise.all([
+  import(path.join(ROOT, "packages/graph-store/dist/index.js")),
+  import(path.join(ROOT, "packages/pipeline/dist/index.js")),
+  import(path.join(ROOT, "packages/episodic/dist/index.js")),
+  import(path.join(ROOT, "packages/capture/dist/index.js")),
+  import(path.join(ROOT, "packages/staleness/dist/index.js")),
+  import(path.join(ROOT, "packages/core/dist/index.js")),
+]);
 
 const { closePool, getPool, runMigrations } = graphStore;
 
-/** Source scope: the library and its harnesses, excluding tests and build output. */
-const GLOBS = [
-  `${ROOT}/packages/*/src/**/*.ts`,
-  `${ROOT}/eval/*/src/**/*.ts`,
-  `!${ROOT}/**/*.test.ts`,
-  `!${ROOT}/**/dist/**`,
-];
-
 async function sync() {
   await runMigrations();
-  const t0 = Date.now();
 
-  const project = new Project({ compilerOptions: { rootDir: ROOT } });
-  project.addSourceFilesAtPaths(GLOBS);
-  const extraction = extractProject(project, REPO_ID);
-  await persistExtraction(extraction, REPO_ID);
-  await retrieval.indexNodeEmbeddings(extraction.nodes, retrieval.createFakeEmbedder());
-  const structureMs = Date.now() - t0;
-
-  // Knowledge half: our own history, through the shipped capture package.
-  // Idempotent by contract (spec.md §24.2.1) — re-running after a merge only
-  // records commits that are actually new.
+  // Our own history, through the shipped capture package. Idempotent by
+  // contract (spec.md §24.2.1) — re-running after a merge only records commits
+  // that are actually new.
   const t1 = Date.now();
-  const { rows } = await getPool().query(
-    "SELECT id, path FROM nodes WHERE repo_id = $1 AND type = 'file' AND path IS NOT NULL",
-    [REPO_ID]
-  );
-  const idByPath = new Map(rows.map((r) => [r.path, r.id]));
-  // The structural graph is still alive until M15, so keep new memories bound
-  // to it as well as to their text anchors — that is what `resolveNodeIds` is
-  // for. Text anchors are written unconditionally by the package.
-  const resolveNodeIds = (paths) =>
-    paths.map((f) => idByPath.get(path.join(ROOT, f))).filter(Boolean);
-
-  const embedder = retrieval.createFakeEmbedder();
+  const embedder = core.createFakeEmbedder();
   // Whole repo, not just `packages/`: the commits that recorded this project's
   // biggest decisions (the spec.md §24 pivot, for instance) touch spec.md and
   // ROADMAP.md at the root, and a subtree-scoped mine cannot see them — which
@@ -102,7 +72,6 @@ async function sync() {
     repoDir: ROOT,
     pathScope: "",
     limit: 500,
-    resolveNodeIds,
     embedder,
   });
   const mined = result.mined;
@@ -118,14 +87,9 @@ async function sync() {
     JSON.stringify(
       {
         repoId: REPO_ID,
-        files: project.getSourceFiles().length,
-        nodes: extraction.nodes.length,
-        edges: extraction.edges.length,
-        structureMs,
         explanatoryCommits: mined,
         experiencesAdded: added,
         knowledgeMs: Date.now() - t1,
-        indexedFiles: idByPath.size,
         staleness: {
           changedPaths: suspect.changedPaths,
           candidates: suspect.candidates,
@@ -140,59 +104,41 @@ async function sync() {
 }
 
 /**
- * Retrieve knowledge by its own content, through the shipped by-meaning API.
- * The spike measured the node-gated path at MRR 0.13 (it returns whatever is
- * newest on the traversed files) against 0.75 for this; M11 re-measured the
- * shipped package path at 0.85 lexical-only / 0.90 with the stub embedder (see
- * BENCHMARKS.md).
+ * Ask the memory, through the shipped pipeline (spec.md §22).
+ *
+ * `runPipeline` is what produces the ranked hits AND their staleness verdicts
+ * in one pass, so this prints exactly what an agent calling the product would
+ * be handed — no second query that could disagree with the first. Before M15 it
+ * also printed a "Code" section from the structural graph, and the by-meaning
+ * listing had to be a separate query because the pipeline's own context was
+ * recency-sorted; `PipelineResult.byMeaning` carries the ranking now.
+ *
+ * The spike measured the node-gated path at MRR 0.13 against 0.75 for this;
+ * M11 re-measured the shipped package path at 0.85 lexical-only / 0.90 with
+ * the stub embedder, and M15's gate re-confirmed both numbers with the
+ * structural graph present and absent (see BENCHMARKS.md).
  */
-async function askKnowledge(question, limit = 4) {
-  return episodic.queryByMeaning(question, { limit, embedder: retrieval.createFakeEmbedder() });
-}
-
 async function ask(question) {
   if (!question) throw new Error('usage: self-memory.mjs ask "your question"');
 
-  const { context } = await pipelineMod.runPipeline(question, {
-    repoId: REPO_ID,
-    embedder: retrieval.createFakeEmbedder(),
-    graph: traversal.createPostgresGraphProvider(),
-    reasoner: {
-      async decide(ctx) {
-        return {
-          decisions: ctx.candidates.map((c) => ({
-            edgeId: c.edgeId,
-            action: c.score >= 0.15 ? "expand" : "skip",
-          })),
-          stop: false,
-        };
-      },
-    },
-    contextOptions: { maxSourceFiles: 8 },
+  const { byMeaning: knowledge, staleness: verdicts } = await pipelineMod.runPipeline(question, {
+    embedder: core.createFakeEmbedder(),
+    byMeaning: { limit: 4 },
+    maxExperiences: 4,
+    contextOptions: { maxExperiences: 4 },
     // spec.md §24.2.3 / M12: one git lookup, so a memory the history has
     // overtaken arrives tagged rather than silently trusted.
     stalenessRepoDir: ROOT,
   });
+  const verdictById = new Map(verdicts.map((v) => [v.experience.id, v]));
 
-  const knowledge = await askKnowledge(question);
-  // The by-meaning listing below is a second query, so it does not inherit the
-  // pipeline's verdicts — re-flag it against the same history so what is
-  // printed matches what the context says.
-  const knowledgeVerdicts = await staleness.flagPossiblyStale(
-    knowledge.map((h) => h.experience),
-    { repoDir: ROOT }
-  );
-
-  console.log(`## Code (${context.sourceFiles.length} files)\n`);
-  for (const f of context.sourceFiles) console.log(`- ${path.relative(ROOT, f.path)}`);
-
-  console.log(`\n## Why / prior knowledge (${knowledge.length})\n`);
+  console.log(`## Why / prior knowledge (${knowledge.length})\n`);
   if (knowledge.length === 0) {
     console.log("(nothing recorded for this — run `sync`, or the question may be new ground)");
   }
-  for (const [i, hit] of knowledge.entries()) {
+  for (const hit of knowledge) {
     const k = hit.experience;
-    const verdict = knowledgeVerdicts[i];
+    const verdict = verdictById.get(k.id);
     console.log(
       `### ${k.task}\n_${k.action ?? "unknown source"} · ${new Date(k.timestamp)
         .toISOString()
@@ -214,29 +160,24 @@ async function ask(question) {
 async function record(json) {
   const input = JSON.parse(json);
   const files = input.files ?? [];
-  const { rows } = await getPool().query(
-    "SELECT id, path FROM nodes WHERE repo_id = $1 AND type = 'file' AND path = ANY($2::text[])",
-    [REPO_ID, files.map((f) => path.resolve(ROOT, f))]
-  );
+  // spec.md §24.2.2 / §24.4: memories bind to the changed files as text
+  // anchors, and since M15 that is the only binding there is. It was always the
+  // load-bearing one — a node id names a symbol, so §24.2.3's staleness pass
+  // had nothing to ask git about it, and the quality gate writes here on every
+  // task, which would have made the fastest-rotting memories in the system the
+  // ones staleness could never reach.
+  const anchors = files.map((f) => ({ path: path.relative(ROOT, path.resolve(ROOT, f)) }));
   const saved = await episodic.recordExperience({
     task: input.task,
     observation: input.observation,
     action: input.action,
     result: input.result,
     lessons: input.lessons ?? [input.observation],
-    relatedNodes: rows.map((r) => r.id),
-    // spec.md §24.2.2 / M12: also bind to the changed files as text anchors.
-    // Node ids alone would leave these memories permanently unfalsifiable —
-    // a node id names a symbol, so §24.2.3's staleness pass has nothing to ask
-    // git about. The quality gate writes here on every task, so without this
-    // the fastest-rotting memories in the system would be the ones staleness
-    // could never reach.
-    anchors: files.map((f) => ({ path: path.relative(ROOT, path.resolve(ROOT, f)) })),
+    relatedNodes: anchors.map((a) => a.path),
+    anchors,
     confidence: input.confidence ?? 0.7,
   });
-  console.log(
-    JSON.stringify({ id: saved.id, boundTo: rows.length, anchors: saved.anchors?.length ?? 0 })
-  );
+  console.log(JSON.stringify({ id: saved.id, anchors: saved.anchors?.length ?? 0 }));
   await closePool();
 }
 
@@ -257,7 +198,7 @@ async function scout(file) {
   const saved = await capture.recordScoutReport({
     ...input,
     anchors: (input.anchors ?? []).map((a) => path.relative(ROOT, path.resolve(ROOT, a))),
-    embedder: retrieval.createFakeEmbedder(),
+    embedder: core.createFakeEmbedder(),
   });
   console.log(JSON.stringify({ id: saved.id, anchors: saved.relatedNodes.length }));
   await closePool();
@@ -422,18 +363,6 @@ async function supersede(file) {
         return { ...parsed, path: path.relative(ROOT, path.resolve(ROOT, parsed.path)) };
       })
     : undefined;
-  // Only looked up when the caller re-anchored. When they did NOT, the node
-  // bindings are inherited from the superseded memory (which is right — same
-  // code); when they DID, the resolved set is passed even if it is empty, so a
-  // correction cannot end up silently bound to the old memory's symbols after
-  // being explicitly pointed somewhere else.
-  const { rows } = anchors
-    ? await getPool().query(
-        "SELECT id FROM nodes WHERE repo_id = $1 AND type = 'file' AND path = ANY($2::text[])",
-        [REPO_ID, anchors.map((a) => path.resolve(ROOT, a.path))]
-      )
-    : { rows: [] };
-
   const { experience, superseded } = await episodic.recordSupersedingExperience({
     supersedes: input.supersedes,
     task: input.task,
@@ -441,7 +370,9 @@ async function supersede(file) {
     action: input.action ?? `refine-memory: corrects ${input.supersedes}`,
     result: input.result,
     lessons: input.lessons ?? [input.observation],
-    relatedNodes: anchors ? rows.map((r) => r.id) : undefined,
+    // Mirrored in text form, or inherited from the superseded memory when the
+    // caller did not re-anchor — the two bindings move together (M13).
+    relatedNodes: anchors ? anchors.map((a) => core.formatAnchor(a)) : undefined,
     anchors,
     confidence: input.confidence ?? 0.8,
   });
@@ -450,7 +381,7 @@ async function supersede(file) {
   // ranks a correction on the same footing as everything else in the corpus.
   await graphStore.upsertExperienceEmbedding(
     experience.id,
-    await retrieval.createFakeEmbedder().embed(capture.embeddedText(experience))
+    await core.createFakeEmbedder().embed(capture.embeddedText(experience))
   );
 
   console.log(
@@ -496,18 +427,25 @@ async function history(id) {
 
 async function stats() {
   const pool = getPool();
-  const [nodes, edges, experiences, latest] = await Promise.all([
-    pool.query("SELECT type, count(*) FROM nodes WHERE repo_id = $1 GROUP BY type", [REPO_ID]),
-    pool.query("SELECT relation, count(*) FROM edges WHERE repo_id = $1 GROUP BY relation", [REPO_ID]),
+  const [experiences, tiers, flags, latest] = await Promise.all([
     pool.query("SELECT count(*) FROM experiences"),
+    pool.query("SELECT tier, count(*) FROM experiences GROUP BY tier"),
+    pool.query(
+      `SELECT count(*) FILTER (WHERE suspect AND superseded_by IS NULL) AS suspect,
+              count(*) FILTER (WHERE superseded_by IS NOT NULL) AS superseded,
+              count(*) FILTER (WHERE cold) AS cold
+         FROM experiences`
+    ),
     pool.query('SELECT task, action FROM experiences ORDER BY "timestamp" DESC LIMIT 5'),
   ]);
   console.log(
     JSON.stringify(
       {
-        nodes: Object.fromEntries(nodes.rows.map((r) => [r.type, Number(r.count)])),
-        edges: Object.fromEntries(edges.rows.map((r) => [r.relation, Number(r.count)])),
         experiences: Number(experiences.rows[0].count),
+        tiers: Object.fromEntries(tiers.rows.map((r) => [r.tier, Number(r.count)])),
+        suspect: Number(flags.rows[0].suspect),
+        superseded: Number(flags.rows[0].superseded),
+        cold: Number(flags.rows[0].cold),
         newest: latest.rows.map((r) => `${r.action ?? "-"} ${r.task}`.slice(0, 90)),
       },
       null,

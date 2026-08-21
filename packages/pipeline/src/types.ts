@@ -1,50 +1,54 @@
+import type { EmbeddingProvider } from "@cognitive-memory/core";
 import type { AgentContext, BuildContextOptions } from "@cognitive-memory/context";
 import type { QueryByMeaningOptions, ScoredExperience } from "@cognitive-memory/episodic";
-import type { EmbeddingProvider, RetrieveOptions, SeedNode } from "@cognitive-memory/retrieval";
 import type { StalenessVerdict } from "@cognitive-memory/staleness";
-import type { GraphProvider, ReasoningProvider, TraversalResult, TraverseOptions } from "@cognitive-memory/traversal";
 
-/** spec.md §22: composes retrieval (§9) / traversal (§10) / context (§17) into one entry point. */
+/**
+ * spec.md §22, as it stands after M15: composes §24.2.1's by-meaning retrieval,
+ * §24.2.3's read-time staleness check and §17's context construction into one
+ * entry point.
+ *
+ * §22 originally composed §9's `retrieveSeeds`, §10's `traverse` and §17's
+ * `buildContext` — retrieve code seeds, walk the symbol graph, hydrate the
+ * memories bound to the nodes it reached. M15 removed that path entirely, on
+ * the measurement in `BENCHMARKS.md`: on the same corpus and the same ten
+ * hand-labelled "why" questions, the node-gated arm found the answering commit
+ * 0 times out of 10 whether the graph held 501 nodes or none, while by-meaning
+ * scored MRR 0.85 identically in both conditions. A stage that cannot change
+ * an outcome is not a stage.
+ */
 export interface PipelineOptions {
-  repoId?: string;
   /**
-   * Shared with both retrieval's vector leg and traversal's ranking term —
-   * computed at most once per `runPipeline` call (spec.md §22 step 1), never
-   * independently by each stage, so the two stages can't disagree about
-   * what "semantically relevant to this task" means for the same call.
+   * Shared with the by-meaning vector leg — computed at most once per
+   * `runPipeline` call (spec.md §22 step 1), never independently per stage.
    */
   embedder?: EmbeddingProvider;
-  graph: GraphProvider;
-  reasoner: ReasoningProvider;
-  retrieveOptions?: Omit<RetrieveOptions, "embedder" | "repoId">;
-  traverseOptions?: Omit<TraverseOptions, "graph" | "reasoner" | "taskEmbedding">;
   contextOptions?: BuildContextOptions;
   /**
-   * Flat cap on hydrated experiences across the whole subgraph, independent
-   * of node count — keeps this bounded the same way §17's own DEFAULT_MAX_*
-   * caps bound `buildContext`'s output. Default 20.
+   * Flat cap on hydrated experiences, keeping this bounded the same way §17's
+   * own DEFAULT_MAX_* caps bound `buildContext`'s output. Default 20.
    *
    * The effective cap is `min(this, contextOptions.maxExperiences ?? 10)`:
    * `buildContext` sorts experiences by recency *before* truncating, so
    * anything handed to it beyond its own cap is dropped by date rather than by
-   * relevance — which since M11 would silently discard the best by-meaning hit,
-   * because the memory that answers a "why" question is usually an old one.
-   * Raise `contextOptions.maxExperiences` too if you want more than 10 through.
+   * relevance — which would silently discard the best by-meaning hit, because
+   * the memory that answers a "why" question is usually an old one. Raise
+   * `contextOptions.maxExperiences` too if you want more than 10 through.
    */
   maxExperiences?: number;
   /**
-   * By-meaning experience retrieval (spec.md §24.2.1 / ROADMAP.md M11): match
-   * the task against experience *text*, independent of any node hit.
-   *
-   * On by default, and deliberately so — this is the measured-stronger half of
-   * the memory (MRR 0.75 vs 0.13 for node-gated hydration,
-   * `WHY_MEMORY_SPIKE.md`). Pass `false` to get the pre-M11 node-gated-only
-   * behaviour, which is what the node-gated baseline in `eval/why-spike` needs.
+   * Overrides for by-meaning experience retrieval (spec.md §24.2.1): match the
+   * task against experience *text*.
    *
    * `embedder` and `queryEmbedding` are supplied by `runPipeline` itself from
    * the single task embedding of §22 step 1 — setting them here has no effect.
+   *
+   * Until M15 this option also accepted `false`, which reproduced the pre-M11
+   * node-gated-only behaviour for `eval/why-spike`'s baseline arm. There is no
+   * node-gated path left to fall back to, so the flag went with it: turning
+   * by-meaning off now would mean "retrieve nothing".
    */
-  byMeaning?: boolean | Omit<QueryByMeaningOptions, "embedder" | "queryEmbedding">;
+  byMeaning?: Omit<QueryByMeaningOptions, "embedder" | "queryEmbedding">;
   /**
    * Absolute path to a git work tree for the repo these memories describe.
    * Given, `runPipeline` runs spec.md §24.2.3's read-time staleness check over
@@ -65,14 +69,10 @@ export interface PipelineOptions {
 
 export interface PipelineResult {
   context: AgentContext;
-  /** Surfaced for callers/eval harnesses that need to see *why* — spec.md §9. */
-  seeds: SeedNode[];
-  /** Surfaced for callers/eval harnesses that need to see *why* — spec.md §10. */
-  traversal: TraversalResult;
   /**
    * The by-meaning hits, with their fusion scores and matching legs — the
    * ranking `context.experiences` loses when `buildContext` re-sorts by
-   * recency. Empty when `byMeaning` is disabled (spec.md §24.2.1).
+   * recency (spec.md §24.2.1).
    */
   byMeaning: ScoredExperience[];
   /**
@@ -81,15 +81,15 @@ export interface PipelineResult {
    * when the git lookup failed — staleness never fails a retrieval.
    *
    * **Key these by `experience.id`, never by position.** They are in pipeline
-   * order (relevance-interleaved), while `context.experiences` is re-sorted by
+   * order (relevance-ranked), while `context.experiences` is re-sorted by
    * recency inside `buildContext` and then truncated — so index `i` of one is
    * routinely a different memory than index `i` of the other. That is the
    * normal case, not an edge case: the top-ranked by-meaning answer is
    * frequently an old commit.
    *
-   * Surfaced for the same reason `seeds` and `traversal` are: a caller that
-   * wants to act on staleness — M13's read-repair especially — needs the
-   * matching commits, not just the rendered warning string.
+   * Surfaced because a caller that wants to act on staleness — M13's
+   * read-repair especially — needs the matching commits, not just the rendered
+   * warning string.
    */
   staleness: StalenessVerdict[];
 }

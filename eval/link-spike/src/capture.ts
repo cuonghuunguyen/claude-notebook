@@ -2,14 +2,17 @@
  * Fills the database with the corpus the probe reads, using the shipped
  * `captureGitHistory` from `packages/capture` — no spike-local persistence.
  *
- * Unlike `eval/why-spike/src/capture.ts` this passes no `resolveNodeIds`:
- * M14 never touches the structural graph, and by-meaning retrieval does not
- * dereference a node id (spec.md §24.2.1). Anchors are the commit's own paths
- * as plain text.
+ * Anchors are the commit's own paths as plain text: M14 never touched the
+ * structural graph, and by-meaning retrieval never dereferenced a node id
+ * (spec.md §24.2.1). Through M14 that was a deliberate contrast with
+ * `eval/why-spike/src/capture.ts`, which bound node ids as well so the
+ * node-gated baseline arm had something to hydrate; M15 removed the graph, the
+ * arm and the `resolveNodeIds` option, so text anchors are simply what capture
+ * writes now.
  */
 import { captureGitHistory } from "@cognitive-memory/capture";
 import { closePool } from "@cognitive-memory/graph-store";
-import { createFakeEmbedder } from "@cognitive-memory/retrieval";
+import { createFakeEmbedder } from "@cognitive-memory/core";
 import { commitLimit, pathScope, repoDir } from "./config.js";
 
 async function main(): Promise<void> {

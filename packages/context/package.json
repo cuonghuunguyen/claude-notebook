@@ -11,9 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@cognitive-memory/core": "workspace:*",
-    "@cognitive-memory/episodic": "workspace:*",
-    "@cognitive-memory/graph-store": "workspace:*"
+    "@cognitive-memory/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

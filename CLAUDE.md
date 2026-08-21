@@ -1,19 +1,25 @@
 # Codebase Cognitive Memory
 
-A graph-based memory layer for coding agents. `spec.md` is the contract;
+A knowledge memory for coding agents: the reasoning behind a codebase, mined
+from its own history and retrieved by meaning. (It began as a code-symbol graph;
+`spec.md` §24 and `BENCHMARKS.md` record why that half was measured out and
+removed in M15.) `spec.md` is the contract;
 `ROADMAP.md` tracks milestone status (check it before doing anything — it's
 the source of truth, not this file's memory of past sessions).
 
 ## Rules (non-negotiable — see AGENT_HARNESS.md for the full rationale)
 
 - Stack is locked: pnpm + TypeScript workspaces, Postgres + pgvector +
-  pg_trgm, ts-morph for TS/JS structural extraction. Don't introduce a
-  different one without flagging it explicitly first. One approved
-  addition: `tree-sitter` for the Python extractor (spec.md §21, ROADMAP.md
-  M8) — flagged in PR #9 and signed off by a human, so `/next-milestone`
-  building M8 does not need to re-flag this as a new deviation. Any
-  *other* new dependency still needs the same explicit flag-and-wait this
-  rule always required.
+  pg_trgm. Don't introduce a different one without flagging it explicitly
+  first. **There is no parser in the stack any more** — M15 removed
+  `ts-morph` (M1's TS/JS extractor) and `tree-sitter` (M8's Python one)
+  along with the structural graph they fed, and spec.md §24.2 point 7 makes
+  language-agnosticism a design principle rather than a side effect:
+  *nothing may reintroduce a per-language dependency on the load-bearing
+  path*. Adding a parser back is not a "new dependency" decision, it is a
+  reversal of a measured decision — flag it as such. Any other new
+  dependency still needs the same explicit flag-and-wait this rule always
+  required.
 - Never check a ROADMAP.md milestone box without having actually run its
   tests in this session and seen them pass (unit always; integration tests
   need `DATABASE_URL`, set automatically by the SessionStart hook —
@@ -22,8 +28,8 @@ the source of truth, not this file's memory of past sessions).
   A single automated run MAY ship several milestones back-to-back (see
   "Picking up work" below), but each still gets its own branch, PR, and
   merge decision.
-- `spec.md`'s already-made decisions (§3.2 node identity, §3.3 confidence
-  vs weight, §7 promotion thresholds, §10 traversal batching) are final —
+- `spec.md`'s already-made decisions (§3.3 confidence vs weight, §7 promotion
+  thresholds, §24.2's five, §24.5's tier shape, §24.7's retirements) are final —
   extend them, don't relitigate them. If one genuinely blocks a milestone,
   say so in the commit/PR description instead of silently overriding it.
 - Passing your own tests isn't done. Before opening a PR: run an independent
@@ -106,12 +112,16 @@ evidence-bar rule itself, not because of how often a cycle gets to run.
 
 ## This repo uses its own memory
 
-`scripts/self-memory.mjs` points the system at this repository. It ingests
-both halves, because the benchmarks showed one without the other is useless:
+`scripts/self-memory.mjs` points the system at this repository. It ingests the
+half the benchmarks showed pays — this repo's own explanatory commits and the
+scout reports sessions write back. Until M15 it also ran ts-morph over
+`packages/**/*.ts` into nodes and edges; that half lost to grep
+(`E2E_BENCHMARK_MULTI_REPO.md`) and is gone, which is why `sync` no longer
+parses anything and finishes in ~240ms:
 
 ```bash
-node scripts/self-memory.mjs sync              # structure + our own git history + staleness pass
-node scripts/self-memory.mjs ask "why ...?"    # code files + the reasoning behind them
+node scripts/self-memory.mjs sync              # our own git history + staleness pass
+node scripts/self-memory.mjs ask "why ...?"    # the reasoning behind the code
 node scripts/self-memory.mjs scout report.json # persist a distilled scout report
 node scripts/self-memory.mjs stale             # M12: re-flag what history has overtaken
 node scripts/self-memory.mjs suspects          # M13: the read-repair worklist
@@ -121,12 +131,17 @@ node scripts/self-memory.mjs history <id>      # M13: what we used to believe
 node scripts/self-memory.mjs stats
 ```
 
-Since M11 both halves are shipped packages, not script-local code:
-`packages/capture` (`captureGitHistory` — idempotent; `recordScoutReport`) and
-`packages/episodic` (`queryByMeaning` — full-text + trigram + vector, never
-gated on a structural node hit). `runPipeline` surfaces by-meaning hits in
-`AgentContext.experiences`, so it answers even when the structural graph has no
-matching node at all.
+Since M11 the capture and retrieval halves are shipped packages, not
+script-local code: `packages/capture` (`captureGitHistory` — idempotent;
+`recordScoutReport`) and `packages/episodic` (`queryByMeaning` — full-text +
+trigram + vector, fused by weighted RRF). Since M15 there is no other kind of
+retrieval: `runPipeline` is embed-once → by-meaning → read-time staleness →
+`buildContext`, with no seed retrieval, no traversal and no node hydration in
+front of it. spec.md §24.7 records what each retired spec section's
+implementation was replaced by, and `BENCHMARKS.md` records the gate that
+justified removing it (by-meaning MRR 0.85/0.90 identical with a 501-node graph
+present and with none; the node-gated arm 0.00 in both, returning ten memories
+per question and never the right one).
 
 **Writing back what you worked out.** If a task made you understand how
 something here actually fits together, drop it in `.claude/scout-report.json`
@@ -137,8 +152,8 @@ understanding only: `packages/capture` rejects a report that is really a file
 listing, because grep already answers "where is X" in one turn (spec.md §24.2.1,
 measured in `E2E_BENCHMARK_MULTI_REPO.md`).
 
-Since M12 memories also bind to **text anchors** (`{ path, symbol? }` — never
-line numbers, never node ids) and staleness is git-driven: `sync` and `stale`
+Memories bind to **text anchors** (`{ path, symbol? }` — never line numbers,
+never node ids) and staleness is git-driven: `sync` and `stale`
 flag any memory whose anchored paths a *newer* commit touched, and `ask` tags it
 `possibly-stale — verify before trusting` in the context it hands you. A flagged
 memory is still returned — the flag is a warning, not a filter, because
@@ -164,10 +179,10 @@ the root, and a subtree-scoped mine could not see them.
 Structure alone loses to grep (`E2E_BENCHMARK_MULTI_REPO.md`); the knowledge
 half is what pays (`WHY_MEMORY_SPIKE.md`: 7.7 → 1.4 turns against an agent that
 had full git access). Which is why `ask` retrieves experiences by their own
-content rather than through a node-id hit — re-measured through the shipped
-package path in M11 at MRR 0.85 (0.90 with the stub embedder) against 0.00 for
-the node-gated path on the same corpus (`BENCHMARKS.md`, which also records the
-controls that rule out this PR's own changes as the cause of that 0.13 → 0.00).
+content — measured in M11 at MRR 0.85 (0.90 with the stub embedder) against
+0.00 for the node-gated path on the same corpus, and re-measured at M15's gate
+with the structural graph *present* to confirm the 0.00 was the design failing
+rather than an empty database (`BENCHMARKS.md`).
 
 ## Quality gate (catch it in the task that caused it)
 

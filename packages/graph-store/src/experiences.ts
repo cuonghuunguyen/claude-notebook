@@ -157,20 +157,6 @@ function defaultVisibility(coldParam: number, supersededParam: number): string {
   return `($${coldParam} OR NOT cold) AND ($${supersededParam} OR superseded_by IS NULL)`;
 }
 
-export async function queryExperiencesByNode(
-  nodeId: string,
-  options: ExperienceQueryOptions = {}
-): Promise<Experience[]> {
-  const pool = getPool();
-  const { rows } = await pool.query<ExperienceRow>(
-    `SELECT ${EXPERIENCE_COLUMNS} FROM experiences
-     WHERE related_nodes @> $1::jsonb AND ${defaultVisibility(2, 3)}
-     ORDER BY "timestamp" DESC`,
-    [JSON.stringify([nodeId]), options.includeCold ?? false, options.includeSuperseded ?? false]
-  );
-  return rows.map(rowToExperience);
-}
-
 export async function queryExperiencesByTask(
   task: string,
   options: ExperienceQueryOptions = {}
@@ -186,41 +172,41 @@ export async function queryExperiencesByTask(
 }
 
 /**
- * spec.md §18: mark an experience cold once its lessons have been promoted
- * to a durable semantic edge — still queryable via `includeCold`, just out
- * of the default hot path. Pure status flip, no event: unlike
- * `RelationInvalidated`, cold/hot is not part of the spec.md §14 event
- * vocabulary, and nothing about the experience's own content changed.
+ * spec.md §18: retire an experience to cold storage — still queryable via
+ * `includeCold`, just out of the default hot path. Pure status flip, no event:
+ * cold/hot is not part of the spec.md §14 event vocabulary, and nothing about
+ * the experience's own content changed.
+ *
+ * Its automatic caller retired with the structural graph at M15: §18's
+ * cold-eligibility rule was "every structural node this memory is bound to
+ * already has a durable semantic edge", and neither a structural node nor a
+ * semantic edge can exist any more. The setter stays because `cold` is still a
+ * real, read stored state — existing rows carry it and every by-meaning leg
+ * filters on it — and because §18 needs an actuator for whatever retention
+ * rule replaces the edge-based one. Today nothing calls it automatically:
+ * `packages/gc` reports idle short-term memories (§24.5) and deliberately does
+ * not act on them, see `gc/src/idleTier.ts` for why.
  */
 export async function markExperienceCold(id: string): Promise<void> {
   const pool = getPool();
   await pool.query(`UPDATE experiences SET cold = true WHERE id = $1`, [id]);
 }
 
-/** id + relatedNodes only, for packages/gc's cold-eligibility scan — avoids hydrating full experience rows just to inspect one field. */
-export async function listWarmExperienceRefs(): Promise<
-  Array<{ id: string; relatedNodes: string[] }>
-> {
-  const pool = getPool();
-  const { rows } = await pool.query<{ id: string; related_nodes: string[] }>(
-    `SELECT id, related_nodes FROM experiences WHERE NOT cold`
-  );
-  return rows.map((row) => ({ id: row.id, relatedNodes: row.related_nodes }));
-}
-
-
 // ---------------------------------------------------------------------------
 // Content search over knowledge (spec.md §24.2.1 / ROADMAP.md M11).
 //
 // The three functions below are the storage primitives for by-meaning
 // retrieval: they find an experience by what it *says*, with no reference to
-// any structural node. `packages/episodic`'s `queryByMeaning` composes them
-// into one hybrid query, mirroring how `packages/retrieval` composes
-// `searchNodesByTrigram` + `searchNodesByEmbedding` for §9.
+// any structural node — and since M15 there is no structural node to refer to.
+// `packages/episodic`'s `queryByMeaning` composes them into one hybrid query;
+// the shape is §9's, which `packages/retrieval` used to implement over node
+// text before it retired with the graph.
 //
-// Every one of them honours §18's cold flag the same way the by-node/by-task
-// queries do — a memory whose lessons were already promoted to a durable edge
-// stays out of the default hot path unless explicitly asked for.
+// Every one of them honours §18's cold flag the same way `queryExperiencesByTask`
+// does. Note what `cold` now means: nothing marks a memory cold automatically
+// any more (the edge-based rule went with the edges, see `packages/gc`), so in
+// practice the flag is only set by an explicit `markExperienceCold` call or
+// carried by a row written before M15.
 // ---------------------------------------------------------------------------
 
 /** The searched text: exactly what migration 0004's indexes are built over. */
@@ -300,11 +286,11 @@ export async function searchExperiencesByFullText(
  * The `<%` operator reads its threshold from a GUC, so a GUC is the only way to
  * feed it. It is set with `set_config(..., is_local => true)` inside an
  * explicit transaction, so the setting dies with the transaction rather than
- * riding along on a pooled connection for the rest of its life. (This is
- * deliberately *not* what `searchNodesByTrigram` does — `set_limit()` sets a
- * different GUC, `pg_trgm.similarity_threshold` for `%`, and leaks it
- * session-wide. That is pre-existing and out of scope here, but it is not a
- * precedent worth copying.)
+ * riding along on a pooled connection for the rest of its life. (The node-search
+ * equivalent removed in M15 used `set_limit()` instead, which sets a different
+ * GUC — `pg_trgm.similarity_threshold`, for `%` — and leaks it session-wide.
+ * Recorded here because it was the tempting precedent and it was the wrong
+ * one; there is no longer any code in the tree doing it.)
  */
 export async function searchExperiencesByTrigram(
   query: string,
@@ -339,9 +325,9 @@ export async function searchExperiencesByTrigram(
 }
 
 /**
- * Vector leg. Mirrors `searchNodesByEmbedding` exactly, including `1 - (a <=>
- * b)` as the score so cosine *similarity* (higher is better) is what callers
- * see, not cosine distance.
+ * Vector leg. `1 - (a <=> b)` as the score, so cosine *similarity* (higher is
+ * better) is what callers see, not cosine distance — the same convention the
+ * node-embedding search used before M15 removed it.
  */
 export async function searchExperiencesByEmbedding(
   embedding: number[],
@@ -362,10 +348,9 @@ export async function searchExperiencesByEmbedding(
 
 /**
  * Writes the embedding the vector leg searches. Separate from
- * `recordExperience` for the same reason `upsertNodeEmbedding` is separate
- * from `upsertNode` (spec.md §9): computing it is the caller's business via
- * an injected provider, and a capture run without an embedder must still be
- * able to write the memory.
+ * `recordExperience` deliberately (spec.md §9): computing it is the caller's
+ * business via an injected provider, and a capture run without an embedder
+ * must still be able to write the memory.
  *
  * This is the one write that touches an existing experience row, and it is
  * still consistent with spec.md §8's append-only rule: it adds a derived

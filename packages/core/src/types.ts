@@ -1,91 +1,15 @@
 import type { Anchor } from "./anchors.js";
 
-// Mirrors spec.md §3-§8. Keep this file and spec.md in sync — this package
-// is the contract every other package in the workspace imports against.
-
-export type NodeType =
-  | "repository"
-  | "directory"
-  | "file"
-  | "module"
-  | "class"
-  | "function"
-  | "method"
-  | "interface"
-  | "type"
-  | "variable"
-  | "test"
-  | "invariant"
-  | "decision"
-  | "concept"
-  | "subsystem"
-  | "bug"
-  | "experience";
-
-export type NodeStatus = "active" | "stale" | "deleted";
-
-export type StructuralRelationType =
-  | "contains"
-  | "imports"
-  | "exports"
-  | "calls"
-  | "references"
-  | "extends"
-  | "implements"
-  | "uses"
-  | "tested_by";
-
-/** Runtime enumeration of StructuralRelationType — spec.md §9 seed expansion filters edges by this set. */
-export const STRUCTURAL_RELATIONS: readonly StructuralRelationType[] = [
-  "contains",
-  "imports",
-  "exports",
-  "calls",
-  "references",
-  "extends",
-  "implements",
-  "uses",
-  "tested_by",
-] as const;
-
-export type SemanticRelationType =
-  | "depends_on"
-  | "owns"
-  | "constrained_by"
-  | "violates"
-  | "caused_by"
-  | "prevents"
-  | "requires"
-  | "must_follow"
-  | "alternative_to"
-  | "related_to";
-
-/** Runtime enumeration of SemanticRelationType — spec.md §9 seed expansion filters edges by this set. */
-export const SEMANTIC_RELATIONS: readonly SemanticRelationType[] = [
-  "depends_on",
-  "owns",
-  "constrained_by",
-  "violates",
-  "caused_by",
-  "prevents",
-  "requires",
-  "must_follow",
-  "alternative_to",
-  "related_to",
-] as const;
-
-export type ExperienceRelationType =
-  | "observed_in"
-  | "fixed_by"
-  | "learned_from"
-  | "relevant_to";
-
-export type RelationType =
-  | StructuralRelationType
-  | SemanticRelationType
-  | ExperienceRelationType;
-
-export type EdgeStatus = "active" | "stale" | "invalid" | "disputed";
+// Mirrors spec.md §4, §8 and §24. Keep this file and spec.md in sync — this
+// package is the contract every other package in the workspace imports
+// against.
+//
+// M15 removed the §3.1/§3.2 code-graph vocabulary that used to live here
+// (`Node`, `Edge`, `RelationType`, `TraversalBudget`, `nodeId()`) along with
+// the structural graph itself: nothing produced a code-symbol node any more,
+// so nothing could consume one. What remains is the vocabulary of a memory
+// (`Experience`, §8), the evidence it can rest on (`Provenance`, §4), and the
+// tier it lives in (§24.5).
 
 export type ProvenanceSourceType =
   | "source_code"
@@ -128,63 +52,6 @@ export interface Provenance {
   observedAt: string;
 }
 
-export interface NodeMetadata {
-  keywords?: string[];
-  embedding?: number[];
-  language?: string;
-  package?: string;
-  module?: string;
-}
-
-export interface Node {
-  /** hash(repoId, stableSymbolPath) — see spec.md §3.2. Stable across renames. */
-  id: string;
-  type: NodeType;
-
-  name?: string;
-  path?: string;
-
-  summary?: string;
-
-  metadata: NodeMetadata;
-
-  provenance: Provenance[];
-
-  createdAt: string;
-  updatedAt: string;
-
-  status: NodeStatus;
-}
-
-export interface Edge {
-  id: string;
-
-  from: string;
-  to: string;
-
-  relation: RelationType;
-
-  /** 0–1: how likely this fact is true. See spec.md §3.3. */
-  confidence: number;
-  /** 0–1: how much this edge matters for ranking/traversal. See spec.md §3.3. */
-  weight: number;
-
-  provenance: Provenance[];
-
-  status: EdgeStatus;
-
-  createdAt: string;
-  updatedAt: string;
-
-  lastVerifiedAt?: string;
-}
-
-export type SemanticStage =
-  | "observation"
-  | "hypothesis"
-  | "candidate"
-  | "durable";
-
 export interface Experience {
   id: string;
 
@@ -196,16 +63,26 @@ export interface Experience {
   result?: string;
   lessons?: string[];
 
+  /**
+   * Legacy/mirrored anchor list — the paths in `anchors`, formatted as text.
+   *
+   * Named for what it held before §24.2.2: a list of structural node ids.
+   * Those cannot be produced any more (M15), but existing rows still carry
+   * them, which is why `anchorsFromRelatedNodes` still filters them out.
+   * `anchors` is the typed home for new knowledge; this stays because it is
+   * persisted history and because renderers read it.
+   */
   relatedNodes: string[];
 
   /**
    * Text anchors this memory binds to (spec.md §24.2.2 / ROADMAP.md M12):
    * `{ path, symbol? }`, never line numbers, never node ids.
    *
-   * Alongside `relatedNodes` rather than replacing it, per ROADMAP M12 — the
-   * structural graph is alive until M15 and still writes node ids there. New
-   * knowledge binds here (spec.md §24.4); a pre-M12 memory's paths are read
-   * out of `relatedNodes` by `anchorsFromRelatedNodes`.
+   * Since M15 this is the ONLY place new knowledge binds; the structural
+   * graph that used to write node ids into `relatedNodes` is gone. A pre-M12
+   * memory's paths are still read out of `relatedNodes` by
+   * `anchorsFromRelatedNodes`, which drops the node ids a legacy row may
+   * carry (spec.md §24.4).
    *
    * Optional so every existing `Experience` literal in the workspace stays
    * valid; storage normalizes a missing value to `[]`.
@@ -257,23 +134,6 @@ export interface Experience {
   confidence: number;
   timestamp: string;
 }
-
-export interface TraversalBudget {
-  maxDepth: number;
-  maxNodes: number;
-  maxEdges: number;
-  maxReasoningSteps: number;
-  maxTokens: number;
-}
-
-/** spec.md §10.1 default budget. */
-export const DEFAULT_TRAVERSAL_BUDGET: TraversalBudget = {
-  maxDepth: 3,
-  maxNodes: 50,
-  maxEdges: 100,
-  maxReasoningSteps: 5,
-  maxTokens: 8000,
-};
 
 /**
  * spec.md §24.5 memory tiers. Ordered short → mid → long; a memory is born

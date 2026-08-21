@@ -17,7 +17,6 @@ import {
   type Anchor,
   type ChangedPath,
 } from "./anchors.js";
-import { nodeId } from "./identity.js";
 
 const change = (
   path: string,
@@ -80,7 +79,15 @@ describe("anchor text form (spec.md §24.2.2)", () => {
 
 describe("reading anchors out of a pre-M12 relatedNodes array", () => {
   it("keeps paths and drops structural node ids", () => {
-    const id = nodeId("repo", "src/parse.ts#parseAnchor");
+    // A real §3.2 node id, exactly as the deleted generator produced it:
+    //   sha256("repo" + "\0" + "src/parse.ts#parseAnchor").hex.slice(0, 32)
+    // Written as a literal on purpose — M15 removed the generator, but rows
+    // written by it are not going anywhere, so the shape this must keep
+    // recognising is a historical fact the current code can no longer derive.
+    // The separator is a NUL byte, which is the detail that becomes
+    // unrecoverable once `identity.ts` is gone; it is spelled out here so the
+    // value stays reproducible by hand.
+    const id = "4f82b9813f16ef750be0145a4f2755d8";
     expect(isNodeId(id)).toBe(true);
     expect(anchorsFromRelatedNodes(["src/parse.ts", id, "docs/spec.md"])).toEqual([
       { path: "src/parse.ts" },

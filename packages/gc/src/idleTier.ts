@@ -17,9 +17,11 @@
  * outright — it may only rank it lower."
  *
  * Before M16, every `cold` memory had already had its lessons promoted to a
- * durable semantic edge (`coldStorage.ts`), so the knowledge survived
- * somewhere retrievable and hiding the raw memory lost nothing. An *idle*
- * memory has no such durable representation. Marking it cold would delete
+ * durable semantic edge (`coldStorage.ts`, removed with the structural graph
+ * in M15), so the knowledge survived somewhere retrievable and hiding the raw
+ * memory lost nothing. An *idle* memory has no such durable representation —
+ * and since M15 nothing has a durable representation, which makes this the
+ * only retention signal §18 has left. Marking it cold would delete
  * knowledge from the system's reachable surface on the evidence that nobody
  * happened to retrieve it — and since a cold memory cannot be retrieved, it
  * can never accrue an access, so it could never earn its way back. There is no

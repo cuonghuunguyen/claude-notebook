@@ -83,6 +83,19 @@ decommission (M15) once nothing load-bearing reads it. A further consequence:
 every mechanism in §24 is language-agnostic by construction, where each parser
 costs its own extractor forever.
 
+**M15 carried out the decommission**, and it is worth reading how the gate was
+designed, because "re-run the eval and check for no regression" would have
+proved nothing: a pipeline that still contains the structural stage tells you
+nothing about a pipeline without it. So the gate was a **2×2 ablation** — the
+zod v4 graph fully ingested (501 nodes, 1171 edges) vs. an empty `nodes` table,
+each lexical-only and with the stub embedder. By-meaning scored MRR 0.85 / 0.90
+in *both* node conditions, to the digit, same per-question ranks. The node-gated
+arm scored **0.00 with the graph present** — it found seeds, traversed, and
+returned ten memories for all ten questions, and the answering commit was in
+none of them. Not an empty database: the design, at full coverage, pointed at
+the wrong thing. Five packages, four eval sets and two tables came out;
+`BENCHMARKS.md` has the table and the reproduction commands.
+
 **And one hypothesis that did not survive.** M14 tested whether edges *between
 memories* (reverts, shared issue, temporal follow-ups) — relations that exist
 nowhere in the source — would pay off where call-graph edges did not. Measured
@@ -106,9 +119,10 @@ write-up, including the threats an independent review pass found, is in
        │                                                │
        └───────────────────┬────────────────────────────┘
                            ▼
-    Experience { task, observation, lessons[], relatedNodes[], confidence }
-    `relatedNodes` holds plain-text repo paths — no AST node required
-    (a deliberately non-FK jsonb array since migration 0001)
+    Experience { task, observation, lessons[], anchors[], confidence, tier }
+    `anchors` holds plain-text `{ path, symbol? }` — no AST node required, and
+    since M15 no AST exists. (`relatedNodes` mirrors the paths as text and
+    still carries node ids on rows written before M15 — see `spec.md` §24.7.)
                            │
                            ▼
               Postgres 16 + pgvector + pg_trgm
@@ -125,12 +139,12 @@ write-up, including the threats an independent review pass found, is in
                    runPipeline() ──▶ AgentContext { experiences, … }
 ```
 
-The load-bearing path is `capture → experiences → queryByMeaning`. It never
-routes through a structural node hit — that is the whole point of the M11
-measurement above. The structural graph (`packages/structural`,
-`packages/structural-python`, `packages/traversal`) still exists and still
-runs, but it is no longer what the system is selling, and M15 exists to remove
-it once M11–M14's successors land without regression.
+The load-bearing path is `capture → experiences → queryByMeaning`, and since
+M15 it is the *only* path: there is no structural node to route through, no
+seed retrieval and no traversal in front of it. `runPipeline` is embed-once →
+by-meaning → read-time staleness → `buildContext`. Nothing in the tree parses
+source code, which is why the same mechanisms work unchanged for SQL, YAML,
+docs and any language (`spec.md` §24.2 point 7).
 
 Leg weights are not arbitrary knobs: `text` is the reference weight because it
 is the leg measured at MRR 0.75 in the spike; `vector` and `trigram` are halved
@@ -155,7 +169,7 @@ pnpm install
 bash scripts/setup-dev-db.sh
 
 export DATABASE_URL="postgres://postgres:postgres@localhost:5432/cognitive_memory"
-pnpm migrate            # runs migrations/0001 … 0004
+pnpm migrate            # runs migrations/0001 … 0008
 
 pnpm build
 pnpm typecheck
@@ -242,23 +256,25 @@ staleness risk. Store synthesized understanding only (`spec.md` §24.2.1).
 ```ts
 import { runPipeline } from "@cognitive-memory/pipeline";
 
-const { context, byMeaning, seeds, traversal } = await runPipeline(
+const { context, byMeaning, staleness } = await runPipeline(
   "why is the catch handler opt-in?",
-  { graph, reasoner /*, embedder, maxExperiences, byMeaning: true */ }
+  { embedder, stalenessRepoDir: "/path/to/checkout" /*, maxExperiences */ }
 );
 ```
 
-`byMeaning` is **on by default** — deliberately, because it is the
-measured-stronger half. `result.byMeaning` exposes the fusion ranking that
-`context.experiences` loses when `buildContext` re-sorts by recency; pass
-`byMeaning: false` to get the pre-M11 node-gated-only behaviour, which is what
-the node-gated baseline in `eval/why-spike` needs.
+No `graph` and no `reasoner`: until M15 those were required injections for the
+traversal stage. `result.byMeaning` exposes the fusion ranking that
+`context.experiences` loses when `buildContext` re-sorts by recency, and
+`result.staleness` carries the per-memory §24.2.3 verdicts — **key those by
+`experience.id`, never by position**, since the two lists are ordered
+differently on purpose.
 
 ### Dogfooding
 
-`scripts/self-memory.mjs` points the system at *this* repository — it ingests
-both structure and this repo's own explaining commits, because the benchmarks
-showed one half without the other is useless:
+`scripts/self-memory.mjs` points the system at *this* repository — it mines this
+repo's own explaining commits and the scout reports sessions write back. It used
+to ingest structure too; M15 removed that half, which is why `sync` no longer
+parses anything and finishes in ~240ms:
 
 ```bash
 node scripts/self-memory.mjs sync              # structure + our own git history (idempotent)
@@ -289,19 +305,21 @@ All packages are `@cognitive-memory/*`, TypeScript, ESM, `private: true`.
 
 | Package | What it does | Milestone |
 |---|---|---|
-| `core` | Shared types: `Node`, `Edge`, `Provenance`, `Experience` | M0 |
-| `graph-store` | Postgres client, migration runner, typed CRUD | M0 |
+| `core` | Shared types: `Experience`, `Anchor`, `Provenance`, `MemoryTier` + the `EmbeddingProvider` contract | M0, M15 |
+| `graph-store` | Postgres client, migration runner, typed CRUD over experiences/events/tiers | M0 |
 | **`capture`** | **Git-history mining (`captureGitHistory`, idempotent) + session distillation (`recordScoutReport`) + embedding backfill** | **M11** |
-| **`episodic`** | **`queryByMeaning` — full-text + trigram + vector legs fused by weighted RRF; plus experience recording/query** | M4, **M11** |
-| `retrieval` | Hybrid seed retrieval, `EmbeddingProvider` interface | M2 |
-| `semantic` | Semantic memory nodes and promotion lifecycle | M3 |
-| `traversal` | Reasoning-guided traversal over the structural graph | M5 |
+| **`episodic`** | **`queryByMeaning` — full-text + trigram + vector legs fused by weighted RRF; plus experience recording/query and supersede chains** | M4, **M11**, M13 |
 | `context` | `buildContext` → `AgentContext`, with §17 size caps | M6 |
-| `pipeline` | `runPipeline` — retrieval + traversal + by-meaning + context in one entry point | M9, M11 |
-| `staleness` | Staleness marking for structural nodes | M7 |
-| `gc` | §18 garbage collection and cold-storage promotion | M7 |
-| `structural` | ts-morph TS/JS structural extractor *(slated for decommission, M15)* | M1 |
-| `structural-python` | tree-sitter Python structural extractor *(same)* | M8 |
+| `pipeline` | `runPipeline` — by-meaning + read-time staleness + context in one entry point | M9, M11, M15 |
+| `staleness` | Text anchors + git-driven memory staleness | M12 |
+| `tiers` | Access-driven tier promotion, settled per session | M16 |
+| `gc` | §18 retention signal over memories (reported, not acted on) | M7, M16 |
+
+Five packages were removed by M15 — `structural` (ts-morph), `structural-python`
+(tree-sitter), `retrieval` (hybrid node search), `semantic` (edge promotion) and
+`traversal` (reasoning-guided expansion). `spec.md` §24.7 records what each
+retired spec section's implementation was replaced by, and what was deliberately
+*kept* despite looking retirable.
 
 Supporting directories:
 
@@ -312,11 +330,12 @@ AGENT_HARNESS.md          how this repo builds itself, milestone by milestone
 BENCHMARKS.md             append-only measurement log (incl. the M14 go/no-go)
 WHY_MEMORY_SPIKE.md       the 7.7 → 1.4 turns experiment
 E2E_BENCHMARK_*.md        the benchmarks that killed the structural-graph premise
-migrations/               0001_init … 0004_experiences_content_search
+migrations/               0001_init … 0008_decommission_structural
 scripts/setup-dev-db.sh   local Postgres + pgvector + pg_trgm setup
 scripts/self-memory.mjs   point the system at this repo
-eval/                     why-spike, link-spike, e2e-benchmark, retrieval,
-                          staleness, traversal-cost harnesses
+eval/                     why-spike (knowledge retrieval), link-spike (M14
+                          go/no-go), tier-promotion (M16); e2e-benchmark keeps
+                          only its results/ JSON, cited by the reports above
 ```
 
 ---
@@ -332,6 +351,7 @@ real clone and a real Postgres; none of them are mocked.
 | Why-spike | Does memory of *why* beat an agent with full git access? | **Yes** — 7.7 → 1.4 turns, −47% cost | `WHY_MEMORY_SPIKE.md` |
 | M11 re-measurement | Does by-meaning beat node-gated retrieval, through the shipped packages? | **Yes** — MRR 0.85 vs 0.00 | `BENCHMARKS.md` |
 | M14 link spike | Do memory-to-memory edges pay off where code edges didn't? | **NO-GO** — real but underpowered, `follows_up` precision 0.00 | `BENCHMARKS.md` |
+| M15 gate (2×2 ablation) | Does *anything* still measurably depend on structural nodes? | **No** — 0.85/0.90 identical with 501 nodes and with none; node-gated 0.00 in both | `BENCHMARKS.md` |
 
 Reproducing the why-spike, for example:
 
@@ -360,13 +380,13 @@ in its own words.
 
 | | Milestone | Status |
 |---|---|---|
-| M0–M9 | Scaffolding, structural graph, hybrid retrieval, semantic + episodic memory, traversal, context, staleness/GC/eval, Python extraction, pipeline orchestration | ✅ shipped |
+| M0–M9 | Scaffolding, structural graph, hybrid retrieval, semantic + episodic memory, traversal, context, staleness/GC/eval, Python extraction, pipeline orchestration | ✅ shipped — the structural half later removed by M15 |
 | M10 | Structural extraction: variable-bound declarations | ⛔ **superseded, never built** — knowledge-first pivot (`spec.md` §24.3) |
 | M11 | **Knowledge Layer as Product** — by-meaning retrieval + capture shipped into `packages/` | ✅ shipped |
 | M12 | Text anchors & commit-triggered staleness (git replaces the AST for anchoring) | ✅ shipped |
 | M13 | Refine-memory skill — read-repair + `supersedes` chains | ✅ shipped |
 | M14 | Knowledge-link edges (measured spike) | ✅ measured → **NO-GO on integrating** |
-| M15 | Decommission the structural graph | ⬜ next — gated on M11–M14 outcomes |
+| M15 | **Decommission the structural graph** — 5 packages, 4 eval sets, 2 tables removed | ✅ shipped — gate passed on a 2×2 ablation |
 | M16 | Memory tiers — short/mid/long-term with access-driven promotion | ✅ shipped |
 
 M16 carries a deliberately open problem: **access is not correctness.** A

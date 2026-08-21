@@ -10,7 +10,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { closePool } from "@cognitive-memory/graph-store";
-import { createFakeEmbedder } from "@cognitive-memory/retrieval";
+import { createFakeEmbedder } from "@cognitive-memory/core";
 import { commitLimit, pathScope, repoDir, resultsDir } from "./config.js";
 import { buildAdjacency, mineKnowledgeLinks, readCommitLog, readCorpusRevision } from "./miner.js";
 import { QUESTIONS, type GoldSlot, type LinkQuestion } from "./questions.js";

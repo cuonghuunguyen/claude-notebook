@@ -18,7 +18,7 @@
 import type { Experience } from "@cognitive-memory/core";
 import { queryByMeaning } from "@cognitive-memory/episodic";
 import { getPool } from "@cognitive-memory/graph-store";
-import type { EmbeddingProvider } from "@cognitive-memory/retrieval";
+import type { EmbeddingProvider } from "@cognitive-memory/core";
 import { otherEnd, type KnowledgeLink } from "./miner.js";
 
 /** How a memory got into an arm's result. */

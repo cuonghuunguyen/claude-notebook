@@ -13,7 +13,7 @@
  * `eval/why-spike` already wrote, so promoting this into a package does not
  * orphan the memories either of them recorded.
  */
-import type { Anchor, Experience } from "@cognitive-memory/core";
+import type { Anchor, EmbeddingProvider, Experience } from "@cognitive-memory/core";
 import { recordExperience } from "@cognitive-memory/episodic";
 import {
   getExperienceById,
@@ -21,8 +21,7 @@ import {
   listExperienceIdsMissingEmbedding,
   upsertExperienceEmbedding,
 } from "@cognitive-memory/graph-store";
-import type { EmbeddingProvider } from "@cognitive-memory/retrieval";
-import { lessonFrom, mineCommits, type CommitRecord } from "./corpus.js";
+import { lessonFrom, mineCommits } from "./corpus.js";
 
 /** `Experience.action` prefix that identifies a git-mined memory. */
 export const COMMIT_ACTION_PREFIX = "commit ";
@@ -45,15 +44,6 @@ export interface CaptureGitHistoryOptions {
   pathScope: string;
   /** Max commits `git log` walks. Default 400 (the spike's value). */
   limit?: number;
-  /**
-   * Optional bridge to the structural graph: given a commit's repo-relative
-   * paths, return structural node ids to *also* bind. Omitted by default
-   * because spec.md §24.4 is explicit that new knowledge binds to text
-   * anchors, not node ids — this exists so the node-gated baseline stays
-   * measurable (and so `self-memory.mjs`'s existing graph stays connected)
-   * while the structural graph is still alive (M15 removes it).
-   */
-  resolveNodeIds?: (repoRelativePaths: string[]) => string[] | Promise<string[]>;
   /** When given, each newly recorded memory gets an embedding for the vector leg. */
   embedder?: EmbeddingProvider;
   confidence?: number;
@@ -82,21 +72,14 @@ export interface CaptureGitHistoryResult {
  * structural node in existence.
  *
  * Since M12 they are written to the typed `anchors` column (migration 0006) AND
- * still mirrored into `relatedNodes`. The mirror is not redundancy for its own
- * sake: `relatedNodes` is where `options.resolveNodeIds` puts structural node
- * ids, and `packages/gc`'s §18 cold-eligibility scan reads that column. Writing
- * paths only to `anchors` would silently change which memories `packages/gc`
- * considers, which is not this milestone's decision to make — M15 retires
- * `relatedNodes` along with the structural graph.
- *
- * One consequence worth stating out loud: `packages/gc` decides §18 cold
- * eligibility by asking whether every entry in `relatedNodes` has a durable
- * semantic edge, and a text anchor never can. `markPromotedExperiencesCold`
- * therefore skips text anchors and judges only the structural node ids a
- * memory carries (see `packages/gc/src/coldStorage.ts`) — a memory anchored
- * *only* to text stays warm, which is the fail-safe direction but does mean
- * §18 has no retention signal for it yet. That signal is what ROADMAP M16's
- * access-driven tiers are for.
+ * mirrored into `relatedNodes` as text. Until M15 that mirror also carried
+ * structural node ids, supplied by a `resolveNodeIds` bridge into
+ * `packages/structural`; both the bridge and the graph behind it are gone, so
+ * the two columns now hold the same paths in two shapes. The mirror is kept
+ * rather than dropped because it is where every memory written before M12
+ * stored its anchors, `graph-store`'s anchor-match query reads both columns to
+ * stay correct over that history, and renderers read it — the duplication is
+ * legacy compatibility, not a live second binding.
  */
 export async function captureGitHistory(
   options: CaptureGitHistoryOptions
@@ -128,7 +111,7 @@ export async function captureGitHistory(
       continue;
     }
 
-    const anchors = await anchorsFor(commit, options);
+    const anchors = commit.files;
     if (anchors.length === 0) {
       unanchored += 1;
       continue;
@@ -184,16 +167,6 @@ export async function backfillEmbeddings(
     filled += 1;
   }
   return filled;
-}
-
-async function anchorsFor(
-  commit: CommitRecord,
-  options: CaptureGitHistoryOptions
-): Promise<string[]> {
-  const textAnchors = commit.files;
-  if (!options.resolveNodeIds) return textAnchors;
-  const nodeIds = await options.resolveNodeIds(commit.files);
-  return [...new Set([...textAnchors, ...nodeIds])];
 }
 
 /**

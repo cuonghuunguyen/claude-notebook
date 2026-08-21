@@ -14,8 +14,7 @@ import { POSSIBLY_STALE_FLAG } from "@cognitive-memory/core";
 import { renderContext } from "@cognitive-memory/context";
 import { recordExperience } from "@cognitive-memory/episodic";
 import { closePool, runMigrations } from "@cognitive-memory/graph-store";
-import { createFakeEmbedder } from "@cognitive-memory/retrieval";
-import { createPostgresGraphProvider, expandAllReasoner } from "@cognitive-memory/traversal";
+import { createFakeEmbedder } from "@cognitive-memory/core";
 import { bulkyContent, buildFixtureRepo, type FixtureRepo } from "@cognitive-memory/staleness/fixtureRepo";
 import { runPipeline } from "./pipeline.js";
 
@@ -37,8 +36,6 @@ let repo: FixtureRepo;
 function pipelineOptions(extra: Record<string, unknown> = {}) {
   return {
     embedder: createFakeEmbedder(),
-    graph: createPostgresGraphProvider(),
-    reasoner: expandAllReasoner(),
     ...extra,
   };
 }

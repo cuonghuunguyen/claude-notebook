@@ -7,8 +7,8 @@ export default defineConfig({
      *
      * `integration.test.ts`'s last case exercises spec.md §14's
      * rebuild-from-events, which calls `wipeMaterializedGraph()` — a
-     * `TRUNCATE` of `nodes`/`edges`/`experiences` across the whole database,
-     * not just that file's own rows. It is deliberately the last case in its
+     * `TRUNCATE` of `experience_accesses`/`experiences` across the whole
+     * database, not just that file's own rows. It is deliberately the last case in its
      * own file for that reason, but vitest runs a package's test FILES in
      * parallel workers, so the truncate lands in the middle of whatever the
      * sibling suites are doing. Observed: `supersede.integration.test.ts`

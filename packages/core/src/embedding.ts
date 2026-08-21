@@ -1,14 +1,33 @@
-import type { EmbeddingProvider } from "./types.js";
+/**
+ * The embedding-provider contract, and the deterministic stub every test in
+ * the workspace embeds with.
+ *
+ * Lived in `packages/retrieval` until M15. That package existed to search the
+ * structural graph (spec.md §9's hybrid lexical+vector node search feeding
+ * §10's traversal) and retired with it — but the *injection* contract it
+ * defined outlived its original subject: §24.2.1's by-meaning retrieval has a
+ * vector leg of its own, over experience text rather than node text, and
+ * `packages/capture` needs the same provider to embed a memory as it writes
+ * it. So the interface moves here, to the package both of them already depend
+ * on, rather than keeping a package alive around it.
+ */
+export interface EmbeddingProvider {
+  embed(text: string): Promise<number[]>;
+}
 
 const DEFAULT_DIM = 1536;
 
 /**
- * Deterministic fake embedder for tests (spec.md ROADMAP M2: "stub with a
- * deterministic fake embedder in tests, real provider wired via config").
+ * Deterministic fake embedder for tests and for the workspace's own eval
+ * harnesses (spec.md ROADMAP M2: "stub with a deterministic fake embedder in
+ * tests, real provider wired via config").
+ *
  * Feature-hashes tokens into a fixed-width vector — not a real semantic
  * embedding, but deterministic and gives token-overlap-driven cosine
  * similarity, which is enough to exercise the vector leg without a live
- * embedding API.
+ * embedding API. `BENCHMARKS.md` reports by-meaning MRR both with this stub
+ * and without it for exactly that reason: the lexical-only number is the
+ * honest floor.
  */
 export function createFakeEmbedder(dim = DEFAULT_DIM): EmbeddingProvider {
   return {

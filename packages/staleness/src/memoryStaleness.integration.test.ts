@@ -90,10 +90,20 @@ const FIXTURES: Fixture[] = [
   },
   // MUST be flagged: a pre-M12 memory with paths only in `relatedNodes` still
   // gets checked, via the read-time fallback in graph-store's row mapper.
+  //
+  // The 32-hex entry alongside the path is a real spec.md §3.2 node id —
+  // sha256("repo\0src/parse.ts#parseAnchor") truncated to 32 hex chars, as the
+  // structural graph wrote them until M15. It is here because M15 removed the
+  // graph but NOT this column, and the two failure modes it guards are
+  // opposite: drop `related_nodes` from `listExperiencesByAnchorPaths`'s
+  // predicate and this memory becomes invisible to the staleness pass
+  // entirely; drop `isNodeId` from `anchorsFromRelatedNodes` and the node id
+  // becomes an "anchor" naming a file that has never existed, which git can
+  // never check. The whole pre-M12 corpus is shaped like this row.
   {
     id: IDS.legacyRelatedNodes,
     anchors: [],
-    relatedNodes: ["src/touched.ts"],
+    relatedNodes: ["src/touched.ts", "4f82b9813f16ef750be0145a4f2755d8"],
     timestamp: DATES.memories,
   },
   // MUST be flagged: the commit touching this path was AUTHORED after the
@@ -239,9 +249,27 @@ d("markSuspectFromHistory over a fixture repo (ROADMAP.md M12)", () => {
     expect(symbolAnchored?.anchors).toEqual([{ path: "src/touched.ts", symbol: "handler" }]);
   });
 
-  it("derives anchors from relatedNodes for a memory written before migration 0006", async () => {
+  it("derives anchors from relatedNodes for a memory written before migration 0006, dropping a legacy structural node id", async () => {
     const legacy = await getExperienceById(IDS.legacyRelatedNodes);
+    // The path becomes an anchor; the node id does not — a node id names a
+    // symbol, so there is nothing for git to check it against, and since M15
+    // nothing can dereference it either (spec.md §24.7).
     expect(legacy?.anchors).toEqual([{ path: "src/touched.ts" }]);
+    // ...and the stored column is untouched: M15 preserves history rather than
+    // rewriting it tidy.
+    expect(legacy?.relatedNodes).toEqual([
+      "src/touched.ts",
+      "4f82b9813f16ef750be0145a4f2755d8",
+    ]);
+  });
+
+  it("finds a pre-M12 memory by anchor path through the relatedNodes leg (M15 kept that column for exactly this)", async () => {
+    // `listExperiencesByAnchorPaths` matches `anchors` OR `related_nodes`.
+    // This memory has an EMPTY `anchors` array, so only the second leg can
+    // reach it — which is why migration 0008 retires the `nodes`/`edges`
+    // tables but not `experiences.related_nodes` or its GIN index.
+    const hits = await listExperiencesByAnchorPaths(["src/touched.ts"]);
+    expect(hits.map((h) => h.id)).toContain(IDS.legacyRelatedNodes);
   });
 
   it("a verification survives the read-time recompute — the repair is not undone by the next read (M13)", async () => {

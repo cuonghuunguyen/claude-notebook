@@ -28,9 +28,12 @@ export type RecordExperienceInput = Omit<Experience, "id" | "timestamp"> &
 
 /**
  * Append-only per spec.md §8: this module deliberately exposes no
- * update/delete. To correct an experience, record a new one — the
- * promotion pipeline (packages/semantic) reasons over the full history, not
- * a single "current" record.
+ * update/delete. To correct an experience, record a new one and link it —
+ * `recordSupersedingExperience` (spec.md §24.6 / M13) is the supported path,
+ * and retrieval returns chain heads while the superseded text stays queryable.
+ * Until M15 the same append-only history was also what `packages/semantic`'s
+ * §7 promotion pipeline reasoned over; that pipeline retired with the edges it
+ * promoted, and read-repair is where §7/§13's update path lives now.
  */
 export async function recordExperience(
   input: RecordExperienceInput,

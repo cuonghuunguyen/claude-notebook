@@ -5,8 +5,9 @@ let pool: Pool | undefined;
 /**
  * A pool or a single checked-out client — both expose the same `.query()`
  * shape. Functions that accept this instead of hardcoding `getPool()` can
- * run inside a caller-managed transaction (e.g. packages/semantic's
- * advisory-lock-guarded read-modify-write) without borrowing a second
+ * run inside a caller-managed transaction (e.g. episodic's
+ * `recordSupersedingExperience`, which writes a correction, its link and its
+ * event together under an advisory lock) without borrowing a second
  * connection from the pool for every statement, which risks a deadlock if
  * concurrent callers collectively hold all pool connections while each
  * waits on a lock only a query on a now-unobtainable connection can release.

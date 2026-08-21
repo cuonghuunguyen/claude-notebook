@@ -12,8 +12,9 @@
  *
  * Shape reuse (spec.md §24.4: "§9's hybrid-search shape is reused, pointed at
  * experience content"): independent legs run concurrently, then merge and
- * de-dupe into one ranked list — same as `packages/retrieval`'s
- * `retrieveSeeds`. Two differences, both forced by the data:
+ * de-dupe into one ranked list — the shape `packages/retrieval`'s
+ * `retrieveSeeds` implemented over node text until M15 removed it. Two
+ * differences from that original, both forced by the data:
  *
  *  1. There are three legs, not two. §9's argument for trigram-over-tsvector
  *     was about *code identifiers*; an experience body is prose, where
@@ -30,14 +31,13 @@
  *     said. RRF only reads each leg's *rank order*, which is the part each leg
  *     is actually authoritative about.
  */
-import type { Experience, MemoryTier } from "@cognitive-memory/core";
+import type { EmbeddingProvider, Experience, MemoryTier } from "@cognitive-memory/core";
 import {
   searchExperiencesByEmbedding,
   searchExperiencesByFullText,
   searchExperiencesByTrigram,
   type ExperienceSearchHit,
 } from "@cognitive-memory/graph-store";
-import type { EmbeddingProvider } from "@cognitive-memory/retrieval";
 import { recordRetrievalAccess, tierBoost } from "@cognitive-memory/tiers";
 
 /** Which search leg produced a hit. */
@@ -120,7 +120,7 @@ export interface QueryByMeaningOptions {
   limit?: number;
   /** Hits pulled from each leg before fusion. Default 20. */
   legLimit?: number;
-  /** Vector leg. Omitted ⇒ lexical-only, exactly as `retrieveSeeds` treats a missing embedder. */
+  /** Vector leg. Omitted ⇒ lexical-only rather than an error, which is how §9 treated a missing embedder too. */
   embedder?: EmbeddingProvider;
   /** Pre-computed question embedding, to avoid a second `embed()` call (spec.md §22 step 1). */
   queryEmbedding?: number[];

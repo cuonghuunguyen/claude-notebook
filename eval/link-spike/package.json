@@ -14,8 +14,7 @@
     "@cognitive-memory/capture": "workspace:*",
     "@cognitive-memory/core": "workspace:*",
     "@cognitive-memory/episodic": "workspace:*",
-    "@cognitive-memory/graph-store": "workspace:*",
-    "@cognitive-memory/retrieval": "workspace:*"
+    "@cognitive-memory/graph-store": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

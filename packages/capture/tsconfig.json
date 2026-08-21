@@ -7,8 +7,7 @@
   "references": [
     { "path": "../core" },
     { "path": "../graph-store" },
-    { "path": "../episodic" },
-    { "path": "../retrieval" }
+    { "path": "../episodic" }
   ],
   "include": ["src"]
 }

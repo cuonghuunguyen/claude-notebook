@@ -38,7 +38,8 @@ import { recordExperience, type RecordExperienceInput } from "./record.js";
 
 export type RecordSupersedingInput = Omit<RecordExperienceInput, "relatedNodes"> & {
   /**
-   * Structural node bindings, for as long as the structural graph exists (M15).
+   * The correction's `relatedNodes` — the text mirror of its anchors. Named
+   * for the structural node ids it carried until M15; nothing produces one now.
    *
    * Optional here where `recordExperience` requires it, so that "the caller did
    * not say" is distinguishable from "the caller said none" — the first

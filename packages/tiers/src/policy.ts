@@ -4,7 +4,7 @@
  * Nothing here touches a database. The whole transition table is one function
  * over one struct, so the full matrix — promote, hold, decay, reject — is
  * unit-testable without Postgres, the same way `packages/semantic`'s
- * confidence maths is separable from its edge writes.
+ * confidence maths was separable from its edge writes before M15 retired it.
  *
  * ## The open problem, and what M16 decided
  *

@@ -11,20 +11,26 @@
  * zod clone is not available in CI. `results/probe.json` (see README.md) is the
  * run against the real repository.
  *
- * The comparison arm is deliberately *generous* to the old design: instead of
- * making it earn its seeds through retrieval and traversal, it is handed the
- * correct anchor for free and asked for the memories bound to it — the best
- * case node gating could ever have. It still loses, because what it orders by
- * is recency, and the memory that answers a "why" question is usually not the
- * newest one on the file.
+ * The comparison arm is deliberately *generous* to the design by-meaning
+ * replaced: instead of making it earn its seeds through retrieval and
+ * traversal, it is handed the correct anchor for free and asked for the
+ * memories bound to it, newest first — the best case anchor gating could ever
+ * have. It still loses, because what it orders by is recency, and the memory
+ * that answers a "why" question is usually not the newest one on the file.
+ *
+ * Since M15 that arm reaches the memories through their *text* anchor
+ * (`listExperiencesByAnchorPaths`) rather than through a structural node id.
+ * That is not a weakening of the baseline — it is the same "everything bound to
+ * this file, newest first" window, with the node hop that M15's gate measured
+ * at 0.00 MRR taken out of the middle of it.
  */
 import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { captureGitHistory } from "@cognitive-memory/capture";
 import { buildFixtureRepo, type FixtureRepo } from "@cognitive-memory/capture/testing";
-import { queryByMeaning, queryByNode } from "@cognitive-memory/episodic";
-import { closePool, runMigrations } from "@cognitive-memory/graph-store";
+import { queryByMeaning } from "@cognitive-memory/episodic";
+import { closePool, listExperiencesByAnchorPaths, runMigrations } from "@cognitive-memory/graph-store";
 import {
   DISTRACTORS_PER_ANCHOR,
   KNOWLEDGE_EVAL_COMMITS,
@@ -37,7 +43,7 @@ const hasDb = Boolean(process.env["DATABASE_URL"]);
 const d = hasDb ? describe : describe.skip;
 
 /** The node-gated MRR `WHY_MEMORY_SPIKE.md` measured, for reference. */
-const NODE_GATED_BASELINE_MRR = 0.13;
+const ANCHOR_RECENCY_BASELINE_MRR = 0.13;
 /** The by-meaning MRR it measured. "In the neighborhood" is read as within 0.15. */
 const BY_MEANING_REFERENCE_MRR = 0.75;
 
@@ -70,7 +76,7 @@ d("knowledge retrieval eval (spec.md §24.2.1 / ROADMAP.md M11)", () => {
   /** question id -> the experience id that actually answers it. */
   const answerByQuestion = new Map<string, string>();
   const byMeaningRanks: number[] = [];
-  const nodeGatedRanks: number[] = [];
+  const anchorRecencyRanks: number[] = [];
 
   beforeAll(async () => {
     await runMigrations();
@@ -103,15 +109,15 @@ d("knowledge retrieval eval (spec.md §24.2.1 / ROADMAP.md M11)", () => {
       const byMeaning = await queryByMeaning(question.question, { limit: 10 });
       byMeaningRanks.push(byMeaning.findIndex((h) => h.experience.id === answerId));
 
-      // The generous node-gated arm: the correct anchor handed over for free,
-      // scoped to this run's corpus so a previous run's rows on the same paths
-      // cannot flatter or penalise it. All it has left to do is order the
+      // The generous anchor-recency arm: the correct anchor handed over for
+      // free, scoped to this run's corpus so a previous run's rows on the same
+      // paths cannot flatter or penalise it. All it has left to do is order the
       // memories on that one file — and what it orders by is recency.
-      const nodeGated = (await queryByNode(question.anchor)).filter((e) =>
+      const anchorRecency = (await listExperiencesByAnchorPaths([question.anchor])).filter((e) =>
         e.task.startsWith(`${RUN}:`)
       );
-      expect(nodeGated.length).toBeGreaterThan(1);
-      nodeGatedRanks.push(nodeGated.findIndex((e) => e.id === answerId));
+      expect(anchorRecency.length).toBeGreaterThan(1);
+      anchorRecencyRanks.push(anchorRecency.findIndex((e) => e.id === answerId));
     }
   }, 60_000);
 
@@ -130,9 +136,9 @@ d("knowledge retrieval eval (spec.md §24.2.1 / ROADMAP.md M11)", () => {
     ).toBeGreaterThanOrEqual(0);
   });
 
-  it("by-meaning MRR lands in the neighborhood of the spike's 0.75 and decisively above node-gated", () => {
+  it("by-meaning MRR lands in the neighborhood of the spike's 0.75 and decisively above the anchor-recency window", () => {
     const byMeaningMrr = mean(byMeaningRanks.map(reciprocalRank));
-    const nodeGatedMrr = mean(nodeGatedRanks.map(reciprocalRank));
+    const anchorRecencyMrr = mean(anchorRecencyRanks.map(reciprocalRank));
 
     // Printed, not just asserted: the number is the deliverable here, and a
     // human reading CI output should be able to see it without a debugger.
@@ -141,8 +147,14 @@ d("knowledge retrieval eval (spec.md §24.2.1 / ROADMAP.md M11)", () => {
         {
           questions: QUESTIONS.length,
           byMeaning: { mrr: Number(byMeaningMrr.toFixed(3)), ranks: byMeaningRanks },
-          nodeGatedGenerous: { mrr: Number(nodeGatedMrr.toFixed(3)), ranks: nodeGatedRanks },
-          reference: { byMeaning: BY_MEANING_REFERENCE_MRR, nodeGated: NODE_GATED_BASELINE_MRR },
+          anchorRecencyGenerous: {
+            mrr: Number(anchorRecencyMrr.toFixed(3)),
+            ranks: anchorRecencyRanks,
+          },
+          reference: {
+            byMeaning: BY_MEANING_REFERENCE_MRR,
+            anchorRecency: ANCHOR_RECENCY_BASELINE_MRR,
+          },
         },
         null,
         2
@@ -150,12 +162,12 @@ d("knowledge retrieval eval (spec.md §24.2.1 / ROADMAP.md M11)", () => {
     );
 
     expect(byMeaningMrr).toBeGreaterThan(BY_MEANING_REFERENCE_MRR - 0.15);
-    expect(byMeaningMrr).toBeGreaterThan(nodeGatedMrr);
-    expect(byMeaningMrr).toBeGreaterThan(NODE_GATED_BASELINE_MRR * 2);
-    // The node-gated arm must not be a constant of the fixture: if every
+    expect(byMeaningMrr).toBeGreaterThan(anchorRecencyMrr);
+    expect(byMeaningMrr).toBeGreaterThan(ANCHOR_RECENCY_BASELINE_MRR * 2);
+    // The baseline arm must not be a constant of the fixture: if every
     // question's answer sits at the same recency rank, the comparison is
     // arithmetic rather than measured. Distractor counts vary per anchor
     // precisely so this holds.
-    expect(new Set(nodeGatedRanks).size).toBeGreaterThan(1);
+    expect(new Set(anchorRecencyRanks).size).toBeGreaterThan(1);
   });
 });

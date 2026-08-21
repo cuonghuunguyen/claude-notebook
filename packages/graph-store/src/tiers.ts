@@ -4,8 +4,9 @@
  * This module is deliberately policy-free: it records accesses, settles them,
  * reports the aggregates a decision needs, and writes the decision back. What
  * counts as "enough" to promote lives in `packages/tiers`, which is pure and
- * unit-testable without a database — the same split `packages/semantic` uses
- * between its confidence maths and its edge writes.
+ * unit-testable without a database — the same split `packages/semantic` used
+ * between its confidence maths and its edge writes, before M15 retired it with
+ * the edges.
  *
  * The one piece of policy that IS here is the one that has to be enforced by
  * the schema rather than by a function: an access is keyed by (memory,

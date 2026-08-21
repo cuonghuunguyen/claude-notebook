@@ -28,7 +28,7 @@ This checklist is the source of truth for what's done — see
 - [x] M12 — Text Anchors & Commit-Triggered Staleness (git replaces the AST for anchoring and staleness)
 - [x] M13 — Refine-Memory Skill (read-repair + `supersedes` links)
 - [x] M14 — Knowledge-Link Edges (spike: memory-to-memory traversal, go/no-go on a measured win) — **outcome: NO-GO on integrating; `follows_up` a hard no. See BENCHMARKS.md**
-- [ ] M15 — Decommission the Structural Graph (gated on M11–M14 outcomes)
+- [x] M15 — Decommission the Structural Graph (gate passed: by-meaning MRR **0.85** lexical / **0.90** with the stub embedder, *identical* with 501 structural nodes present and with none; node-gated arm **0.00** in both. See BENCHMARKS.md)
 - [x] M16 — Memory Tiers: short/mid/long-term with access-driven promotion (extends §7/§18)
 
 Repo layout target:
@@ -43,20 +43,27 @@ migrations/
   0006_experience_anchors.sql           # M12: text anchors + commit-triggered staleness
   0007_supersede_chains.sql             # M13: supersede links + verification stamps
 packages/
-  core/                       # shared types (Node, Edge, Provenance, Experience) mirrored from spec.md §3-§8
-  graph-store/                # Postgres client, migration runner, typed CRUD for nodes/edges/experiences/events
-  structural/                 # M1: ts-morph based extractor
-  retrieval/                  # M2: hybrid search (pg_trgm + pgvector) -> seed nodes
-  semantic/                   # M3: promotion pipeline per spec §7
+  core/                       # shared types (Provenance, Experience, Anchor, MemoryTier) + the embedder contract
+  graph-store/                # Postgres client, migration runner, typed CRUD for experiences/events/tiers
   episodic/                   # M4: experience capture/query per spec §8; M11: by-meaning retrieval per spec §24.2.1
-  traversal/                  # M5: reasoning-guided expansion per spec §10
   context/                    # M6: subgraph -> compact agent context per spec §17
   pipeline/                   # M9: task -> AgentContext orchestration per spec §22
   capture/                    # M11: git-history mining + scout-report distillation per spec §24.2.1
   staleness/                  # M12: text anchors + git-driven memory staleness per spec §24.2.2-3
-                              #      (also holds the §12 structural edge verifier, retired with M15)
-eval/                         # M7-adjacent: retrieval/staleness/promotion eval sets, spec §19
+  tiers/                      # M16: access-driven tier promotion per spec §24.5
+  gc/                         # M7/M18: retention signal over memories
+eval/                         # eval sets, spec §19: why-spike (M11 knowledge retrieval),
+                              # link-spike (M14 go/no-go), tier-promotion (M16)
 ```
+
+M15 removed five packages from that list — `structural` (M1's ts-morph
+extractor), `structural-python` (M8's tree-sitter one), `retrieval` (M2's
+hybrid node search), `semantic` (M3's edge-promotion pipeline) and `traversal`
+(M5's reasoning-guided expansion) — along with `eval/retrieval`,
+`eval/staleness`, `eval/traversal-cost` and `eval/e2e-benchmark`'s harness. The
+milestone sections for M1-M8 below are kept as written: they are the record of
+what was built and measured, not a description of the current tree. Where a
+later section contradicts an earlier one, the later one is current.
 
 ---
 
@@ -568,7 +575,19 @@ added. The measured result, in full, is the go/no-go section of
 traversal layer. It is not evidence against by-meaning retrieval, and it does
 not by itself justify keeping the structural graph either.
 
-## M15 — Decommission the Structural Graph (gated on M11–M14) (spec §24)
+## M15 — Decommission the Structural Graph (gated on M11–M14) (spec §24) — DONE
+
+**Gate result (measured 2026-08-21, before anything was deleted):** the eval
+set was re-run through the knowledge-first pipeline in four conditions — with
+the zod v4 structural graph fully ingested (501 nodes, 1171 edges) and with an
+empty `nodes` table, each lexical-only and with the stub embedder. By-meaning
+scored **MRR 0.85 / recall 0.90** lexical-only and **MRR 0.90 / recall 0.90**
+with the embedder — *the same in both node conditions* — and the node-gated arm
+scored **0.00** in both, returning ten memories per question with the graph
+present and never the answering one. Nothing measurably depended on structural
+nodes, so removal proceeded. The post-removal re-run reproduces 0.85 / 0.90
+exactly. Full numbers, method and reproduction steps: `BENCHMARKS.md`.
+
 
 **Goal:** once nothing load-bearing reads structural nodes — retrieval is
 by meaning (M11), anchors are text (M12), staleness is git-driven (M12) —
@@ -587,6 +606,44 @@ milestone and gets written down instead.
   regression vs the pre-removal baseline.
 - Migration retires now-unused columns/indexes (e.g. node-gating surfaces),
   idempotent as always; `experiences` data is preserved.
+
+**What shipped** (all three acceptance bullets met — see `BENCHMARKS.md` for
+the numbers and the reproduction steps):
+
+- **Removed**: `packages/structural`, `packages/structural-python`,
+  `packages/traversal`, `packages/semantic`, `packages/retrieval`;
+  `graph-store`'s `nodes.ts` / `edges.ts`; `staleness`'s §12 edge verifier;
+  `gc`'s edge-based cold-storage rule; `episodic`'s `queryByNode`;
+  `context`'s four code sections; `core`'s `Node` / `Edge` / `RelationType` /
+  `TraversalBudget` / `nodeId()`; `eval/retrieval`, `eval/staleness`,
+  `eval/traversal-cost`, and `eval/e2e-benchmark`'s harness. ~10,300 lines
+  deleted against ~1,000 added.
+- **`runPipeline` lost its whole structural stage.** §22 was
+  seeds → traverse → hydrate nodes → hydrate memories on those nodes →
+  interleave with by-meaning. It is now embed once → by-meaning →
+  read-time staleness → `buildContext`. There is no seed-miss short-circuit
+  left to get wrong, because "the graph has no node for this task" is no
+  longer expressible (§24.3).
+- **`migrations/0008_decommission_structural.sql`** drops `edges` then
+  `nodes` (`IF EXISTS`, idempotent). Verified on a populated database:
+  144 memories before and after with an identical content hash, `anchors`,
+  `related_nodes` and embeddings untouched, and the `events` log — including
+  1,903 pre-M15 `SymbolAdded` / `RelationAdded` rows — intact.
+- **`experiences.related_nodes` and its GIN index deliberately STAY.** The
+  column is named for node ids but since M11 it carries text anchors, and
+  `listExperiencesByAnchorPaths` matches on it so that pre-M12 memories —
+  which have anchors *only* there — stay findable by §24.2.3's staleness pass.
+  Dropping it would have been silent data loss dressed as cleanup.
+- **§14 stays honest about old logs.** `materializer.ts` accepts the six
+  retired structural event types, skips them, and *counts* the skips, so
+  `rebuildFromEvents` succeeds on any database that ever ran an extraction
+  instead of throwing on the first `SymbolAdded` it meets. Verified against
+  this repository's own log: 1,903 skipped, 144 memories replayed to a
+  byte-identical content hash.
+- **`scripts/self-memory.mjs sync` no longer parses anything.** It was
+  ts-morph over `packages/**/*.ts` plus a git mine; it is now the git mine
+  and the staleness pass, which is why it works for a repository in any
+  language (§24.2 point 7) and finishes in ~240ms.
 
 ## M16 — Memory Tiers: Access-Driven Promotion (spec §24.5)
 
@@ -645,3 +702,8 @@ M14 only needs M11 and can run in parallel with M12/M13. M16 needs M11's
 shipped retrieval (it hooks access accounting into it) and is independent
 of M12–M15. M15 is last and gated — it starts only after M11–M12 are merged and the eval re-run shows
 no regression, and it must respect M14's go/no-go either way.
+
+That is how it played out: M15 ran after M11–M14 and M16 were all merged, its
+gate passed on a re-measurement rather than on the prior recorded numbers, and
+it respected M14's NO-GO by verifying there was no memory-link traversal in
+`packages/` to remove or preserve.

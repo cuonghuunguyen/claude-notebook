@@ -7,8 +7,6 @@
   "references": [
     { "path": "../core" },
     { "path": "../graph-store" },
-    { "path": "../retrieval" },
-    { "path": "../traversal" },
     { "path": "../context" },
     { "path": "../episodic" },
     { "path": "../staleness" }

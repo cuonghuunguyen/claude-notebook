@@ -3,7 +3,7 @@ import { rmSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { queryByMeaning } from "@cognitive-memory/episodic";
 import { closePool, getPool, runMigrations } from "@cognitive-memory/graph-store";
-import { createFakeEmbedder } from "@cognitive-memory/retrieval";
+import { createFakeEmbedder, isNodeId } from "@cognitive-memory/core";
 import { captureGitHistory, commitAction } from "./git.js";
 import { recordScoutReport } from "./scout.js";
 import { buildFixtureRepo, type FixtureCommit, type FixtureRepo } from "./testing.js";
@@ -96,15 +96,13 @@ d("git-history capture (spec.md §24.2.1 / ROADMAP.md M11)", () => {
     expect(actions).not.toContain(commitAction(repo.shortShas[3]!));
     expect(actions).not.toContain(commitAction(repo.shortShas[4]!));
 
-    // Anchors are the commit's own repo-relative paths, as plain text — no
-    // structural node for any of them exists in this database.
+    // Anchors are the commit's own repo-relative paths, as plain text. Before
+    // M15 this also asserted that no structural node existed for any of them,
+    // by counting rows in `nodes`; there is no such table now, so the claim is
+    // made directly instead — nothing capture writes is a node id.
     const anchors = result.experiences.flatMap((e) => e.relatedNodes);
     expect(anchors.sort()).toEqual(["src/base64.ts", "src/parse.ts", "src/record.ts"]);
-    const { rows } = await getPool().query<{ count: string }>(
-      "SELECT count(*) FROM nodes WHERE path = ANY($1::text[])",
-      [anchors]
-    );
-    expect(Number(rows[0]?.count)).toBe(0);
+    expect(anchors.filter(isNodeId)).toEqual([]);
 
     // spec.md §24.2.3 needs the memory dated by the commit, not by the sync.
     const parse = result.experiences.find((e) => e.relatedNodes.includes("src/parse.ts"));
@@ -173,35 +171,6 @@ d("git-history capture (spec.md §24.2.1 / ROADMAP.md M11)", () => {
     expect(top?.anchored).toBe(true);
   });
 
-  it("also binds structural node ids when a resolver is injected, without dropping the text anchors", async () => {
-    const solo = await buildFixtureRepo([
-      {
-        subject: `fix(${MARKER}-resolver): the domain regex needs a leading lookahead`,
-        body:
-          `A ${MARKER}-resolver domain is limited to 253 characters in total by RFC 1035, ` +
-          `and per-label quantifiers cannot express a limit on the whole string, so the ` +
-          `pattern opens with a lookahead asserting the total length before matching any ` +
-          `label at all.`,
-        files: ["src/regexes.ts"],
-        date: "2024-12-12T10:00:00Z",
-      },
-    ]);
-    try {
-      const result = await captureGitHistory({
-        repoDir: solo.dir,
-        pathScope: "src",
-        resolveNodeIds: (paths) => paths.map((p) => `fake-node-id:${p}`),
-      });
-      expect(result.recorded).toBe(1);
-      expect(result.experiences[0]?.relatedNodes.sort()).toEqual([
-        "fake-node-id:src/regexes.ts",
-        "src/regexes.ts",
-      ]);
-    } finally {
-      rmSync(solo.dir, { recursive: true, force: true });
-    }
-  });
-
   it("writes an embedding for the vector leg when an embedder is injected", async () => {
     const solo = await buildFixtureRepo([
       {
@@ -263,27 +232,23 @@ d("scout-report capture (spec.md §24.2.1 second source class)", () => {
         `regardless of how many candidate edges that round considered. The consequence ` +
         `worth knowing is that widening the frontier is nearly free while deepening it ` +
         `is not, which is the opposite of what the budget names suggest.`,
-      anchors: ["packages/traversal/src/traverse.ts", "packages/core/src/types.ts"],
+      anchors: ["packages/staleness/src/memoryStaleness.ts", "packages/core/src/types.ts"],
       source: "integration-test",
     });
 
     expect(recorded.action).toBe("scout-report integration-test");
     expect(recorded.relatedNodes).toEqual([
-      "packages/traversal/src/traverse.ts",
+      "packages/staleness/src/memoryStaleness.ts",
       "packages/core/src/types.ts",
     ]);
     // M12: typed anchors alongside the text mirror.
     expect(recorded.anchors).toEqual([
-      { path: "packages/traversal/src/traverse.ts" },
+      { path: "packages/staleness/src/memoryStaleness.ts" },
       { path: "packages/core/src/types.ts" },
     ]);
 
-    // No structural node exists for either anchor.
-    const { rows } = await getPool().query<{ count: string }>(
-      "SELECT count(*) FROM nodes WHERE id = ANY($1::text[])",
-      [recorded.relatedNodes]
-    );
-    expect(Number(rows[0]?.count)).toBe(0);
+    // Plain paths, not node ids — see the note in the git-history suite above.
+    expect(recorded.relatedNodes.filter(isNodeId)).toEqual([]);
 
     // Paraphrase, not the recorded wording.
     const hits = await queryByMeaning(
@@ -307,21 +272,21 @@ d("scout-report capture (spec.md §24.2.1 second source class)", () => {
         "changes the stage of every edge that shares it, which is intended: the evidence " +
         "hierarchy is the single source of truth and the stage is only ever a view of it.",
       anchors: [
-        "packages/semantic/src/confidence.ts#computeConfidence",
-        { path: "packages/semantic/src/edge.ts", symbol: "stageFor" },
+        "packages/tiers/src/policy.ts#decideTier",
+        { path: "packages/tiers/src/accounting.ts", symbol: "creditFor" },
       ],
       source: "integration-test-symbols",
     });
 
     expect(recorded.anchors).toEqual([
-      { path: "packages/semantic/src/confidence.ts", symbol: "computeConfidence" },
-      { path: "packages/semantic/src/edge.ts", symbol: "stageFor" },
+      { path: "packages/tiers/src/policy.ts", symbol: "decideTier" },
+      { path: "packages/tiers/src/accounting.ts", symbol: "creditFor" },
     ]);
     // Mirrored back into `relatedNodes` in text form, so the column keeps one
     // consistent representation.
     expect(recorded.relatedNodes).toEqual([
-      "packages/semantic/src/confidence.ts#computeConfidence",
-      "packages/semantic/src/edge.ts#stageFor",
+      "packages/tiers/src/policy.ts#decideTier",
+      "packages/tiers/src/accounting.ts#creditFor",
     ]);
   });
 
@@ -345,10 +310,10 @@ d("scout-report capture (spec.md §24.2.1 second source class)", () => {
       recordScoutReport({
         task: "where things live",
         understanding:
-          "- packages/retrieval/src/retrieve.ts\n- packages/retrieval/src/merge.ts\n" +
-          "- packages/retrieval/src/expand.ts\n- packages/graph-store/src/nodes.ts\n" +
-          "- packages/graph-store/src/edges.ts\n- packages/traversal/src/traverse.ts\n",
-        anchors: ["packages/retrieval/src/retrieve.ts"],
+          "- packages/episodic/src/byMeaning.ts\n- packages/episodic/src/query.ts\n" +
+          "- packages/episodic/src/supersede.ts\n- packages/graph-store/src/experiences.ts\n" +
+          "- packages/graph-store/src/tiers.ts\n- packages/pipeline/src/pipeline.ts\n",
+        anchors: ["packages/episodic/src/byMeaning.ts"],
       })
     ).rejects.toThrow(/§24.2.1/);
   });

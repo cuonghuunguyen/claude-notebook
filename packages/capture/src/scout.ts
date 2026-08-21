@@ -16,11 +16,10 @@
  * just a file listing is rejected at the API boundary rather than quietly
  * written and later blamed for polluting retrieval.
  */
-import type { Anchor, Experience } from "@cognitive-memory/core";
+import type { Anchor, EmbeddingProvider, Experience } from "@cognitive-memory/core";
 import { dedupeAnchors, formatAnchor, parseAnchor } from "@cognitive-memory/core";
 import { recordExperience } from "@cognitive-memory/episodic";
 import { upsertExperienceEmbedding } from "@cognitive-memory/graph-store";
-import type { EmbeddingProvider } from "@cognitive-memory/retrieval";
 import { embeddedText } from "./git.js";
 
 /** `Experience.action` prefix that identifies a distilled scout report. */

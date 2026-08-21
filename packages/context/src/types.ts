@@ -1,38 +1,24 @@
-import type { Edge, Experience, Node, RelationType } from "@cognitive-memory/core";
+import type { Experience } from "@cognitive-memory/core";
 
 /**
- * The output of retrieval+traversal (M2/M5): a set of hydrated nodes and the
- * edges traversal decided to EXPAND, plus whatever prior experiences the
- * caller already looked up for those nodes (via `hydrateExperiences` below,
- * or any other source). Building this is the caller's job — `buildContext`
- * itself does no I/O, per spec.md §17's "no new LLM call required" and
- * ROADMAP's "plain templating over the subgraph."
+ * What `buildContext` projects from: the memories a retrieval decided are
+ * relevant to this task.
+ *
+ * Until M15 this also carried hydrated code-symbol nodes and the edges
+ * traversal chose to expand — spec.md §17's projection had five sections, four
+ * of which described code. Those sections are gone with the structural graph
+ * (§24, and the measurement behind it: `E2E_BENCHMARK_MULTI_REPO.md` found the
+ * code half lost to grep, `WHY_MEMORY_SPIKE.md` found the memory half was the
+ * part grep cannot reconstruct). The name `Subgraph` is kept because §17 and
+ * §22 both refer to it, and because a set of memories retrieved for one task
+ * is still exactly that: a slice of the memory graph.
+ *
+ * Building it is the caller's job — `buildContext` itself does no I/O, per
+ * spec.md §17's "no new LLM call required" and ROADMAP's "plain templating
+ * over the subgraph".
  */
 export interface Subgraph {
-  nodes: Node[];
-  edges: Edge[];
   experiences?: Experience[];
-}
-
-export interface SubsystemSummary {
-  nodeId: string;
-  name: string;
-  summary?: string;
-}
-
-export interface RelationshipSummary {
-  edgeId: string;
-  relation: RelationType;
-  from: { id: string; name: string };
-  to: { id: string; name: string };
-  confidence: number;
-  weight: number;
-}
-
-export interface InvariantSummary {
-  nodeId: string;
-  name: string;
-  summary?: string;
 }
 
 export interface ExperienceSummary {
@@ -53,27 +39,13 @@ export interface ExperienceSummary {
   stalenessReason?: string;
 }
 
-export interface SourceFileSummary {
-  nodeId: string;
-  path: string;
-  summary?: string;
-}
-
-/** spec.md §17's five-part compact projection, as a structured object — `render.ts` turns this into the text an agent actually reads. */
+/** spec.md §17's compact projection, as a structured object — `render.ts` turns this into the text an agent actually reads. */
 export interface AgentContext {
   task: string;
-  subsystems: SubsystemSummary[];
-  relationships: RelationshipSummary[];
-  invariants: InvariantSummary[];
   experiences: ExperienceSummary[];
-  sourceFiles: SourceFileSummary[];
 }
 
 export interface BuildContextOptions {
-  /** Caps applied per section so the projection stays compact even if the caller hands in a larger-than-expected subgraph. */
-  maxRelationships?: number;
-  maxInvariants?: number;
-  maxSubsystems?: number;
+  /** Cap applied so the projection stays compact even if the caller hands in a larger-than-expected subgraph. */
   maxExperiences?: number;
-  maxSourceFiles?: number;
 }

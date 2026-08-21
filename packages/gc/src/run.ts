@@ -1,20 +1,6 @@
-import { hardDeleteInvalidEdgesBefore, hardDeleteNodesDeletedBefore } from "@cognitive-memory/graph-store";
-import { markPromotedExperiencesCold } from "./coldStorage.js";
-
 import { listIdleShortTermCandidates } from "./idleTier.js";
 
-/** spec.md §18: soft-deleted nodes are retained 90 days before hard-deletion. */
-export const DELETED_NODE_RETENTION_DAYS = 90;
-/** spec.md §18: invalidated edges are retained 30 days before hard-deletion — shorter than nodes', since an invalidated edge has no "this used to exist" retrieval value the way a deleted node does. */
-export const INVALID_EDGE_RETENTION_DAYS = 30;
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
 export interface GCResult {
-  nodesHardDeleted: number;
-  edgesHardDeleted: number;
-  /** Cold because their lessons reached a durable semantic edge (§18). */
-  experiencesMarkedCold: number;
   /**
    * Short-term memories idle past their §24.5 window — REPORTED ONLY.
    *
@@ -29,21 +15,32 @@ export interface GCResult {
 }
 
 /**
- * spec.md §18's batch job. `now` defaults to the real clock but is
- * accepted as a parameter so tests can exercise the 90/30-day boundaries
- * without waiting real days — retention cutoffs are computed from it, not
- * from Postgres's `now()`, so a test's backdated `updated_at` fixtures and
- * this function's notion of "how long ago" agree.
+ * spec.md §18's batch job.
+ *
+ * ## What M15 took out of it, and why nothing replaced it
+ *
+ * Until M15 this job did three things: hard-delete soft-deleted structural
+ * nodes past a 90-day retention window, hard-delete invalidated edges past a
+ * 30-day one, and mark an experience cold once every structural node it was
+ * bound to had a durable semantic edge (`coldStorage.ts`). All three retired
+ * with the structural graph: two of them collected node and edge rows that no
+ * longer exist, and the third was *already* a no-op for every memory captured
+ * since M12 — its eligibility test asked whether each entry in `relatedNodes`
+ * resolved to a node with a durable edge, and a text anchor never resolves to
+ * one, so it skipped them. That is measurable rather than assumed: on this
+ * repository's own memory graph, every memory is text-anchored.
+ *
+ * So §18 stands (spec.md §24.4) with the one signal it has left, which is
+ * M16's: memories that no session has usefully accessed inside their tier's
+ * idle window. It is reported, not acted on — `idleTier.ts` explains why that
+ * is a deliberate stopping point and not an unfinished one.
+ *
+ * `now` defaults to the real clock but is accepted as a parameter so tests can
+ * exercise the idle-window boundary without waiting real days.
  */
 export async function runGC(now: Date = new Date()): Promise<GCResult> {
-  const nodesCutoff = new Date(now.getTime() - DELETED_NODE_RETENTION_DAYS * MS_PER_DAY);
-  const edgesCutoff = new Date(now.getTime() - INVALID_EDGE_RETENTION_DAYS * MS_PER_DAY);
-
-  const nodesHardDeleted = await hardDeleteNodesDeletedBefore(nodesCutoff);
-  const edgesHardDeleted = await hardDeleteInvalidEdgesBefore(edgesCutoff);
-  const experiencesMarkedCold = await markPromotedExperiencesCold();
   // Counted, not acted on — see `GCResult.idleShortTermCandidates`.
   const idleShortTermCandidates = (await listIdleShortTermCandidates(now)).length;
 
-  return { nodesHardDeleted, edgesHardDeleted, experiencesMarkedCold, idleShortTermCandidates };
+  return { idleShortTermCandidates };
 }

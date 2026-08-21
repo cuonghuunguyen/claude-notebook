@@ -716,7 +716,16 @@ toward the eval plan.
 
 ---
 
-## 22. Pipeline Orchestration (extends §1, §9, §10, §17 — proposed via `/propose-milestone`)
+## 22. Pipeline Orchestration (extends §1, §9, §10, §17 — proposed via `/propose-milestone`) — its INTERFACE is superseded by §24.7 item 9; the composition principle stands
+
+> **Read §24.7 item 9 before treating anything below as current.** M15 removed
+> §9's node retrieval and §10's traversal, so the seven-step composition,
+> `PipelineOptions`'s required `graph`/`reasoner`, and `PipelineResult`'s
+> `seeds`/`traversal` fields specified in this section no longer exist in the
+> code. What survives is this section's actual argument — that the stages must
+> be composed *somewhere* rather than left to each caller — and
+> `packages/pipeline` still is that somewhere. The stage list is what changed.
+
 
 §1's data-flow diagram (Task → Hybrid Retrieval → Seed Nodes → Reasoning →
 Selective Graph Traversal → Evidence/Experience Retrieval → Task-specific
@@ -1221,3 +1230,112 @@ step only has the information it needs when something is actually reading
 the code the memory describes, and M12's measured 24-of-27 flag rate on
 this repository means an unattended pass would be mostly rewriting
 memories that were never wrong.
+
+### 24.7 What M15 Actually Retired (settled at the milestone, 2026-08-21)
+
+§24.4 above was written before the decommission and reads, in places, as
+though every listed section survives *as implemented code*. M15 measured its
+gate, passed it, and then had to decide that question concretely. This section
+records the answers so a later reader does not have to re-derive them from a
+deletion diff, and so §24.4's list is not mistaken for a promise the tree
+keeps.
+
+The rule applied was: **a mechanism survives if it still has a subject once no
+code-symbol node or edge can exist.** Everything below follows from it.
+
+1. **§9 (hybrid retrieval) — implementation retired, shape survives.** §24.4
+   already said the *shape* is reused pointed at experience content, and that
+   reuse is `packages/episodic`'s `queryByMeaning` (full-text + trigram +
+   vector, fused by weighted RRF). What retired is `packages/retrieval`: its
+   subject was nodes, and hybrid search over an empty table is not a
+   degradation, it is nothing. The one part of it with a subject beyond the
+   graph — the injected `EmbeddingProvider`, which §24.2.1's vector leg and
+   `packages/capture` both need — moved into `packages/core`.
+
+2. **§10-§11 (traversal, ranking) — retired.** M14's spike was the standing
+   hypothesis that traversal moves up a level to memory-to-memory edges, and
+   it returned NO-GO. With no code edges and no memory edges, `traverse` had
+   nothing to walk. §10's batching guidance stays written down for whoever
+   revisits M14's `reverts` / `shares_issue` relations with a better-designed
+   measurement.
+
+3. **§7 / §3.3 (promotion thresholds, confidence vs weight) — the decisions
+   stand, the edge-level implementation retired.** `packages/semantic`
+   computed a `SemanticStage` from an edge's provenance list and promoted the
+   edge. Both of its inputs were edges. §24.2 decision 4 had already
+   relocated §7/§13's *update path* to read-repair at the moment of use, which
+   shipped in M13 as supersede chains — so what M15 removed is the older
+   realization of an idea that already had a newer one, not the idea.
+   `Provenance`, `ProvenanceSourceType` and §4's `EVIDENCE_HIERARCHY` are kept
+   in `packages/core`: §4 is a vocabulary, it is cheap, and a memory is the
+   obvious future carrier for it.
+
+4. **§12 (lazy edge verification) — retired.** It answered "do this edge's
+   structural endpoints still exist". Neither term survives. §24.2.3's
+   git-driven memory staleness is the verification that remains, and it never
+   needed the parser.
+
+5. **§18 (GC) — stands, on one signal instead of three.** It used to
+   hard-delete soft-deleted nodes past 90 days, hard-delete invalidated edges
+   past 30, and mark a memory cold once every node it bound to had a durable
+   edge. The first two collected rows that no longer exist. The third was
+   *already* inert for every memory captured since M12 — its test asked
+   whether each `relatedNodes` entry resolved to a node, and a text anchor
+   never does — so removing it removed no live behaviour. What §18 has left is
+   §24.5's: short-term memories no session has usefully accessed inside their
+   idle window, reported and deliberately not acted on, because `cold` is a
+   hard filter on every by-meaning leg and §24.5 forbids retrieval missing a
+   correct memory outright.
+
+6. **§17 (context construction) — one section instead of five.** Subsystems,
+   relationships, invariants and source files were projections of the graph.
+   Nothing replaced them: the agent reading the context already has the
+   working tree, and `E2E_BENCHMARK_MULTI_REPO.md` is the measurement that
+   re-describing the code to it loses to letting it grep. `Prior Experience`
+   is the section grep cannot produce.
+
+7. **§3.2 (node identity) — generator retired, recogniser kept.** `nodeId()`
+   is gone. `isNodeId()` is not: rows written before M15 still carry 32-hex
+   node ids in `related_nodes`, and `anchorsFromRelatedNodes` must keep
+   telling them apart from paths — dropping the test would not delete old node
+   ids, it would silently reclassify them as file paths that match nothing.
+
+8. **§13's "disputed" state has no successor, and that is a real gap rather
+   than a relocation.** §24.2 decision 4 relocated §13's *update* path to
+   read-repair, and M13 shipped it — but a supersede resolves a conflict by
+   *replacing*, which cannot express "two equally-trusted sources disagree and
+   we do not know which is right". `EdgeStatus: "disputed"` and
+   `resolveConfidence`'s same-tier disagreement detection went with the edges
+   they described, and nothing on a memory represents that state today. It is
+   named here rather than quietly dropped: if it comes back it belongs on the
+   memory (two live chain heads that contradict each other), not on an edge,
+   and it needs a measurement showing the state is reachable often enough to be
+   worth representing.
+
+9. **§22 (pipeline orchestration) — the composition stands, its interface does
+   not.** §22 specified seven steps over `retrieveSeeds` → `traverse` →
+   `getNodesByIds` → `queryByNode` → `buildContext`, with `graph` and
+   `reasoner` as required injections and `seeds`/`traversal` on the result.
+   Five of those seven no longer exist. `runPipeline` is now embed-once →
+   by-meaning (§24.2.1) → read-time staleness (§24.2.3) → `buildContext` (§17),
+   and takes neither a `GraphProvider` nor a `ReasoningProvider`. §22's
+   *argument* is untouched and is why the package still exists: the stages must
+   be composed in one place rather than reassembled by every caller, which is
+   exactly what §22 observed was missing. Only the stage list changed. §22 now
+   carries a pointer to this item so it is not read as current.
+
+10. **§14 (event sourcing) — stands, with the retired half explicit.** The
+   event vocabulary keeps naming `SymbolAdded` / `CodeChanged` /
+   `SymbolRemoved` / `RelationAdded` / `RelationInvalidated` /
+   `ExperiencePromoted`, because the log is append-only and every database
+   that ever ran an extraction is full of them. The materializer skips them
+   and *counts* the skips, so a rebuild reports that it dropped a projection
+   rather than either failing or silently claiming a faithful replay.
+
+**What is NOT retired, and was specifically checked:**
+`experiences.related_nodes` and its GIN index. The column's name points at
+node ids, which makes it look like a node-gating surface; since M11 it holds
+text anchors, and `listExperiencesByAnchorPaths` matches on both it and
+`anchors` precisely so that pre-M12 memories — which have anchors *only*
+there — remain reachable by §24.2.3's staleness pass. Retiring it would have
+been data loss wearing a cleanup's clothes.

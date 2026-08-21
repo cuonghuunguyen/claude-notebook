@@ -13,9 +13,7 @@
   "dependencies": {
     "@cognitive-memory/core": "workspace:*",
     "@cognitive-memory/graph-store": "workspace:*",
-    "@cognitive-memory/retrieval": "workspace:*",
     "@cognitive-memory/staleness": "workspace:*",
-    "@cognitive-memory/traversal": "workspace:*",
     "@cognitive-memory/context": "workspace:*",
     "@cognitive-memory/episodic": "workspace:*"
   },

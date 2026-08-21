@@ -28,11 +28,7 @@ function experience(overrides: Partial<Experience> = {}): Experience {
   };
 }
 
-const subgraphOf = (...experiences: Experience[]): Subgraph => ({
-  nodes: [],
-  edges: [],
-  experiences,
-});
+const subgraphOf = (...experiences: Experience[]): Subgraph => ({ experiences });
 
 describe("staleness in the agent context (spec.md §24.2.3)", () => {
   it("tags a suspect memory with the spec's exact wording", () => {

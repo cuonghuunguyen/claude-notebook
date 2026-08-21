@@ -79,14 +79,16 @@ does so having shipped nothing.
    three lanes before picking one — the point of not pre-committing to a
    lane is that the highest-value target varies cycle to cycle:
    - **Performance:** run the existing eval harnesses
-     (`eval/retrieval`, `eval/traversal-cost`) or a targeted script against
+     (`eval/why-spike`, `eval/link-spike`, `eval/tier-promotion`) or a
+     targeted script against
      real Postgres and look for a hot path — an unindexed filter, an N+1
      query, a redundant re-fetch, an avoidable full table scan as data
      volume grows (the M4 PR's `experiences.task` index is the template for
      what this looks like).
    - **Correctness/robustness:** look for an edge case spec.md actually
      specifies but no existing test exercises — a promotion/conflict
-     interaction, a staleness/GC boundary, a traversal-budget edge — and
+     interaction, a staleness/GC boundary, a supersede-chain or tier
+     boundary — and
      write a failing test that proves the gap before fixing it.
    - **Code quality/simplification:** run the `code-review` or `simplify`
      skill across a package that hasn't had one since its milestone shipped
@@ -200,12 +202,14 @@ fix.
 
 ## Non-negotiables
 
-- Stack is locked (pnpm + TS workspaces, Postgres+pgvector+pg_trgm,
-  ts-morph). An improvement that would require a different one isn't a
+- Stack is locked (pnpm + TS workspaces, Postgres+pgvector+pg_trgm). There
+  is no parser in it since M15 removed ts-morph and tree-sitter with the
+  structural graph, and spec.md §24.2 point 7 forbids reintroducing a
+  per-language dependency on the load-bearing path. An improvement that would require a different one isn't a
   self-improve candidate — flag it in a report instead of doing it.
-- `spec.md`'s already-decided semantics (§3.2 identity, §3.3
-  confidence/weight, §7 promotion thresholds, §10 traversal batching) are
-  final. A "performance improvement" that changes one of these is a
+- `spec.md`'s already-decided semantics (§3.3 confidence/weight, §7
+  promotion thresholds, §24.2's five decisions, §24.5's tier shape, §24.7's
+  retirements) are final. A "performance improvement" that changes one of these is a
   deviation, not a self-improvement — flag it, don't ship it silently.
 - Never fabricate a BENCHMARKS.md entry. If step 9's re-measurement doesn't
   actually show the improvement, there is no improvement this cycle — go

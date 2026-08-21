@@ -1,6 +1,15 @@
 import { getPool, type Queryable } from "./db.js";
 
-/** Event types the materializer replays — spec.md §14. */
+/**
+ * The spec.md §14 event vocabulary, in full.
+ *
+ * Deliberately still complete after M15: the first six members project into
+ * the structural graph, which no longer exists, and no code can produce one
+ * any more — but the log is append-only and every database that ever ran an
+ * extraction still holds thousands of them, so the *type* has to keep naming
+ * them or `listEventsSince` cannot describe its own rows. `materializer.ts`
+ * skips them explicitly and counts the skips.
+ */
 export type EventType =
   | "CodeChanged"
   | "SymbolAdded"
@@ -39,12 +48,12 @@ function toEventId(id: string): number {
 }
 
 /**
- * `db` defaults to the shared pool but accepts a checked-out `PoolClient` —
- * same pattern as edges.ts's `upsertEdgeByTriple` — so a caller appending an
- * event as part of its own transaction (e.g. semantic's advisory-lock-
- * guarded recordObservation) gets the event committed/rolled back atomically
- * with the mutation it describes, instead of the event surviving a rollback
- * of the write it was supposed to describe.
+ * `db` defaults to the shared pool but accepts a checked-out `PoolClient`, so
+ * a caller appending an event as part of its own transaction (e.g. episodic's
+ * `recordSupersedingExperience`, which writes the correction and its link
+ * together) gets the event committed/rolled back atomically with the mutation
+ * it describes, instead of the event surviving a rollback of the write it was
+ * supposed to describe.
  */
 export async function appendEvent(event: MemoryEvent, db: Queryable = getPool()): Promise<MemoryEvent> {
   const { rows } = await db.query<{

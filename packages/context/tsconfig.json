@@ -5,9 +5,7 @@
     "rootDir": "src"
   },
   "references": [
-    { "path": "../core" },
-    { "path": "../graph-store" },
-    { "path": "../episodic" }
+    { "path": "../core" }
   ],
   "include": ["src"]
 }

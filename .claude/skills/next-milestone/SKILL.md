@@ -195,12 +195,14 @@ step 7 above.
 
 ## Non-negotiables
 
-- Stack is locked (pnpm + TS workspaces, Postgres+pgvector+pg_trgm,
-  ts-morph). Flag a needed deviation in the PR description; don't switch
-  silently.
-- `spec.md`'s already-decided semantics (§3.2 identity, §3.3
-  confidence/weight, §7 promotion thresholds, §10 traversal batching) are
-  final. Extend, don't relitigate.
+- Stack is locked (pnpm + TS workspaces, Postgres+pgvector+pg_trgm). There
+  is no parser in it since M15 removed ts-morph and tree-sitter with the
+  structural graph, and spec.md §24.2 point 7 forbids reintroducing a
+  per-language dependency on the load-bearing path. Flag a needed deviation
+  in the PR description; don't switch silently.
+- `spec.md`'s already-decided semantics (§3.3 confidence/weight, §7
+  promotion thresholds, §24.2's five decisions, §24.5's tier shape, §24.7's
+  retirements) are final. Extend, don't relitigate.
 - If you hit a genuine ambiguity spec.md doesn't resolve, make the smallest
   reasonable call, note it as `Deviation:` in the PR description, and keep
   going rather than stalling.

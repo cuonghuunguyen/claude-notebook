@@ -3,29 +3,9 @@
 exports[`renderContext > renders a fixed subgraph fixture to a compact-context snapshot 1`] = `
 "# Context: how does PaymentService persist a payment record
 
-## Relevant Subsystem
-
-- **Payments**: Handles payment capture and persistence.
-
-## Relationships
-
-- PaymentService --[calls]--> save (confidence 1.00, weight 0.90)
-- PaymentService --[constrained_by]--> Payment writes are idempotent (confidence 0.95, weight 0.80)
-- src/payments/PaymentService.ts --[contains]--> PaymentService (confidence 1.00, weight 0.60)
-- src/payments/PaymentRepository.ts --[contains]--> save (confidence 1.00, weight 0.60)
-
-## Invariants
-
-- **Payment writes are idempotent**: Retrying save() with the same payment id must not create a duplicate record.
-
 ## Prior Experience
 
-- [investigate slow payment writes] Added an index on payment_id; write latency dropped 80%.
+- [investigate slow payment writes] Added an index on payment_id; write latency dropped 80%. — **possibly-stale — verify before trusting** (modified src/payments/PaymentRepository.ts in 9f2c1a0b)
 - [fix double-charge bug] Added an idempotency check keyed on payment id; regression test added.
-  - save() must check for an existing record by payment id before inserting
-
-## Source Files
-
-- src/payments/PaymentRepository.ts: Persists payment records.
-- src/payments/PaymentService.ts: Payment capture entrypoint."
+  - save() must check for an existing record by payment id before inserting"
 `;

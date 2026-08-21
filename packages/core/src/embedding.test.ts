@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createFakeEmbedder } from "./fakeEmbedder.js";
+import { createFakeEmbedder } from "./embedding.js";
 
 function cosine(a: number[], b: number[]): number {
   let dot = 0;

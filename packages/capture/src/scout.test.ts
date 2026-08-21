@@ -33,14 +33,14 @@ describe("scout-report guardrail (spec.md §24.2.1)", () => {
 
   it("rejects a bare file listing even when it is long enough to pass the length floor", () => {
     const listing = `
-      - packages/retrieval/src/retrieve.ts
-      - packages/retrieval/src/merge.ts
-      - packages/retrieval/src/expand.ts
-      - packages/retrieval/src/indexing.ts
-      - packages/retrieval/src/fakeEmbedder.ts
+      - packages/episodic/src/byMeaning.ts
+      - packages/episodic/src/record.ts
+      - packages/episodic/src/query.ts
+      - packages/episodic/src/supersede.ts
+      - packages/core/src/embedding.ts
       - packages/graph-store/src/nodes.ts
       - packages/graph-store/src/edges.ts
-      - packages/traversal/src/traverse.ts
+      - packages/staleness/src/memoryStaleness.ts
     `;
     expect(listing.trim().length).toBeGreaterThan(MIN_UNDERSTANDING_CHARS);
     expect(() => assertSynthesizedUnderstanding(listing)).toThrow(BareLocationsError);
@@ -48,18 +48,18 @@ describe("scout-report guardrail (spec.md §24.2.1)", () => {
 
   it("rejects a location list wearing prose punctuation", () => {
     const disguised = `
-      retrieveSeeds lives in packages/retrieval/src/retrieve.ts and mergeHits
-      lives in packages/retrieval/src/merge.ts. expandSeeds is in
-      packages/retrieval/src/expand.ts, searchNodesByTrigram is in
-      packages/graph-store/src/nodes.ts and traverse is in
-      packages/traversal/src/traverse.ts.
+      queryByMeaning lives in packages/episodic/src/byMeaning.ts and
+      recordExperience lives in packages/episodic/src/record.ts. runPipeline is
+      in packages/pipeline/src/pipeline.ts, searchExperiencesByTrigram is in
+      packages/graph-store/src/experiences.ts and flagPossiblyStale is in
+      packages/staleness/src/memoryStaleness.ts.
     `;
     expect(disguised.trim().length).toBeGreaterThan(MIN_UNDERSTANDING_CHARS);
     expect(() => assertSynthesizedUnderstanding(disguised)).toThrow(BareLocationsError);
   });
 
   it("rejects a one-liner outright", () => {
-    expect(() => assertSynthesizedUnderstanding("Retrieval is in packages/retrieval.")).toThrow(
+    expect(() => assertSynthesizedUnderstanding("Retrieval is in packages/episodic.")).toThrow(
       /below the 200-char floor/
     );
   });
@@ -76,7 +76,7 @@ describe("scout-report guardrail (spec.md §24.2.1)", () => {
 
   it("counts only prose words, discarding paths and dotted symbol references", () => {
     const text =
-      "See packages/retrieval/src/merge.ts and mergeHits.score plus retrieve.ts for the merge rule";
+      "See packages/episodic/src/byMeaning.ts and fuseLegs.score plus query.ts for the fusion rule";
     // Pinned exactly, so this test fails if the stripping stops working rather
     // than passing on the raw word count alone: "See and plus for the merge
     // rule" is 7 words; the raw text has 12 once its separators are split.

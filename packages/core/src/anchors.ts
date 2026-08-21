@@ -110,11 +110,17 @@ export function parseAnchor(text: string): Anchor {
  * True for a `nodeId()` output (spec.md §3.2: 32 hex chars).
  *
  * Needed because `relatedNodes` is a mixed bag by design: migration 0001 made
- * it a non-foreign-key jsonb array, M11's capture wrote plain paths into it,
- * and the structural graph (alive until M15) still writes real node ids there.
- * Reading anchors out of a pre-M12 memory means telling the two apart, and
- * this is the only distinguishing feature available — a 32-char lowercase hex
- * string is not a plausible repo-relative path.
+ * it a non-foreign-key jsonb array, the structural graph wrote real node ids
+ * into it until M15, and M11's capture wrote plain paths. Nothing writes a
+ * node id there any more — but every row written before M15 keeps the ones it
+ * already has, so reading anchors out of a legacy memory still means telling
+ * the two apart, and this is the only distinguishing feature available: a
+ * 32-char lowercase hex string is not a plausible repo-relative path.
+ *
+ * Deliberately kept by M15 rather than deleted with the rest of §3.2. Dropping
+ * the test would not make old node ids disappear, it would reclassify them as
+ * *paths* — turning 31 real memories in this repo's own graph into anchors
+ * that match no file and can never be checked for staleness.
  */
 export function isNodeId(value: string): boolean {
   return /^[0-9a-f]{32}$/.test(value);
@@ -125,8 +131,9 @@ export function isNodeId(value: string): boolean {
  * every memory captured before this milestone.
  *
  * Node ids are dropped rather than turned into anchors: a node id names a
- * symbol, not a path, so there is nothing for git to check it against. It stays
- * in `relatedNodes` where the structural graph can still use it.
+ * symbol, not a path, so there is nothing for git to check it against. It is
+ * left in place in `relatedNodes` — since M15 nothing can dereference it, but
+ * rewriting stored history to tidy it away is not this function's business.
  */
 export function anchorsFromRelatedNodes(relatedNodes: readonly string[]): Anchor[] {
   return dedupeAnchors(

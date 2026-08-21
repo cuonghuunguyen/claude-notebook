@@ -31,8 +31,8 @@ independently check. When in doubt, it isn't in doubt: leave the PR open.
 
 - `spec.md` — the design contract as it stands. A proposal EXTENDS this
   (adds a new `## N.` section) — it must never edit or contradict an
-  existing decided section (§3.2 identity, §3.3 confidence/weight, §7
-  promotion thresholds, §10 traversal batching, etc.).
+  existing decided section (§3.3 confidence/weight, §7 promotion
+  thresholds, §24.2's five decisions, §24.7's retirements, etc.).
 - `ROADMAP.md` — confirms there's no pending milestone work to defer to
   instead, and gives the next milestone number to use.
 - `BENCHMARKS.md` — read it so you don't propose, as "new," something
@@ -66,8 +66,8 @@ independently check. When in doubt, it isn't in doubt: leave the PR open.
    - Look at `eval/*` and `BENCHMARKS.md` for a *recurring* pattern the
      current design structurally can't address (not a one-off bug —
      `/self-improve` handles those) — e.g. an eval dimension spec.md's own
-     §19 gestures at but never built, a class of query the retrieval/
-     traversal design has no path for.
+     §19 gestures at but never built, a class of question by-meaning
+     retrieval has no path for.
    - If web research tools are available, a small amount of external
      research on how comparable systems (agent memory / code-graph tools)
      handle a gap you've found in this codebase is legitimate evidence —
@@ -191,8 +191,11 @@ surface; take it seriously rather than defending the merge.
 
 ## Non-negotiables
 
-- Stack is locked (pnpm + TS workspaces, Postgres+pgvector+pg_trgm,
-  ts-morph). A proposal that would require a different one isn't a
+- Stack is locked (pnpm + TS workspaces, Postgres+pgvector+pg_trgm). There
+  is no parser in it since M15, and spec.md §24.2 point 7 forbids
+  reintroducing a per-language dependency on the load-bearing path — a
+  proposal that would need one is a reversal of a measured decision, not a
+  new capability. Either way, a proposal requiring a different stack isn't a
   candidate for self-merge — flag it for a human instead.
 - `spec.md`'s already-decided semantics are final. This skill may only
   ADD a new section; it may never edit, weaken, or contradict an existing

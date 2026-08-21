@@ -14,6 +14,107 @@ this file is a history, not a current-state snapshot.
 | 2026-08-10 | Correctness/robustness + performance | `extractChangedFiles` in `packages/structural` and `packages/structural-python`'s `incremental.ts` batched all of one incremental call's node deletions into a single Postgres transaction, instead of opening one connection checkout + one transaction per deleted node. Fixes a real atomicity gap (a crash mid-loop could leave a file's deletions half-applied) and removes the per-node connection overhead. | `vi.spyOn(getPool(), "connect")` around an `extractChangedFiles` call that deletes 3 functions from one file in a single incremental update; asserted call count, real Postgres (`cognitive_memory_test`). Test added to both packages' `integration.test.ts`. | 5 connect() calls (structural), scaling with deleted-node count | 3 connect() calls (structural), constant regardless of deleted-node count — same pattern verified in structural-python | [#14](https://github.com/cuonghuunguyen/claude-notebook/pull/14) |
 | 2026-08-20 | Knowledge retrieval (ROADMAP M11, not a self-improve cycle) | By-meaning retrieval and git-history capture moved out of `eval/why-spike` / `scripts/self-memory.mjs` into `packages/episodic` (`queryByMeaning`: full-text + trigram + vector legs fused by weighted RRF) and a new `packages/capture` (idempotent `captureGitHistory`, `recordScoutReport`), plus migration `0004` giving `experiences` the indexes to be searched by its own content. `runPipeline` now surfaces by-meaning hits in `AgentContext.experiences`. | `eval/why-spike`'s own 10 hand-labelled "why" questions over a full clone of `colinhacks/zod` (`ZOD_DIR=/tmp/zod`, scope `packages/zod/src/v4`), MRR of the commit that actually answers each one. Same questions and same scoring as `WHY_MEMORY_SPIKE.md`, but every retrieval call now goes through the shipped packages. Reproduce: `spike:capture` then `spike:probe` (add `SPIKE_EMBEDDER=fake` for the vector leg). **Three controls were run on separate fresh databases**, because two things besides the port changed and a single number could not tell them apart: (a) the original repair-only `isExplanatory` vocabulary, (b) the widened repair+decision vocabulary that ships, (c) the widened vocabulary with `recordExperience`'s timestamp persistence reverted to master's behaviour. | by-meaning MRR **0.75**; node-gated MRR **0.13** (spike code, `WHY_MEMORY_SPIKE.md`, on a 103-commit corpus) | by-meaning MRR **0.85** lexical-only / **0.90** with the stub embedder, recall 0.90 (9/10). Identical (0.85) under control (a), so the vocabulary widening is measurably neutral here — it added 2 commits to this corpus, not the 34 the corpus grew by; the rest is zod's own history having grown since the spike (103 → 135 explanatory commits in scope). Node-gated re-measured at **0.00**, and it is 0.00 under all three controls — including (c), which rules out the timestamp fix as the cause. What remains is corpus growth against a `LIMIT 10` newest-on-this-file window: as a file accumulates commits, the one that explains a decision falls out of the window. That is the structural weakness §24 is about, not a regression introduced here. | merged directly to `master` (explicit human override of the PR flow — no PR) |
 | 2026-08-20 | Knowledge-link edges (ROADMAP M14 spike — go/no-go, not a self-improve cycle) | Nothing shipped into `packages/`. `eval/link-spike` mines candidate memory-to-memory edges from **git metadata only** (`reverts` / `shares_issue` / `follows_up`), hand-checks their precision on a labelled sample, and runs a budget-fair A/B against the shipped M11 by-meaning retrieval on 10 questions whose ground truth spans **two** commits. Verdict: **NO-GO on integrating a memory-link layer now** — real but underpowered win (n=10, p=0.125), confined to 2 of 3 relations covering 27% of memories; `follows_up` a hard no at precision 0.00 (population-weighted miner precision 0.301, not the 0.52 stratified mean). An independent review pass then found the displaced context slots were worthless by construction (no gold slot at ranks 3-6) and the baseline ran with 0 embeddings, so the headline is not quotable on its own. See the prose section below the table for the full threat list. | Corpus `colinhacks/zod @ 870433f3`, scope `packages/zod/src/v4`, 400-commit window (376 commits after capture's filters, 137 recorded as memories), DB `cognitive_memory_m14`. **Precision:** 25 pairs sampled seeded-stratified from the *memory-to-memory* subset (the only edges retrieval could ever traverse), each labelled by reading both commits' full messages via `git show -s`, criterion + per-pair justification in `labels/precision-labels.json`; scored by `dist/sample.js`, never typed by hand. **A/B:** equal context budget (K=5: arm B spends 3 slots on by-meaning rank and 2 on 1-hop neighbours, so a linked memory must *displace* a by-meaning hit), metric = fraction of questions where **both** gold slots are retrieved. Reproduce: `ZOD_DIR=/tmp/zod node dist/sample.js && node dist/probe.js`. | by-meaning (M11 product), K=5: **bothSlots 0.60** (6/10), slot recall 0.80. Random-rewired control, same budget, 20 substitutions: **0.60**. | linked 1-hop, K=5: **bothSlots 0.90** (9/10), slot recall 0.95. Strong-relations-only (`follows_up` dropped): **0.90** on ~half the edges. Precision: `reverts` 1.00 (n=1), `shares_issue` 1.00 (n=12), `follows_up` **0.00** (n=12), overall 0.52. | no PR — branch `milestone/M14-knowledge-links-spike` (explicit human override of the PR flow) |
+| 2026-08-21 | Decommissioning the structural graph (ROADMAP M15 — the gate, not a self-improve cycle) | **Gate first, deletion second.** Before anything was removed, `eval/why-spike`'s 10 hand-labelled "why" questions were re-run through the knowledge-first pipeline in a **2×2 ablation**: structural graph fully ingested vs. `nodes`/`edges` empty, each lexical-only and with the stub embedder, on four separate fresh databases. The gate's question was not "is by-meaning good" (M11 answered that) but "does *anything* still measurably depend on structural nodes". It does not — the two node conditions are numerically identical, and the node-gated arm is 0.00 in both. So `packages/structural`, `packages/structural-python`, `packages/traversal`, `packages/semantic` and `packages/retrieval` were removed, along with `graph-store`'s `nodes.ts`/`edges.ts`, `staleness`'s §12 edge verifier, `gc`'s edge-based cold rule, `episodic`'s `queryByNode`, `context`'s four code sections, `core`'s `Node`/`Edge`/`RelationType`/`nodeId()`, and `eval/retrieval`, `eval/staleness`, `eval/traversal-cost` and `eval/e2e-benchmark`'s harness. `runPipeline` lost its whole seeds→traverse→hydrate stage. `migrations/0008` drops `edges` then `nodes`. ~10,300 lines deleted, ~1,000 added. | Corpus `colinhacks/zod` @ `e516c3ba`, scope `packages/zod/src/v4`, 142 explanatory commits captured as memories by the shipped `packages/capture`. Metric = MRR (and recall) of the commit that actually answers each of the 10 questions, scored by `dist/probe.js`, never typed by hand. The "with nodes" arm ingests the real ts-morph graph first (`eval/e2e-benchmark`'s `ingest.js`: 501 nodes in store, 1171 edge rows) so the node-gated arm has a genuine graph to seed and traverse; the "without nodes" arm leaves `nodes` empty. Reproduce (pre-removal, at `origin/master`): `ZOD_DIR=/tmp/zod node eval/e2e-benchmark/dist/ingest.js && node eval/why-spike/dist/capture.js && node eval/why-spike/dist/probe.js`, adding `SPIKE_EMBEDDER=fake` for the vector leg, on a fresh database per arm. Post-removal: same two `why-spike` commands, no ingest (there is nothing to ingest with). DBs `cognitive_memory_m15_gate_{nodes,nonodes}[_vec]` and `cognitive_memory_m15_post_{nonodes,vec}` on the dedicated M15 Postgres. | **Pre-removal, WITH the structural graph** (501 nodes / 1171 edges): by-meaning MRR **0.85** lexical-only, **0.90** with the stub embedder, recall **0.90** (9/10) in both; node-gated **MRR 0.00, recall 0.00** — it returned 10 memories for every one of the 10 questions and the answering commit was in none of them. **Pre-removal, WITHOUT any structural node** (`nodes` empty): by-meaning MRR **0.85** / **0.90**, recall **0.90**; node-gated returned **0 hits** for every question, MRR **0.00**. The two conditions differ in no digit. | **Post-removal** (packages gone, migration 0008 applied, `nodes`/`edges` tables dropped): by-meaning MRR **0.85** lexical-only, **0.90** with the stub embedder, recall **0.90** (9/10) — identical to both pre-removal conditions and to M11's recorded baseline. The same question misses in every arm (`domain-lookahead`), i.e. the failure is a property of the corpus, not of the removal. `pnpm -r build`, `pnpm -r typecheck`, `pnpm lint` and `pnpm -r test` green with the packages gone: **292 tests, 12 packages** (was 399 tests, 20 packages). Data preservation proved on a *populated* database: 144 memories before and after 0008, identical `md5(id‖task‖observation)` content hash, `anchors`/`related_nodes`/embeddings untouched, `events` intact (1,903 pre-M15 structural rows kept), and `rebuildFromEvents` on that legacy log replays 144 memories to the same hash while skipping 1,903 retired events. | no PR — branch `milestone/M15-decommission-structural` (explicit human override of the PR flow) |
+
+---
+
+## M15 — Decommissioning the Structural Graph: the gate
+
+**The gate passed, and it passed on an ablation rather than on a re-run.**
+
+ROADMAP M15's wording is "a re-run of the existing eval sets through the
+knowledge-first pipeline shows no regression vs the `BENCHMARKS.md` baseline".
+Read literally, that is satisfiable by one number: run the eval, compare 0.85
+to 0.85, delete. That would have been the wrong measurement, because it cannot
+distinguish "the structural graph contributes nothing" from "the structural
+graph contributes something and the eval does not see it". A no-regression
+re-run of a pipeline that still *has* the structural stage tells you nothing
+about what happens when the stage is gone.
+
+So the gate was run as a **2×2 ablation** instead — the graph present vs.
+absent, crossed with the vector leg off vs. on, on four separate fresh
+databases:
+
+| arm | nodes / edges in DB | by-meaning MRR | by-meaning recall | node-gated MRR | node-gated hits/question |
+|---|---|---|---|---|---|
+| lexical, graph ingested | 501 / 1171 | **0.85** | 0.90 | **0.00** | 10 |
+| lexical, no graph | 0 / 0 | **0.85** | 0.90 | **0.00** | 0 |
+| +stub embedder, graph ingested | 501 / 1171 | **0.90** | 0.90 | **0.00** | 10 |
+| +stub embedder, no graph | 0 / 0 | **0.90** | 0.90 | **0.00** | 0 |
+
+Two things in that table are the whole milestone.
+
+**The by-meaning column does not move.** Not "moves within noise" — the same
+per-question ranks, the same single miss (`domain-lookahead`), the same MRR to
+two decimals, with a real 501-node / 1171-edge ts-morph graph of zod v4 sitting
+in the database and with the tables empty. Retrieval was not using it.
+
+**The node-gated column is 0.00 with the graph present.** This is the sharper
+result, and it is not the same statement as "0.00 because there was nothing to
+retrieve". With the graph ingested the arm worked exactly as designed: it
+found seeds, traversed, and returned ten memories for every single question.
+It just never returned the right one. The pre-M11 design was not
+under-provisioned here; it was pointed at the wrong thing. `WHY_MEMORY_SPIKE.md`
+diagnosed why — a `LIMIT 10` newest-on-this-file window loses the commit that
+explains a decision as soon as the file accumulates commits — and this is that
+diagnosis holding at full graph coverage.
+
+### What the gate could have found instead, and why it would have blocked
+
+The gate was written to be failable, and two specific findings would have
+blocked the milestone:
+
+- **Capture depending on the graph.** `captureGitHistory` used to take a
+  `resolveNodeIds` bridge into `packages/structural`. If anchoring had been
+  routed *through* it — if a commit with no resolvable node had been counted
+  `unanchored` — then deleting the extractors would have silently emptied the
+  corpus. Measured: 142 commits mined, 142 recorded, **0 unanchored**, on a
+  database with zero nodes. Anchors were already text; the bridge was additive.
+- **`experiences.related_nodes` being node-only.** The obvious "retire the
+  node-gating surface" move is to drop that column and its GIN index. Reading
+  `listExperiencesByAnchorPaths` shows why that would have been wrong: it
+  matches anchors against `anchors` **or** `related_nodes`, because memories
+  written before M12 have their anchors only in the latter. Dropping it would
+  have made the entire pre-M12 corpus invisible to §24.2.3's staleness pass —
+  and this repository's own memory graph is mostly pre-M12. Kept, deliberately,
+  and `isNodeId()` kept with it so a legacy 32-hex node id in that column is
+  still never mistaken for a file path.
+
+### The post-removal re-run
+
+Same two commands, on a database migrated `0001`→`0008` from empty, with
+`nodes` and `edges` never created: **MRR 0.85 lexical-only, 0.90 with the stub
+embedder, recall 0.90**. Identical to both pre-removal conditions and to the
+M11 row above. 142 commits mined, 142 memories recorded, 142 preserved.
+
+`pnpm -r build && pnpm -r typecheck && pnpm lint && pnpm -r test` green with
+the packages gone: 292 tests across 12 packages, down from 399 across 20. The
+107 tests that went away tested the removed subsystem; none of the survivors
+were weakened to make them pass. An independent review pass diffed every
+rewritten test file against `origin/master` and found three net stronger, one
+genuine softening (`capture`'s two `SELECT count(*) FROM nodes` assertions
+became a format check, which is all that is expressible after 0008), and none
+tautological.
+
+### Data preservation, proved rather than asserted
+
+The acceptance criterion "`experiences` data is preserved" was checked against
+a *populated* database — the gate's own `_gate_nodes` DB, which had been
+migrated to 0007, loaded with 501 nodes / 1171 edges, and had 144 memories:
+
+```
+before 0008: nodes=501 edges=1171 experiences=144 anchors_rows=142  md5=b2f9fe43…
+after  0008: experiences=144 anchors_rows=142 related_nodes_rows=144 md5=b2f9fe43…
+tables after: events, experience_accesses, experiences, schema_migrations
+re-run:       "No new migrations to apply."   (idempotent)
+events after: ExperienceRecorded 144 | RelationAdded 1401 | SymbolAdded 502
+```
+
+And the §14 backward-compatibility case, on a copy of that same legacy log:
+`rebuildFromEvents()` → `{ applied: 144, skipped: 1903 }`, with the replayed
+corpus hashing to the identical `b2f9fe43…`. A database that ever ran a
+structural extraction can still rebuild itself; it just reports that 1,903
+projections were dropped rather than pretending the replay was complete.
 
 ---
 

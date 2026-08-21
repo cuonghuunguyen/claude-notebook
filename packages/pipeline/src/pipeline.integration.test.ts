@@ -1,15 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import type { Edge, Node } from "@cognitive-memory/core";
-import {
-  closePool,
-  runMigrations,
-  upsertEdgeByTriple,
-  upsertNode,
-} from "@cognitive-memory/graph-store";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createFakeEmbedder } from "@cognitive-memory/core";
+import { closePool, runMigrations, upsertExperienceEmbedding } from "@cognitive-memory/graph-store";
 import { recordExperience } from "@cognitive-memory/episodic";
-import { createFakeEmbedder } from "@cognitive-memory/retrieval";
-import { createPostgresGraphProvider, expandAllReasoner } from "@cognitive-memory/traversal";
 import { runPipeline } from "./pipeline.js";
 
 // Same DATABASE_URL-gating convention as every other integration suite in
@@ -17,37 +10,16 @@ import { runPipeline } from "./pipeline.js";
 const hasDb = Boolean(process.env["DATABASE_URL"]);
 const d = hasDb ? describe : describe.skip;
 
-function makeNode(id: string, overrides: Partial<Node> = {}): Node {
-  const now = new Date().toISOString();
-  return {
-    id,
-    type: "class",
-    metadata: {},
-    provenance: [{ sourceType: "source_code", sourceId: id, confidence: 1, observedAt: now }],
-    status: "active",
-    createdAt: now,
-    updatedAt: now,
-    ...overrides,
-  };
-}
-
-function makeEdge(from: string, to: string, overrides: Partial<Edge> = {}): Edge {
-  const now = new Date().toISOString();
-  return {
-    id: randomUUID(),
-    from,
-    to,
-    relation: "calls",
-    confidence: 1,
-    weight: 0.5,
-    provenance: [],
-    status: "active",
-    createdAt: now,
-    updatedAt: now,
-    ...overrides,
-  };
-}
-
+/**
+ * spec.md §22 end to end against a real database.
+ *
+ * Until M15 the cases here built a fixture *structural* graph — nodes, edges,
+ * a repo id — and asserted that a task string reached the right subsystem,
+ * source files and relationships through retrieval and traversal. There is no
+ * structural graph to build any more, and the assertion that matters is the
+ * one the last of those cases already made: a real task string reaches real
+ * recorded knowledge with nothing code-shaped in between.
+ */
 d("runPipeline integration", () => {
   beforeAll(async () => {
     await runMigrations();
@@ -57,112 +29,7 @@ d("runPipeline integration", () => {
     await closePool();
   });
 
-  it("goes from a task string to an AgentContext matching the fixture's real structural graph (spec.md §22 — the actual point of this milestone)", async () => {
-    const repoId = `pipeline-test-${randomUUID()}`;
-    const svcId = `${repoId}-payment-service`;
-    const fileId = `${repoId}-payment-repository-file`;
-    const unrelatedId = `${repoId}-date-formatter`;
-
-    await upsertNode(makeNode(svcId, { type: "subsystem", name: "PaymentService" }), repoId);
-    // Deliberately no lexical overlap with "PaymentService" — it must only
-    // be reachable via traversal's edge expansion, not retrieval's own
-    // lexical leg or 1-hop seed expansion (spec.md §9), so this test
-    // actually isolates traversal's contribution to the final context.
-    await upsertNode(
-      makeNode(fileId, { type: "file", path: "/src/storageAdapter.ts", name: "StorageAdapterModule" }),
-      repoId
-    );
-    await upsertNode(makeNode(unrelatedId, { type: "class", name: "DateFormatter" }), repoId);
-
-    await upsertEdgeByTriple(makeEdge(svcId, fileId, { relation: "calls", weight: 0.9 }));
-    await upsertEdgeByTriple(makeEdge(svcId, unrelatedId, { relation: "imports", weight: 0.1 }));
-
-    const { context, seeds, traversal } = await runPipeline("PaymentService", {
-      repoId,
-      graph: createPostgresGraphProvider(),
-      reasoner: expandAllReasoner(),
-      // Disable retrieval's own 1-hop seed expansion (spec.md §9) so this
-      // test isolates traversal's contribution — otherwise fileId would
-      // already arrive as a seed (a "structural_neighbor" of the top hit)
-      // and the svc->file edge would never be offered to traversal at all,
-      // since both endpoints would already be pre-visited.
-      retrieveOptions: { expansionSeedCount: 0 },
-      traverseOptions: { budget: { maxDepth: 2, maxNodes: 10, maxEdges: 10, maxReasoningSteps: 3, maxTokens: 8000 } },
-    });
-
-    expect(seeds.some((s) => s.nodeId === svcId)).toBe(true);
-    expect(traversal.nodeIds).toContain(fileId);
-
-    expect(context.subsystems).toContainEqual({ nodeId: svcId, name: "PaymentService", summary: undefined });
-    expect(context.sourceFiles).toContainEqual({
-      nodeId: fileId,
-      path: "/src/storageAdapter.ts",
-      summary: undefined,
-    });
-    expect(context.relationships.some((r) => r.from.id === svcId && r.to.id === fileId)).toBe(true);
-  });
-
-  it("surfaces an experience recorded for a node the traversal reaches (first real, non-test-scaffolding exercise of episodic's read path)", async () => {
-    const repoId = `pipeline-test-${randomUUID()}`;
-    const svcId = `${repoId}-checkout-service`;
-    const helperId = `${repoId}-checkout-helper`;
-
-    await upsertNode(makeNode(svcId, { type: "subsystem", name: "CheckoutService" }), repoId);
-    await upsertNode(makeNode(helperId, { type: "function", name: "computeTotal" }), repoId);
-    await upsertEdgeByTriple(makeEdge(svcId, helperId, { relation: "calls", weight: 0.9 }));
-
-    const recorded = await recordExperience({
-      task: "fix a rounding bug in checkout",
-      observation: "totals were off by a cent for some carts",
-      lessons: ["round after summing, not per line item"],
-      relatedNodes: [helperId],
-      confidence: 0.7,
-    });
-
-    const { context, traversal } = await runPipeline("CheckoutService", {
-      repoId,
-      graph: createPostgresGraphProvider(),
-      reasoner: expandAllReasoner(),
-      traverseOptions: { budget: { maxDepth: 2, maxNodes: 10, maxEdges: 10, maxReasoningSteps: 3, maxTokens: 8000 } },
-    });
-
-    expect(traversal.nodeIds).toContain(helperId);
-    expect(context.experiences.some((e) => e.experienceId === recorded.id)).toBe(true);
-  });
-
-  it("calls a real embedder's embed() exactly once per invocation, even though it feeds both retrieval's vector leg and traversal's ranking", async () => {
-    const repoId = `pipeline-test-${randomUUID()}`;
-    const svcId = `${repoId}-billing-service`;
-    const neighborId = `${repoId}-billing-neighbor`;
-
-    await upsertNode(makeNode(svcId, { type: "subsystem", name: "BillingService" }), repoId);
-    await upsertNode(makeNode(neighborId, { type: "function", name: "applyDiscount" }), repoId);
-    await upsertEdgeByTriple(makeEdge(svcId, neighborId, { relation: "calls", weight: 0.8 }));
-
-    const fake = createFakeEmbedder();
-    const embed = vi.fn((text: string) => fake.embed(text));
-
-    await runPipeline("BillingService", {
-      repoId,
-      embedder: { embed },
-      graph: createPostgresGraphProvider(),
-      reasoner: expandAllReasoner(),
-    });
-
-    expect(embed).toHaveBeenCalledTimes(1);
-  });
-});
-
-d("runPipeline by-meaning integration (spec.md §24.2.1 / ROADMAP.md M11)", () => {
-  beforeAll(async () => {
-    await runMigrations();
-  });
-
-  afterAll(async () => {
-    await closePool();
-  });
-
-  it("hands the agent knowledge that no structural node points at, against a real database", async () => {
+  it("goes from a task string to an AgentContext carrying the memory that answers it (spec.md §22)", async () => {
     const marker = randomUUID().replace(/-/g, "");
     const recorded = await recordExperience({
       task: `why the ${marker} anchor helper exists`,
@@ -171,27 +38,70 @@ d("runPipeline by-meaning integration (spec.md §24.2.1 / ROADMAP.md M11)", () =
         `inline template literal because esbuild refuses to treat an interpolated regex ` +
         `literal as pure, so its dead-code pass kept the entire module in every bundle.`,
       lessons: [`the ${marker} anchor helper exists for esbuild purity, not readability`],
-      // Nothing to gate on: no node, no traversal reach.
+      // Nothing code-shaped to gate on — and since M15, nothing that could be.
       relatedNodes: [],
       confidence: 0.7,
     });
 
     const result = await runPipeline(
       `${marker} why is the iso regex built through a helper rather than inline`,
-      {
-        repoId: `nonexistent-repo-${marker}`,
-        embedder: createFakeEmbedder(),
-        graph: createPostgresGraphProvider(),
-        reasoner: expandAllReasoner(),
-      }
+      { embedder: createFakeEmbedder() }
     );
 
-    // The structural half genuinely found nothing — this repo id has no nodes.
-    expect(result.seeds).toEqual([]);
-    expect(result.context.sourceFiles).toEqual([]);
-    // The knowledge half answered anyway.
     expect(result.context.experiences.map((e) => e.experienceId)).toContain(recorded.id);
+    expect(result.context.experiences.find((e) => e.experienceId === recorded.id)?.lessons).toEqual([
+      `the ${marker} anchor helper exists for esbuild purity, not readability`,
+    ]);
     expect(result.byMeaning.map((h) => h.experience.id)).toContain(recorded.id);
     expect(result.byMeaning.find((h) => h.experience.id === recorded.id)?.anchored).toBe(false);
+  });
+
+  it("calls a real embedder's embed() exactly once per invocation (spec.md §22 step 1)", async () => {
+    const real = createFakeEmbedder();
+    let calls = 0;
+    const counting = {
+      async embed(text: string): Promise<number[]> {
+        calls += 1;
+        return real.embed(text);
+      },
+    };
+
+    await runPipeline(`embed-once-${randomUUID()}`, { embedder: counting });
+
+    expect(calls).toBe(1);
+  });
+
+  it("finds a memory through the vector leg with the embedding written at capture time", async () => {
+    const marker = randomUUID().replace(/-/g, "");
+    const embedder = createFakeEmbedder();
+    const recorded = await recordExperience({
+      task: `${marker} prototype methods retain memory in v8`,
+      observation:
+        `Moving schema methods onto the ${marker} prototype cut bundle size but made v8 ` +
+        `retain more memory per instance, because inline slots no longer covered the ` +
+        `method properties.`,
+      relatedNodes: [],
+      confidence: 0.7,
+    });
+    await upsertExperienceEmbedding(
+      recorded.id,
+      await embedder.embed(`${recorded.task} ${recorded.observation}`)
+    );
+
+    const result = await runPipeline(
+      `${marker} why do prototype methods make v8 retain more memory per instance`,
+      { embedder }
+    );
+
+    const hit = result.byMeaning.find((h) => h.experience.id === recorded.id);
+    expect(hit).toBeDefined();
+    expect(hit?.legs).toContain("vector");
+  });
+
+  it("returns an empty context rather than throwing when nothing matches at all", async () => {
+    const result = await runPipeline(`no-such-knowledge-${randomUUID().replace(/-/g, "")}`, {});
+
+    expect(result.byMeaning).toEqual([]);
+    expect(result.context.experiences).toEqual([]);
   });
 });

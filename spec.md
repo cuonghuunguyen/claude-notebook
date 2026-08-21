@@ -1339,3 +1339,156 @@ text anchors, and `listExperiencesByAnchorPaths` matches on both it and
 `anchors` precisely so that pre-M12 memories — which have anchors *only*
 there — remain reachable by §24.2.3's staleness pass. Retiring it would have
 been data loss wearing a cleanup's clothes.
+
+---
+
+## 25. Storage Backend: SQLite (extends §16 — direct human decision, 2026-08-21)
+
+§16 commits to a single Postgres "until a measured bottleneck justifies
+splitting out a dedicated engine." That escape hatch points *up* — toward
+more specialized engines at greater scale. This section takes the exit §16
+does not contemplate: at the scale this system actually operates, the single
+Postgres **is** the bottleneck — not on latency, on adoption.
+
+§16 is extended, not contradicted. Its deferral principle survives inverted:
+re-adding a server backend is deferred, not rejected, and §25.7 names its
+trigger.
+
+### 25.1 The measurement
+
+Measured 2026-08-21 against the live system, not estimated:
+
+- **Corpus size: 34 memories.** `packages/capture/src/corpus.ts:77` admits a
+  commit only when its meaningful body is ≥ 200 chars, so a mature repo lands
+  in the hundreds-to-thousands, not millions.
+- **Install cost: 621 MB** (`pgvector/pgvector:pg16`) for roughly 1 MB of
+  text, behind a Docker daemon, a free port, two databases, two
+  `CREATE EXTENSION`s, a `DATABASE_URL` and eight migrations.
+- **pgvector's HNSW index buys nothing at this scale.** Brute-force cosine
+  over 10,000 × 1536 Float32 vectors plus a top-10 sort is **19 ms** in plain
+  JS — 300× the current corpus, no index, no extension.
+- **The vector leg is the least load-bearing of the three.** Its only
+  embedder is `createFakeEmbedder` (feature hashing, no measured retrieval
+  quality), carrying RRF weight 0.5 (`DEFAULT_LEG_WEIGHTS`,
+  `packages/episodic/src/byMeaning.ts`). `BENCHMARKS.md`: MRR 0.85
+  lexical-only vs 0.90 with the stub. The single hardest Postgres dependency
+  serves the weakest leg.
+- **Coupling is already narrow.** Exactly one file imports `pg`
+  (`packages/graph-store/src/db.ts`). `capture`, `context`, `core`, `gc`,
+  `pipeline`, `staleness` and `tiers` never name a client type.
+
+### 25.2 The decision
+
+**SQLite is the only backend.** Postgres is removed, not retained behind a
+storage seam. A dual-backend seam would double 68 query sites and the
+integration matrix permanently to serve a networked-team-memory deployment
+that does not exist.
+
+**Driver: `better-sqlite3`.** Chosen over Node's built-in `node:sqlite`,
+which ships *without* FTS5 (verified on Node v22.14 / SQLite 3.47.2 — the
+full-text leg is the strongest one at MRR 0.75, so losing FTS5 is not
+acceptable). This is a new native dependency; CLAUDE.md's flag-and-wait rule
+was honoured — it was flagged and explicitly approved, not quietly added.
+Installed from a prebuilt binary in 7 s with no compiler, and SQLite 3.53.4
+was verified to provide FTS5 + `bm25()`, `tokenize='trigram'`,
+`json_each`/`json_extract`, 1536-dim Float32 blob round-trip, `foreign_keys`
+enforcement and `WITH RECURSIVE`.
+
+### 25.3 Retrieval legs
+
+| Leg | Postgres today | SQLite |
+| --- | --- | --- |
+| text | `to_tsvector` / `ts_rank` / `@@` | FTS5 external-content table, ranked by `bm25()` |
+| text (query) | `to_tsquery('english', 'a \| b')` | `MATCH 'a OR b'` — OR-across-documents semantics verified equivalent |
+| trigram | `word_similarity` / `<%` + GUC threshold | FTS5 `tokenize='trigram'` substring match |
+| vector | `vector(1536)`, `<=>`, HNSW | Float32 `BLOB`, cosine computed in JS. **No vector extension** — §25.1's 19 ms |
+
+**`fuseLegs()` is unchanged.** Weighted RRF reads each leg's *rank order* and
+never its score, so `bm25()`'s scale differing from `ts_rank`'s cannot move
+the fused result while the orderings stay comparable. This is precisely what
+makes the port measurable rather than a rewrite on faith: retrieval quality
+must not move (§25.5).
+
+### 25.4 Deleted rather than ported
+
+- **Both `pg_advisory_lock` uses** — the migration lock
+  (`packages/graph-store/src/migrate.ts`) and the supersede serialization
+  lock plus its `FOR UPDATE` row lock
+  (`packages/graph-store/src/experiences.ts`). SQLite has one global write
+  lock, so what those locks simulate is the engine's default; WAL plus a
+  busy timeout replaces them, and the documented supersede deadlock analysis
+  becomes moot.
+- **`set_config('pg_trgm.word_similarity_threshold', …)`** — a constant once
+  the threshold is not a session GUC.
+- **Both `CREATE EXTENSION`s**, CI's Postgres service container, and
+  `scripts/setup-dev-db.sh`'s entire Docker-vs-apt detection.
+- **`DATABASE_URL` as a hard requirement.** Integration tests currently
+  self-skip without it; after the port there is nothing to skip on.
+
+### 25.5 Rewritten, and how
+
+Postgres-only constructs and their decided replacements:
+
+| Construct | Sites | Replacement |
+| --- | --- | --- |
+| `unnest($1::text[], …)` | `experiences.ts`, `tiers.ts` | `json_each` over a JSON array parameter |
+| `anchors @> ANY ($1::jsonb[])` | `experiences.ts` | `json_each` + `json_extract` |
+| `count(*) FILTER (WHERE …)` | `tiers.ts` | `sum(CASE WHEN … THEN 1 ELSE 0 END)` |
+| `IS NOT DISTINCT FROM` | `tiers.ts` | `IS` (SQLite's `IS` is null-safe) |
+| `nextval('experience_settle_seq')` | `tiers.ts` | counter row bumped inside the same write transaction |
+| `bigserial` | `events.id` | `INTEGER PRIMARY KEY AUTOINCREMENT` |
+| `timestamptz` | throughout | **TEXT, ISO-8601 UTC** — not a Unix integer, so the database stays greppable and diffable, consistent with §24.2.2's reasoning for text anchors |
+| plpgsql `DO $$ … EXCEPTION` | migration 0007 | plain DDL in the baseline |
+
+Two further decisions, so a later cycle does not re-derive them:
+
+1. **Migrations are rewritten as one SQLite baseline, not translated
+   0001→0008.** Those eight files encode the history of a schema that still
+   contained `nodes`/`edges` until 0008 dropped them; replaying that history
+   on a new engine reproduces archaeology for no benefit. The runner keeps
+   its applied-check contract.
+2. **There is no data-migration path from an existing Postgres database.**
+   Mined memories are reproducible — `sync` is idempotent and reads git in
+   ~240 ms. Scout reports are the one class that is *not* reproducible from
+   any external source, so the port ships a one-shot export/import for those
+   specifically and nothing else.
+
+### 25.6 Deferred: markdown as the source of truth
+
+Named here so it is not re-derived from scratch; **not decided by this
+section.** Memories would become `.md` files with YAML frontmatter —
+git-versioned, greppable, reviewable in a PR — with SQLite demoted to a
+derived, gitignored index rebuilt from those files (the same
+source-of-truth-plus-projection shape `packages/graph-store/src/materializer.ts`
+already implements for events).
+
+It is deliberately a *second* milestone, because a port bug and a redesign
+bug are indistinguishable in one step: §25.5's gate only means something
+while behaviour is held constant.
+
+Three known obstacles, all of which the split *resolves* rather than creates
+— every one is an objection to storing operational state in knowledge files,
+not to markdown:
+
+- **Retrieval writes.** `packages/graph-store/src/tiers.ts` increments
+  `access_count` and upserts `experience_accesses` on every `ask`, so a pure
+  markdown corpus would rewrite frontmatter on every question asked.
+- **`experience_accesses` is a join, not an attribute.** Its `(memory,
+  session)` primary key is what makes §24.5's no-self-promotion rule
+  structural rather than conventional.
+- **Embeddings are 6144 bytes per memory**, which in frontmatter destroys the
+  diffability that motivated markdown in the first place.
+
+### 25.7 What this section does not claim
+
+- **No latency claim.** Postgres was never too slow. §25.1's figures show
+  headroom, not a regression being fixed.
+- **No retrieval-quality claim.** The gate is that quality does **not**
+  change (§25.3).
+- **The scale ceiling is real and accepted.** Brute-force vector search is
+  O(n); somewhere around 10^5 memories the vector leg needs an index again.
+  That trigger is named, not solved — and it, or a genuine multi-writer
+  deployment, is what would reopen §16's server-backend question.
+- **The stack is Postgres until the port actually lands.** CLAUDE.md's
+  locked-stack rule and README's Quickstart are updated by the porting
+  milestone, not by this section.

@@ -30,6 +30,8 @@ This checklist is the source of truth for what's done — see
 - [x] M14 — Knowledge-Link Edges (spike: memory-to-memory traversal, go/no-go on a measured win) — **outcome: NO-GO on integrating; `follows_up` a hard no. See BENCHMARKS.md**
 - [x] M15 — Decommission the Structural Graph (gate passed: by-meaning MRR **0.85** lexical / **0.90** with the stub embedder, *identical* with 501 structural nodes present and with none; node-gated arm **0.00** in both. See BENCHMARKS.md)
 - [x] M16 — Memory Tiers: short/mid/long-term with access-driven promotion (extends §7/§18)
+- [ ] M17 — Storage Backend: Port to SQLite (removes Postgres+pgvector+pg_trgm; spec §25) — **behaviour-preserving; gate is MRR 0.85/0.90 unchanged**
+- [ ] M18 — Memories as Markdown, Index as Projection (spec §25.6) — gated on M17
 
 Repo layout target:
 
@@ -51,7 +53,7 @@ packages/
   capture/                    # M11: git-history mining + scout-report distillation per spec §24.2.1
   staleness/                  # M12: text anchors + git-driven memory staleness per spec §24.2.2-3
   tiers/                      # M16: access-driven tier promotion per spec §24.5
-  gc/                         # M7/M18: retention signal over memories
+  gc/                         # M7: retention signal over memories per spec §18
 eval/                         # eval sets, spec §19: why-spike (M11 knowledge retrieval),
                               # link-spike (M14 go/no-go), tier-promotion (M16)
 ```
@@ -689,6 +691,106 @@ with a usage axis and giving §18's GC its retention signal.
 
 ---
 
+## M17 — Storage Backend: Port to SQLite (spec §25)
+
+**Goal:** replace Postgres + pgvector + pg_trgm with a single SQLite file as
+the only backend, preserving retrieval behaviour exactly. The product claim
+is "your coding agent remembers why your codebase is the way it is" — today
+step one of using it is provisioning a database server (spec §25.1).
+
+This is a **behaviour-preserving port**, and that constraint is the
+milestone. Anything that improves retrieval, changes semantics, or reshapes
+the schema belongs to a later milestone; if the eval number moves, the port
+is wrong.
+
+- Driver: `better-sqlite3` (spec §25.2). WAL journal mode, `foreign_keys=ON`,
+  a busy timeout. Database path defaults inside the repo (e.g.
+  `.claude/memory.db`), no env var required to run.
+- Rewrite `packages/graph-store/src/db.ts` — the only file importing `pg`
+  — and the ~68 query sites behind it, per spec §25.5's construct table. No
+  storage-abstraction layer: there is exactly one backend, so a `Store`
+  interface would be a seam with one implementation.
+- Retrieval legs per spec §25.3: FTS5 external-content table ranked by
+  `bm25()`; `tokenize='trigram'` for the identifier leg; Float32 `BLOB`
+  embeddings with cosine in JS and **no vector extension**. `fuseLegs()` must
+  not be modified — if the port needs it changed, that is a finding to report,
+  not a fix to apply.
+- Delete rather than port, per spec §25.4: both `pg_advisory_lock` uses and
+  the `FOR UPDATE` supersede lock, the `pg_trgm` GUC `set_config`, both
+  `CREATE EXTENSION`s, CI's Postgres service, and
+  `scripts/setup-dev-db.sh`'s Docker/apt detection.
+- Migrations: one rewritten SQLite baseline, not a translation of 0001→0008
+  (spec §25.5 decision 1). Keep the runner's applied-check contract.
+- Ship a one-shot scout-report export/import (spec §25.5 decision 2) — mined
+  memories are reproducible from git, scout reports are not. No other data
+  migration.
+- Update `CLAUDE.md`'s locked-stack rule and README's Quickstart in this
+  milestone (spec §25.7) — the stack is Postgres until this lands, so those
+  edits belong here and not in the proposal that authorized it.
+
+**Acceptance:**
+- The existing suite (292 tests across 12 workspaces) green on SQLite, with
+  no test skipped for a missing `DATABASE_URL` — there is nothing to skip on.
+- **The gate: the by-meaning eval reproduces MRR 0.85 lexical-only / 0.90
+  with the stub embedder** (`BENCHMARKS.md`, M11/M15's figure). A moved
+  number means a port defect; report it rather than re-baselining.
+- Unit: `to_tsquery` OR-semantics preserved — a two-term question matches a
+  document containing either term, ranked, not only documents containing
+  both (this is the behaviour `byMeaning.ts` depends on and the reason it
+  does not use `plainto_tsquery`).
+- Unit: supersede serialization still refuses a cycle under concurrent
+  writers, now via SQLite's write lock instead of an advisory lock — the
+  test that covered the advisory-lock path must still pass on the new
+  mechanism.
+- Unit: `WITH RECURSIVE` supersede-chain walking, merged chains included,
+  returns identical results to the Postgres implementation.
+- Unit: anchor containment via `json_each`/`json_extract` still matches on
+  `anchors` **OR** `related_nodes` — spec §24.7 and migration 0008 record
+  that dropping the `related_nodes` leg would make this repo's own mostly
+  pre-M12 corpus invisible to the staleness pass.
+- Integration: tier accounting across two simulated sessions still produces
+  a promotion, and no-self-promotion still holds (§24.5).
+- Dogfood evidence in the PR: `sync` + `ask` against this repo on a fresh
+  SQLite file — memory count, all three legs firing, staleness flags and
+  their `/refine-memory <id>` next step intact — plus the on-disk size of
+  the resulting `.db` against §25.1's 621 MB.
+- CI runs with **no service container**, and the README quickstart is
+  reduced to a `pnpm install` and a single command.
+
+---
+
+## M18 — Memories as Markdown, Index as Projection (spec §25.6)
+
+**Goal:** make the memory corpus `.md` + YAML frontmatter — git-versioned,
+greppable, reviewable in a pull request — and demote SQLite to a derived,
+gitignored index rebuilt from those files. **Gated on M17**: a port bug and a
+redesign bug are indistinguishable if both land at once (spec §25.6).
+
+- Memories become files: task, observation, anchors, supersedes links and
+  provenance in frontmatter; body as prose. Operational state (embeddings,
+  tier, `access_count`, `last_accessed`, `experience_accesses`, suspect
+  flags) stays **out** of the files and lives only in the index — this is
+  what makes write-on-read (§25.6) not rewrite the corpus on every `ask`.
+- A `rebuild` command reconstructs the index from the files alone; deleting
+  the index must never lose knowledge. Same shape as
+  `packages/graph-store/src/materializer.ts`'s rebuild-from-events.
+- Decide and record: what happens to a memory edited by hand in a way the
+  index disagrees with (the read-repair path in §24.6 is the precedent),
+  and whether a hand-edited file's `verified_at` may be trusted.
+
+**Acceptance:**
+- Deleting the index file and running `rebuild` reproduces byte-identical
+  retrieval results (same ranks for the eval question set).
+- A memory is findable by `grep` alone, with no CLI and no index — the
+  property `E2E_BENCHMARK_MULTI_REPO.md` measured grep winning on.
+- An `ask` performs no write to any `.md` file — verified by hashing the
+  corpus directory before and after a query.
+- The eval gate from M17 still holds: MRR unchanged.
+- Dogfood: this repo's own corpus committed as markdown, with the diff of a
+  real `/refine-memory` supersede readable in the PR.
+
+---
+
 ## Sequencing note
 
 M2 and M4 have no dependency on each other and can be built in parallel once
@@ -707,3 +809,11 @@ That is how it played out: M15 ran after M11–M14 and M16 were all merged, its
 gate passed on a re-measurement rather than on the prior recorded numbers, and
 it respected M14's NO-GO by verifying there was no memory-link traversal in
 `packages/` to remove or preserve.
+
+Storage (spec §25): M17 is a behaviour-preserving port and depends on nothing
+except the shipped retrieval it must not change — its gate is the M11/M15 eval
+figure reproduced on the new engine. M18 is gated on M17 for the reason §25.6
+gives: held constant, the eval number distinguishes a port defect from a
+redesign defect; landed together, it cannot. Neither milestone may touch
+`fuseLegs()` — a port that needs the fusion changed has found a defect to
+report, not a fix to apply.

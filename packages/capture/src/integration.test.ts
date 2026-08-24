@@ -2,16 +2,12 @@ import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { queryByMeaning } from "@cognitive-memory/episodic";
-import { closePool, getPool, runMigrations } from "@cognitive-memory/graph-store";
+import { closeDb, getDb, useTemporaryDatabase } from "@cognitive-memory/graph-store";
 import { createFakeEmbedder, isNodeId } from "@cognitive-memory/core";
 import { captureGitHistory, commitAction } from "./git.js";
 import { recordScoutReport } from "./scout.js";
 import { buildFixtureRepo, type FixtureCommit, type FixtureRepo } from "./testing.js";
 
-// Same DATABASE_URL-gating convention as every other integration suite in
-// this repo — skipped, not failed, without a real Postgres.
-const hasDb = Boolean(process.env["DATABASE_URL"]);
-const d = hasDb ? describe : describe.skip;
 
 /** A unique token in every body, so a run never reads another run's rows. */
 const MARKER = `cap${randomUUID().replace(/-/g, "")}`;
@@ -67,11 +63,11 @@ const FIXTURE_COMMITS: FixtureCommit[] = [
   },
 ];
 
-d("git-history capture (spec.md §24.2.1 / ROADMAP.md M11)", () => {
+describe("git-history capture (spec.md §24.2.1 / ROADMAP.md M11)", () => {
   let repo: FixtureRepo;
 
   beforeAll(async () => {
-    await runMigrations();
+    await useTemporaryDatabase();
     repo = await buildFixtureRepo(FIXTURE_COMMITS);
   });
 
@@ -79,7 +75,7 @@ d("git-history capture (spec.md §24.2.1 / ROADMAP.md M11)", () => {
     // Guarded: if beforeAll threw before assigning `repo`, an unguarded
     // `repo.dir` here raises a TypeError that masks the real failure.
     if (repo) rmSync(repo.dir, { recursive: true, force: true });
-    await closePool();
+    await closeDb();
   });
 
   it("records only the self-explaining commits inside the path scope, dated by the history", async () => {
@@ -191,32 +187,37 @@ d("git-history capture (spec.md §24.2.1 / ROADMAP.md M11)", () => {
         embedder: createFakeEmbedder(),
       });
       const id = result.experiences[0]?.id;
-      const { rows } = await getPool().query<{ has: boolean }>(
-        "SELECT embedding IS NOT NULL AS has FROM experiences WHERE id = $1",
+      // Asserting the BLOB's size, not merely that it is non-null: spec.md
+      // §25.3 stores embeddings as a 1536-element Float32 array with no vector
+      // extension, and 1536 x 4 = 6144 bytes is the whole of that contract. A
+      // null check would have passed just as happily on a truncated or
+      // double-precision write.
+      const { rows } = await getDb().query<{ bytes: number | null }>(
+        "SELECT length(embedding) AS bytes FROM experiences WHERE id = $1",
         [id]
       );
-      expect(rows[0]?.has).toBe(true);
+      expect(rows[0]?.bytes).toBe(1536 * 4);
     } finally {
       rmSync(solo.dir, { recursive: true, force: true });
     }
   });
 
   async function countMarkedExperiences(): Promise<number> {
-    const { rows } = await getPool().query<{ count: string }>(
-      "SELECT count(*) FROM experiences WHERE observation LIKE $1 OR task LIKE $1",
+    const { rows } = await getDb().query<{ count: number }>(
+      "SELECT count(*) AS count FROM experiences WHERE observation LIKE $1 OR task LIKE $1",
       [`%${MARKER}%`]
     );
     return Number(rows[0]?.count);
   }
 });
 
-d("scout-report capture (spec.md §24.2.1 second source class)", () => {
+describe("scout-report capture (spec.md §24.2.1 second source class)", () => {
   beforeAll(async () => {
-    await runMigrations();
+    await useTemporaryDatabase();
   });
 
   afterAll(async () => {
-    await closePool();
+    await closeDb();
   });
 
   it("a distilled scout report is retrievable by a paraphrased how-does-X-work question, anchored to plain text paths", async () => {

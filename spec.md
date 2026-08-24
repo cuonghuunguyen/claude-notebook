@@ -1492,3 +1492,131 @@ not to markdown:
 - **The stack is Postgres until the port actually lands.** CLAUDE.md's
   locked-stack rule and README's Quickstart are updated by the porting
   milestone, not by this section.
+
+### 25.8 What the port measured (M17, added by the porting milestone)
+
+§25.5 set the gate: retrieval quality must not change. It changed, upward, and
+this section records what moved and why rather than re-baselining the number
+(ROADMAP.md M17 is explicit that a moved number is to be reported, not
+absorbed).
+
+**Result.** by-meaning MRR **0.85 → 0.883** lexical-only, **0.90 → 0.933** with
+the stub embedder, recall **0.90 → 1.00**, on the same corpus, questions and
+scorer (`eval/why-spike`, 142 mined memories from `colinhacks/zod`). One
+question improved from MISSING to rank 1 (`domain-lookahead`) and one regressed
+from rank 1 to rank 3 (`base64-revert`).
+
+**Where it came from — one leg of three.** Each leg was compared against
+Postgres directly, not inferred from the fused number:
+
+- **trigram: identical.** `word_similarity` is reimplemented exactly rather
+  than replaced by §25.3's proposed `tokenize='trigram'` (see the deviation
+  below). Over the full cross product of the gate corpus — 10 questions x 142
+  memories, 1,420 pairs, pg values read out of Postgres — 1,386 agree exactly,
+  34 differ by at most 0.0073, **no pair crosses the 0.35 threshold**, and the
+  leg returns the same hits in the same order for all 10 questions.
+- **vector: identical on 9 of 10 questions**, and the tenth differs only at rank
+  20 of 20 — a tie at the `LIMIT` boundary, worth ~0.006 of an RRF score in a
+  top-5 result.
+- **full-text: genuinely different.** `ts_rank` and `bm25()` are different
+  ranking functions over largely the same candidate set. `domain-lookahead`'s
+  answering commit ranks **24th of 36** matching memories under `ts_rank` — i.e.
+  outside the leg's `LIMIT 20` window, which is exactly the corpus-growth
+  weakness `BENCHMARKS.md` already recorded for that question — and **1st**
+  under `bm25()`.
+
+**Reproducing 0.85 exactly was possible and was rejected.** It would have meant
+reimplementing `ts_rank` plus Snowball English stemming plus Postgres's stopword
+list in JS, and abandoning the FTS5 index §25.3 chose — rebuilding Postgres's
+ranking function rather than porting to SQLite, to reproduce a *worse* number.
+That is optimizing for the gate instead of for the product.
+
+#### Deviations from §25.3, and why
+
+1. **The trigram leg is not FTS5's `tokenize='trigram'`.** That is a substring
+   matcher; the leg it replaces is a scorer with a threshold. The leg turned out
+   to be load-bearing — measured on the Postgres baseline before any code moved,
+   removing it drops MRR from 0.85 to **0.75**, and it decides the top-ranked hit
+   on three of the ten questions — and it is narrow rather than broad: at the
+   0.35 threshold it returns 0 to 3 hits out of 142 per question. Swapping a
+   scorer for a substring matcher would have changed the fused ranking in a way
+   the gate could not attribute. So `word_similarity` is reproduced in JS and
+   pinned against 70 Postgres-produced fixture values.
+
+2. **`experiences.anchors` and `related_nodes` have no index.** Postgres had GIN
+   containment; SQLite has no equivalent for a JSON array, so
+   `listExperiencesByAnchorPaths` scans. Accepted on §25.1's own reasoning — it
+   runs once per sync/stale pass, not per retrieval — and the alternative (a
+   normalized `experience_anchors` table) is a schema reshape, which the port is
+   not allowed to do.
+
+3. **`nextval()` becomes one `settle_seq` per settle *call*, not per row.** A
+   settle call is per-session, so the granularity the watermark reads is
+   preserved exactly; see `graph-store/src/tiers.ts`.
+
+#### Cost, measured
+
+- **Install: 621 MB → 0.** No image, no daemon, no port, no `DATABASE_URL`, no
+  CI service container. The store is one file; `pnpm install && pnpm test` is
+  the whole setup.
+- **On disk:** 1.3 MB for 142 memories lexical-only, 2.1 MB with 1536-dim
+  Float32 embeddings.
+- **`sync` on this repository:** 181 ms for 35 explanatory commits.
+- **Retrieval latency, 142-memory corpus:** full-text (FTS5) 2 ms, vector (JS
+  cosine) 2 ms, trigram (JS scan) 107 ms, `queryByMeaning` end to end ~103 ms.
+
+The trigram leg is the outlier and its cost is O(corpus), so §25.7's scale
+ceiling now has a second occupant — and a nearer one, since the vector leg's
+limit is around 10^5 memories while this becomes the dominant cost far earlier.
+Getting there took three exact pruning bounds (3.9 s → 107 ms per question; the
+reasoning and the two ways the bounds fail on their own are in
+`trigram.ts`). The leg's own docstring names the change that would let it use an
+index instead of a scan — isolating identifier terms rather than matching the
+whole question — which was already a measured follow-up before the port.
+
+#### What the independent review pass changed (and what it did not)
+
+The review ran on the finished diff, cold, against the ten areas a port like
+this can break silently. It found nothing in the `$n` translation, the row
+decoding, the LATERAL rewrite, the `nextval` replacement, the timestamp
+normalization, the FTS5 trigger sync (checked against VACUUM and
+`integrity-check`) or the anchor lookup. It found eight real defects, and two of
+them are decisions worth recording here rather than only in the commit:
+
+1. **A harness must declare its database.** §25.1 counted "no environment
+   variable needed to run" as the adoption win, and it is — for the product. For
+   the eval harnesses it was a hazard the Postgres era had masked: `DATABASE_URL`
+   being mandatory meant there was no default to fall into, and removing it
+   pointed `eval/why-spike`'s capture (142 memories mined out of a *foreign*
+   repository) and `eval/tier-promotion`'s report (which rewrites `tier`,
+   `access_count`, `last_accessed` and `experience_accesses` as it replays
+   synthetic traffic) at this repo's own dogfooded `.claude/memory.db`, which has
+   no un-mine. So `useScratchDatabase` requires `MEMORY_DB` for harnesses only.
+   The product keeps its zero-configuration default; the scripts that write a
+   corpus they cannot retract do not get it.
+
+2. **The transaction queue serializes transactions, not writes.** There is one
+   connection, so an untransacted `getDb().query(...)` issued while a
+   transaction is open lands *inside* that transaction and rolls back with it —
+   where Postgres would have sent it out on another pooled connection and
+   committed it independently. Nothing in this package writes that way (every
+   multi-statement write either owns its transaction or takes a branded
+   `TransactionClient`), so this is documented and pinned by a test rather than
+   architected around. The related defect was real, though: `withTransaction`
+   resolved `getDb()` when the *queue* reached it, so a transaction enqueued
+   across a `closeDb()` silently reopened `defaultDatabasePath()`. It now
+   captures the handle at call time and fails on a closed connection instead.
+
+The other six were straightforward: the trigram leg's `minScore` floor could
+prune the exact-threshold hit it was supposed to keep; the scout-report transfer
+carried the memory but not its `superseded_by`/`verified_at`/`writer_session`
+state, so a retracted report came back as a live chain head; `self-memory.mjs`
+read commands crashed on an unmigrated file (`getDb()` creates it empty) instead
+of reporting an empty memory; `stats`' `sum(CASE ...)` returned NULL where
+`count(*) FILTER` returned 0; `cosineSimilarity` scored the shared prefix on a
+dimension mismatch where pgvector raised; and the harnesses did not migrate the
+file they opened, which is what the `BENCHMARKS.md` reproduce command does on a
+clean machine.
+
+**The gate was re-measured after the fixes, not assumed:** 0.883 lexical-only
+and 0.933 with the stub embedder, recall 1.00 — identical to the numbers above.

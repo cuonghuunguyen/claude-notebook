@@ -1,14 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createFakeEmbedder } from "@cognitive-memory/core";
-import { closePool, runMigrations, upsertExperienceEmbedding } from "@cognitive-memory/graph-store";
+import { closeDb, upsertExperienceEmbedding, useTemporaryDatabase } from "@cognitive-memory/graph-store";
 import { recordExperience } from "@cognitive-memory/episodic";
 import { runPipeline } from "./pipeline.js";
 
-// Same DATABASE_URL-gating convention as every other integration suite in
-// this repo — skipped, not failed, without a real Postgres.
-const hasDb = Boolean(process.env["DATABASE_URL"]);
-const d = hasDb ? describe : describe.skip;
 
 /**
  * spec.md §22 end to end against a real database.
@@ -20,13 +16,13 @@ const d = hasDb ? describe : describe.skip;
  * one the last of those cases already made: a real task string reaches real
  * recorded knowledge with nothing code-shaped in between.
  */
-d("runPipeline integration", () => {
+describe("runPipeline integration", () => {
   beforeAll(async () => {
-    await runMigrations();
+    await useTemporaryDatabase();
   });
 
   afterAll(async () => {
-    await closePool();
+    await closeDb();
   });
 
   it("goes from a task string to an AgentContext carrying the memory that answers it (spec.md §22)", async () => {

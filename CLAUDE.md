@@ -9,9 +9,14 @@ the source of truth, not this file's memory of past sessions).
 
 ## Rules (non-negotiable — see AGENT_HARNESS.md for the full rationale)
 
-- Stack is locked: pnpm + TypeScript workspaces, Postgres + pgvector +
-  pg_trgm. Don't introduce a different one without flagging it explicitly
-  first. **There is no parser in the stack any more** — M15 removed
+- Stack is locked: pnpm + TypeScript workspaces, and **SQLite via
+  `better-sqlite3` as the only storage backend** (spec.md §25, shipped in
+  M17 — Postgres, pgvector and pg_trgm are gone, along with `DATABASE_URL`,
+  the Docker daemon and CI's service container). Don't introduce a different
+  one without flagging it explicitly first. Re-adding a server backend is
+  deferred, not rejected: §25.7 names its two triggers — roughly 10^5
+  memories, where brute-force cosine stops being affordable, or a genuine
+  multi-writer deployment. **There is no parser in the stack any more** — M15 removed
   `ts-morph` (M1's TS/JS extractor) and `tree-sitter` (M8's Python one)
   along with the structural graph they fed, and spec.md §24.2 point 7 makes
   language-agnosticism a design principle rather than a side effect:
@@ -21,9 +26,9 @@ the source of truth, not this file's memory of past sessions).
   dependency still needs the same explicit flag-and-wait this rule always
   required.
 - Never check a ROADMAP.md milestone box without having actually run its
-  tests in this session and seen them pass (unit always; integration tests
-  need `DATABASE_URL`, set automatically by the SessionStart hook —
-  `scripts/setup-dev-db.sh` if you need to set it up by hand).
+  tests in this session and seen them pass. Since M17 there is nothing to
+  configure and nothing that self-skips: `pnpm test` runs every suite,
+  each against its own throwaway SQLite file.
 - One milestone per PR/diff — never blend two milestones into one commit.
   A single automated run MAY ship several milestones back-to-back (see
   "Picking up work" below), but each still gets its own branch, PR, and

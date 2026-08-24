@@ -28,7 +28,10 @@ lexical floor — see BENCHMARKS.md for both.
 
 ```bash
 export ZOD_DIR=/tmp/zod          # full clone, NOT --depth 1
-export DATABASE_URL="postgres://postgres:postgres@localhost:5432/cognitive_memory"
+# Required, not optional, and deliberately not defaulted: this mines a FOREIGN
+# repo's 142 memories, and the default database is this repo's own dogfooded
+# `.claude/memory.db`, which has no un-mine (spec.md §25.8).
+export MEMORY_DB=/tmp/why-spike.db
 pnpm --filter @cognitive-memory/eval-why-spike build
 pnpm --filter @cognitive-memory/eval-why-spike spike:capture
 pnpm --filter @cognitive-memory/eval-why-spike spike:probe

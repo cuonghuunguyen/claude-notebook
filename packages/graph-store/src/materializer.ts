@@ -1,4 +1,4 @@
-import { getPool } from "./db.js";
+import { withTransaction } from "./db.js";
 import { recordExperience, supersedeExperience } from "./experiences.js";
 import type { MemoryEvent } from "./events.js";
 import { listEventsSince } from "./events.js";
@@ -142,20 +142,22 @@ export function isRetiredEventType(eventType: MemoryEvent["eventType"]): boolean
 
 /**
  * Empties the materialized memory tables WITHOUT touching `events` (the source
- * of truth this rebuilds from) or `schema_migrations`. `RESTART IDENTITY` on
- * `experiences` is moot — it uses text/hash ids, not sequences — kept off
- * deliberately since `events.id` (bigserial) must NOT be touched by this at all
- * and a blanket RESTART IDENTITY on unrelated tables is one less thing to
- * reason about being safe.
+ * of truth this rebuilds from), `schema_migrations`, or `counters`.
+ *
+ * Two `DELETE`s in one transaction rather than Postgres's
+ * `TRUNCATE experience_accesses, experiences`. SQLite has no TRUNCATE, and the
+ * row-by-row delete is the better fit anyway for a reason specific to this
+ * port: the FTS5 index is kept in sync by AFTER DELETE triggers
+ * (`migrations/0001_baseline.sql`), and a bulk operation that bypassed row
+ * triggers would leave the full-text leg answering with memories that no longer
+ * exist. Children first, so the delete does not depend on the FK's CASCADE.
  *
  * `experience_accesses` (spec.md §24.5) is in the list for a reason worth
  * stating: it is read-telemetry, NOT event-sourced. Nothing in the event log
- * records a retrieval, so a rebuild cannot reconstruct it, and Postgres will
- * refuse to TRUNCATE `experiences` while a table referencing it is left out
- * — even an empty one. So a rebuild deliberately returns the corpus to "no
- * memory has been usefully accessed yet": accesses are dropped and every
- * `tier`/`distinct_sessions` on the replayed rows comes back at its column
- * default (`short`/0).
+ * records a retrieval, so a rebuild cannot reconstruct it. A rebuild
+ * deliberately returns the corpus to "no memory has been usefully accessed
+ * yet": accesses are dropped and every `tier`/`distinct_sessions` on the
+ * replayed rows comes back at its column default (`short`/0).
  *
  * That is a real consequence, not an oversight, and it is the *consistent*
  * choice — the alternative (keep the accounting, replay the memories) would
@@ -163,10 +165,16 @@ export function isRetiredEventType(eventType: MemoryEvent["eventType"]): boolean
  * justified it now gone, i.e. a tier no surviving evidence supports. Tiers
  * re-earn themselves from live traffic instead, which is exactly the signal
  * §24.5 says a tier is supposed to represent.
+ *
+ * `counters` is deliberately NOT reset: `experience_settle_seq` is an opaque
+ * monotonic stamp compared only against `credit_watermark`, and every watermark
+ * that could have referred to a consumed value went with the rows.
  */
 export async function wipeMaterializedGraph(): Promise<void> {
-  const pool = getPool();
-  await pool.query(`TRUNCATE TABLE experience_accesses, experiences`);
+  await withTransaction(async (tx) => {
+    await tx.query(`DELETE FROM experience_accesses`);
+    await tx.query(`DELETE FROM experiences`);
+  });
 }
 
 /** Full rebuild: wipe the materialized memory, replay every event ever recorded. */

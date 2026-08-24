@@ -20,7 +20,7 @@ import { execFile } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
-import { closePool } from "@cognitive-memory/graph-store";
+import { closeDb, useScratchDatabase } from "@cognitive-memory/graph-store";
 import { repoDir, resultsDir } from "./config.js";
 import { QUESTIONS, type WhyQuestion } from "./questions.js";
 import { byMeaning, renderWhyContext } from "./retrieve.js";
@@ -81,6 +81,7 @@ async function runAgent(prompt: string, cwd: string) {
 }
 
 async function main(): Promise<void> {
+  await useScratchDatabase("why-spike");
   const root = repoDir();
   const only = process.env["SPIKE_QUESTIONS"]?.split(",").map((s) => s.trim());
   const questions = only ? QUESTIONS.filter((q) => only.includes(q.id)) : QUESTIONS;
@@ -151,7 +152,7 @@ async function main(): Promise<void> {
   console.log(
     "\n" + JSON.stringify({ gitOnly: output["git-only"], memory: output.memory }, null, 2)
   );
-  await closePool();
+  await closeDb();
 }
 
 main().catch((err) => {

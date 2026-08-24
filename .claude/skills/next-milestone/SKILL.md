@@ -1,6 +1,6 @@
 ---
 name: next-milestone
-description: Pick up and ship the next unchecked milestone from ROADMAP.md for the Codebase Cognitive Memory project (cuonghuunguyen/claude-notebook) — implements it, tests it for real against Postgres, self-reviews and sanity-checks it, opens a PR, subscribes to that PR's activity, and merges it once green. On a clean merge it spawns a fresh session to pick up the next milestone immediately (keeping each session's context — and cost — flat instead of accumulating across the whole project) rather than looping in place or waiting for the next scheduled trigger. It stops without spawning a successor if it flagged a spec deviation (a human needs to look). Once ROADMAP.md is fully checked (no milestone work left, whether found at the start or reached by this run's own merge), it hands off directly to `.claude/skills/propose-milestone/SKILL.md` in the same session instead of just stopping. Use whenever asked to continue building this project, or when this repo's milestone-runner Routine fires.
+description: Pick up and ship the next unchecked milestone from ROADMAP.md for the Codebase Cognitive Memory project (cuonghuunguyen/claude-notebook) — implements it, tests it for real against a real SQLite database, self-reviews and sanity-checks it, opens a PR, subscribes to that PR's activity, and merges it once green. On a clean merge it spawns a fresh session to pick up the next milestone immediately (keeping each session's context — and cost — flat instead of accumulating across the whole project) rather than looping in place or waiting for the next scheduled trigger. It stops without spawning a successor if it flagged a spec deviation (a human needs to look). Once ROADMAP.md is fully checked (no milestone work left, whether found at the start or reached by this run's own merge), it hands off directly to `.claude/skills/propose-milestone/SKILL.md` in the same session instead of just stopping. Use whenever asked to continue building this project, or when this repo's milestone-runner Routine fires.
 ---
 
 # next-milestone
@@ -78,17 +78,16 @@ firing into a fresh session), this file is your task description.
      aborting.
 4. **Branch.** Create `milestone/M<N>-<short-slug>` from the latest
    `master`.
-5. **Environment.** `DATABASE_URL` should already be set by the
-   SessionStart hook (`.claude/hooks/session-start.sh`). If it isn't
-   (e.g. you're running outside the hook), run `bash scripts/setup-dev-db.sh`
-   and export it yourself.
+5. **Environment.** Nothing to set up since M17: the store is a SQLite file
+   and each integration suite creates its own throwaway one
+   (`useTemporaryDatabase`). `pnpm install` is all the SessionStart hook does.
 6. **Implement.** Build *only* the milestone from step 2, to its
    ROADMAP.md acceptance criteria. Do not start the next milestone even if
    you finish early — one milestone per PR is what keeps this reviewable.
-7. **Test for real.** Unit tests unconditionally. Integration tests with
-   `DATABASE_URL` set — they self-skip without it; if yours skip when they
-   shouldn't, your env is misconfigured, fix that before continuing. Never
-   check a box on a skipped or failing test.
+7. **Test for real.** `pnpm test` runs every suite, unit and integration
+   alike — since M17 nothing self-skips for a missing connection string, so a
+   skipped integration test is a bug in the suite rather than a missing
+   environment. Never check a box on a skipped or failing test.
 8. **Self-review — don't grade your own homework.** Run the `code-review`
    skill against your diff (or, if unavailable, spawn a fresh review
    sub-agent with no memory of *why* you made each choice — it should judge
@@ -118,7 +117,7 @@ firing into a fresh session), this file is your task description.
 11. **Commit and push** the branch (`git push -u origin milestone/M<N>-...`).
 12. **Open a PR** into `master` via
     `mcp__github__create_pull_request`. Describe what was built, how it was
-    verified (real Postgres, which tests), the self-review outcome (step 8),
+    verified (which tests, against a real database), the self-review outcome (step 8),
     and the manual sanity check (step 9) — enough that a human skimming the
     PR doesn't need this skill's context to trust it.
 13. **Subscribe, then schedule your own short check-in — don't just wait.**
@@ -195,7 +194,9 @@ step 7 above.
 
 ## Non-negotiables
 
-- Stack is locked (pnpm + TS workspaces, Postgres+pgvector+pg_trgm). There
+- Stack is locked (pnpm + TS workspaces, SQLite via `better-sqlite3` as the
+  only backend since M17 — spec.md §25; Postgres, pgvector, pg_trgm and
+  `DATABASE_URL` are all gone). There
   is no parser in it since M15 removed ts-morph and tree-sitter with the
   structural graph, and spec.md §24.2 point 7 forbids reintroducing a
   per-language dependency on the load-bearing path. Flag a needed deviation

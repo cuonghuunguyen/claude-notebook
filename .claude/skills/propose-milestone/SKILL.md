@@ -191,7 +191,9 @@ surface; take it seriously rather than defending the merge.
 
 ## Non-negotiables
 
-- Stack is locked (pnpm + TS workspaces, Postgres+pgvector+pg_trgm). There
+- Stack is locked (pnpm + TS workspaces, SQLite via `better-sqlite3` as the
+  only backend since M17 — spec.md §25; Postgres, pgvector, pg_trgm and
+  `DATABASE_URL` are all gone). There
   is no parser in it since M15, and spec.md §24.2 point 7 forbids
   reintroducing a per-language dependency on the load-bearing path — a
   proposal that would need one is a reversal of a measured decision, not a

@@ -13,13 +13,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { POSSIBLY_STALE_FLAG } from "@cognitive-memory/core";
 import { renderContext } from "@cognitive-memory/context";
 import { recordExperience } from "@cognitive-memory/episodic";
-import { closePool, runMigrations } from "@cognitive-memory/graph-store";
+import { closeDb, useTemporaryDatabase } from "@cognitive-memory/graph-store";
 import { createFakeEmbedder } from "@cognitive-memory/core";
 import { bulkyContent, buildFixtureRepo, type FixtureRepo } from "@cognitive-memory/staleness/fixtureRepo";
 import { runPipeline } from "./pipeline.js";
 
-const hasDb = Boolean(process.env["DATABASE_URL"]);
-const d = hasDb ? describe : describe.skip;
 
 const DATES = {
   init: "2026-01-01T00:00:00Z",
@@ -40,9 +38,9 @@ function pipelineOptions(extra: Record<string, unknown> = {}) {
   };
 }
 
-d("runPipeline read-time staleness (spec.md §24.2.3)", () => {
+describe("runPipeline read-time staleness (spec.md §24.2.3)", () => {
   beforeAll(async () => {
-    await runMigrations();
+    await useTemporaryDatabase();
     repo = await buildFixtureRepo([
       {
         message: "initial",
@@ -86,7 +84,7 @@ d("runPipeline read-time staleness (spec.md §24.2.3)", () => {
 
   afterAll(async () => {
     repo?.cleanup();
-    await closePool();
+    await closeDb();
   });
 
   it("tags the memory whose anchored file was touched, and only that one", async () => {

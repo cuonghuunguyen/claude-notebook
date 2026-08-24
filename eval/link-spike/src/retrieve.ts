@@ -17,7 +17,7 @@
  */
 import type { Experience } from "@cognitive-memory/core";
 import { queryByMeaning } from "@cognitive-memory/episodic";
-import { getPool } from "@cognitive-memory/graph-store";
+import { getDb } from "@cognitive-memory/graph-store";
 import type { EmbeddingProvider } from "@cognitive-memory/core";
 import { otherEnd, type KnowledgeLink } from "./miner.js";
 
@@ -47,10 +47,10 @@ interface Row {
   task: string;
   observation: string;
   action: string | null;
-  lessons: string[];
-  related_nodes: string[];
+  lessons: string;
+  related_nodes: string;
   confidence: number;
-  timestamp: Date;
+  timestamp: string;
 }
 
 const toExperience = (r: Row): Experience => ({
@@ -58,10 +58,10 @@ const toExperience = (r: Row): Experience => ({
   task: r.task,
   observation: r.observation,
   action: r.action ?? undefined,
-  lessons: r.lessons,
-  relatedNodes: r.related_nodes,
+  lessons: JSON.parse(r.lessons) as string[],
+  relatedNodes: JSON.parse(r.related_nodes) as string[],
   confidence: r.confidence,
-  timestamp: r.timestamp.toISOString(),
+  timestamp: r.timestamp,
 });
 
 /**
@@ -73,11 +73,11 @@ const toExperience = (r: Row): Experience => ({
  */
 export async function memoriesForShas(shas: string[]): Promise<Map<string, Experience>> {
   if (shas.length === 0) return new Map();
-  const { rows } = await getPool().query<Row>(
+  const { rows } = await getDb().query<Row>(
     `SELECT id, task, observation, action, lessons, related_nodes, confidence, "timestamp"
        FROM experiences
-      WHERE action = ANY($1::text[])`,
-    [shas.map((s) => `commit ${s}`)]
+      WHERE action IN (SELECT value FROM json_each($1))`,
+    [JSON.stringify(shas.map((s) => `commit ${s}`))]
   );
   return new Map(rows.map((r) => [shaOf(toExperience(r)), toExperience(r)]));
 }

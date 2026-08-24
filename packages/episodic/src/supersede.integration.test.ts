@@ -14,7 +14,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { closePool, getExperienceById, listEventsSince, runMigrations } from "@cognitive-memory/graph-store";
+import { closeDb, getExperienceById, listEventsSince, useTemporaryDatabase } from "@cognitive-memory/graph-store";
 import { queryByMeaning } from "./byMeaning.js";
 import { recordExperience } from "./record.js";
 import {
@@ -24,8 +24,6 @@ import {
   recordVerification,
 } from "./supersede.js";
 
-const hasDb = Boolean(process.env["DATABASE_URL"]);
-const d = hasDb ? describe : describe.skip;
 
 const tag = randomUUID().slice(0, 8);
 /** A nonsense word unique to this run, so the lexical legs can only find our rows. */
@@ -41,9 +39,9 @@ let v1: string;
 let v2: string;
 let v3: string;
 
-d("read-repair through by-meaning retrieval (M13)", () => {
+describe("read-repair through by-meaning retrieval (M13)", () => {
   beforeAll(async () => {
-    await runMigrations();
+    await useTemporaryDatabase();
 
     const first = await recordExperience({
       id: `${tag}-v1`,
@@ -79,7 +77,7 @@ d("read-repair through by-meaning retrieval (M13)", () => {
   });
 
   afterAll(async () => {
-    await closePool();
+    await closeDb();
   });
 
   it("returns only the head of a length-3 chain by default", async () => {

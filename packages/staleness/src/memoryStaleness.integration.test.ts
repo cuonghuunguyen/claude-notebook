@@ -14,13 +14,13 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Anchor, Experience } from "@cognitive-memory/core";
 import {
   clearExperienceSuspect,
-  closePool,
-  getPool,
+  closeDb,
+  getDb,
   markExperienceVerified,
   getExperienceById,
   listExperiencesByAnchorPaths,
   recordExperience,
-  runMigrations,
+  useTemporaryDatabase,
 } from "@cognitive-memory/graph-store";
 import { bulkyContent, buildFixtureRepo, type FixtureRepo } from "./fixtureRepo.js";
 import { flagPossiblyStale, markSuspectFromHistory } from "./memoryStaleness.js";
@@ -32,11 +32,9 @@ import { flagPossiblyStale, markSuspectFromHistory } from "./memoryStaleness.js"
  * suite's fixtures survive test order.
  */
 async function clearVerification(id: string): Promise<void> {
-  await getPool().query(`UPDATE experiences SET verified_at = NULL WHERE id = $1`, [id]);
+  await getDb().query(`UPDATE experiences SET verified_at = NULL WHERE id = $1`, [id]);
 }
 
-const hasDb = Boolean(process.env["DATABASE_URL"]);
-const d = hasDb ? describe : describe.skip;
 
 const DATES = {
   init: "2026-01-01T00:00:00Z",
@@ -137,9 +135,9 @@ async function seed(): Promise<void> {
   }
 }
 
-d("markSuspectFromHistory over a fixture repo (ROADMAP.md M12)", () => {
+describe("markSuspectFromHistory over a fixture repo (ROADMAP.md M12)", () => {
   beforeAll(async () => {
-    await runMigrations();
+    await useTemporaryDatabase();
     repo = await buildFixtureRepo([
       {
         message: "initial",
@@ -181,7 +179,7 @@ d("markSuspectFromHistory over a fixture repo (ROADMAP.md M12)", () => {
 
   afterAll(async () => {
     repo?.cleanup();
-    await closePool();
+    await closeDb();
   });
 
   it("flags exactly the memories the history overtook", async () => {
@@ -237,11 +235,43 @@ d("markSuspectFromHistory over a fixture repo (ROADMAP.md M12)", () => {
   it("finds candidates by anchor path, including symbol-qualified anchors", async () => {
     const hits = await listExperiencesByAnchorPaths(["src/touched.ts"]);
     const ids = hits.map((h) => h.id);
-    // jsonb containment matches `{path}` against `{path, symbol}` too — the
-    // reason migration 0006 stores anchors as objects in one array.
+    // A path-level trigger must find a `{ path, symbol }` anchor on that path.
+    // Postgres got this free from jsonb containment's per-object subset matching;
+    // the SQLite rewrite gets it from comparing `json_extract(value, '$.path')`
+    // rather than the whole element (spec.md §25.5), which is the same semantics
+    // reached a different way — and the reason anchors are stored as objects in
+    // one array rather than split across two columns.
     expect(ids).toContain(IDS.touched);
     expect(ids).toContain(IDS.symbolAnchored);
     expect(ids).not.toContain(IDS.untouched);
+  });
+
+  it("returns a memory once even when several of the changed paths match it", async () => {
+    // The rewrite unnests both the anchors array and the changed-path set, so a
+    // join would multiply a memory anchored to three changed files into three
+    // rows — and every caller treats this list as a set of candidates. `EXISTS`
+    // is what keeps it one row per memory; a duplicate would inflate
+    // `markSuspectFromHistory`'s `candidates`/`marked` counts, which is the
+    // number the read-repair loop watches.
+    const multi = await recordExperience({
+      id: `m17-multi-${tag}`,
+      task: "anchored to several files",
+      observation: "One memory, three anchors, all of them in the changed set.",
+      relatedNodes: [],
+      anchors: [
+        { path: "src/touched.ts" },
+        { path: "src/touched.ts", symbol: "handler" },
+        { path: "src/second.ts" },
+      ],
+      confidence: 0.7,
+      timestamp: "2026-01-01T00:00:00.000Z",
+    });
+    const hits = await listExperiencesByAnchorPaths([
+      "src/touched.ts",
+      "src/second.ts",
+      "src/unrelated.ts",
+    ]);
+    expect(hits.filter((hit) => hit.id === multi.id)).toHaveLength(1);
   });
 
   it("stores anchors as typed objects and round-trips them", async () => {

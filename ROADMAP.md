@@ -30,7 +30,7 @@ This checklist is the source of truth for what's done — see
 - [x] M14 — Knowledge-Link Edges (spike: memory-to-memory traversal, go/no-go on a measured win) — **outcome: NO-GO on integrating; `follows_up` a hard no. See BENCHMARKS.md**
 - [x] M15 — Decommission the Structural Graph (gate passed: by-meaning MRR **0.85** lexical / **0.90** with the stub embedder, *identical* with 501 structural nodes present and with none; node-gated arm **0.00** in both. See BENCHMARKS.md)
 - [x] M16 — Memory Tiers: short/mid/long-term with access-driven promotion (extends §7/§18)
-- [ ] M17 — Storage Backend: Port to SQLite (removes Postgres+pgvector+pg_trgm; spec §25) — **behaviour-preserving; gate is MRR 0.85/0.90 unchanged**
+- [x] M17 — Storage Backend: Port to SQLite (removes Postgres+pgvector+pg_trgm; spec §25) — gate MOVED rather than held: MRR **0.883/0.933**, recall **1.00**, from `ts_rank` → `bm25()`; reported in spec §25.8, not re-baselined
 - [ ] M18 — Memories as Markdown, Index as Projection (spec §25.6) — gated on M17
 
 Repo layout target:

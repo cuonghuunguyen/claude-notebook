@@ -10,7 +10,7 @@ produced it: what the obvious implementation broke, what was tried and
 reverted, which invariant a strange early-return is protecting. That knowledge
 exists in commit messages, review threads and in the understanding an agent
 builds while scouting a codebase — and today it is thrown away at the end of
-every session. This project captures it, stores it in Postgres, and hands it
+every session. This project captures it, stores it in a SQLite file, and hands it
 back on the next task.
 
 > **Status: a research / dogfooding repository.** Nothing here is published to
@@ -125,15 +125,15 @@ write-up, including the threats an independent review pass found, is in
     still carries node ids on rows written before M15 — see `spec.md` §24.7.)
                            │
                            ▼
-              Postgres 16 + pgvector + pg_trgm
-              (migration 0004 gives `experiences` the
-               indexes to be searched by its own content)
+                   SQLite (one file: `.claude/memory.db`)
+              (`migrations/0001_baseline.sql`; FTS5 for the
+               full-text leg, no extensions of any kind)
                            │
                            ▼
                   queryByMeaning()  ── three legs, fused by weighted RRF
-                     ├─ full-text   (tsquery, OR-joined + ts_rank)   w=1.0
+                     ├─ full-text   (FTS5 + bm25, OR-joined terms)   w=1.0
                      ├─ trigram     (word_similarity, identifiers)   w=0.5
-                     └─ vector      (pgvector, injected embedder)    w=0.5
+                     └─ vector      (Float32 blobs, cosine in JS)    w=0.5
                            │
                            ▼
                    runPipeline() ──▶ AgentContext { experiences, … }
@@ -156,35 +156,32 @@ left to the application layer (`spec.md` §9).
 
 ## Quickstart
 
-Requirements: Node ≥ 20 (CI uses 22), pnpm 10, and a Postgres 16 with
-`pgvector` and `pg_trgm`.
+Requirements: Node ≥ 20 (CI uses 22) and pnpm 10. There is no database to
+install: the store is one SQLite file, created on first write
+(`.claude/memory.db`, gitignored; `MEMORY_DB` overrides the path).
 
 ```bash
 git clone git@github.com:cuonghuunguyen/claude-notebook.git
 cd claude-notebook
 pnpm install
 
-# Installs/starts a local Postgres with pgvector + pg_trgm.
-# This is the verified path in sandboxed dev environments without a Docker daemon.
-bash scripts/setup-dev-db.sh
-
-export DATABASE_URL="postgres://postgres:postgres@localhost:5432/cognitive_memory"
-pnpm migrate            # runs migrations/0001 … 0008
-
-pnpm build
-pnpm typecheck
-pnpm lint
-pnpm test               # unit tests always run; integration tests need
-                        # DATABASE_URL and self-skip without it
+pnpm build && pnpm typecheck && pnpm lint && pnpm test
 ```
 
-For integration tests, point `DATABASE_URL` at a disposable database (e.g.
-`cognitive_memory_test`) so runs don't pollute your dev data.
+That is the whole setup. Every test runs — nothing self-skips for a missing
+connection string, because there is no connection string (`spec.md` §25).
+Each integration suite creates its own throwaway SQLite file, so runs cannot
+pollute your dev data and cannot collide with each other.
 
-CI (`.github/workflows/ci.yml`) runs exactly these commands — typecheck, lint,
-build, then the full suite including integration tests — against a
-`pgvector/pgvector:pg16` service container on every push and pull request. A
-green CI run and a green local run mean the same thing.
+`pnpm migrate` applies `migrations/` to the default database if you want to
+create it up front; nothing requires you to.
+
+Step one used to be provisioning a Postgres 16 with `pgvector` and `pg_trgm`
+behind a Docker daemon — 621 MB of image for about 1 MB of text. `spec.md` §25.1
+measured that as the real cost of this system and §25 removed it.
+
+CI (`.github/workflows/ci.yml`) runs exactly these commands, with **no service
+container**. A green CI run and a green local run mean the same thing.
 
 ---
 
@@ -306,7 +303,7 @@ All packages are `@cognitive-memory/*`, TypeScript, ESM, `private: true`.
 | Package | What it does | Milestone |
 |---|---|---|
 | `core` | Shared types: `Experience`, `Anchor`, `Provenance`, `MemoryTier` + the `EmbeddingProvider` contract | M0, M15 |
-| `graph-store` | Postgres client, migration runner, typed CRUD over experiences/events/tiers | M0 |
+| `graph-store` | SQLite driver, migration runner, typed CRUD over experiences/events/tiers, the three search legs | M0 |
 | **`capture`** | **Git-history mining (`captureGitHistory`, idempotent) + session distillation (`recordScoutReport`) + embedding backfill** | **M11** |
 | **`episodic`** | **`queryByMeaning` — full-text + trigram + vector legs fused by weighted RRF; plus experience recording/query and supersede chains** | M4, **M11**, M13 |
 | `context` | `buildContext` → `AgentContext`, with §17 size caps | M6 |
@@ -331,7 +328,6 @@ BENCHMARKS.md             append-only measurement log (incl. the M14 go/no-go)
 WHY_MEMORY_SPIKE.md       the 7.7 → 1.4 turns experiment
 E2E_BENCHMARK_*.md        the benchmarks that killed the structural-graph premise
 migrations/               0001_init … 0008_decommission_structural
-scripts/setup-dev-db.sh   local Postgres + pgvector + pg_trgm setup
 scripts/self-memory.mjs   point the system at this repo
 eval/                     why-spike (knowledge retrieval), link-spike (M14
                           go/no-go), tier-promotion (M16); e2e-benchmark keeps
@@ -343,7 +339,7 @@ eval/                     why-spike (knowledge retrieval), link-spike (M14
 ## Benchmarks
 
 Every number in this README is reproducible from `eval/`. The harnesses take a
-real clone and a real Postgres; none of them are mocked.
+real clone and a real SQLite database; none of them are mocked.
 
 | Experiment | Question it answers | Verdict | Write-up |
 |---|---|---|---|
@@ -352,13 +348,15 @@ real clone and a real Postgres; none of them are mocked.
 | M11 re-measurement | Does by-meaning beat node-gated retrieval, through the shipped packages? | **Yes** — MRR 0.85 vs 0.00 | `BENCHMARKS.md` |
 | M14 link spike | Do memory-to-memory edges pay off where code edges didn't? | **NO-GO** — real but underpowered, `follows_up` precision 0.00 | `BENCHMARKS.md` |
 | M15 gate (2×2 ablation) | Does *anything* still measurably depend on structural nodes? | **No** — 0.85/0.90 identical with 501 nodes and with none; node-gated 0.00 in both | `BENCHMARKS.md` |
+| M17 port gate | Does dropping Postgres for SQLite cost retrieval quality? | **No, and it moved** — 0.85/0.90 → **0.883/0.933**, recall 0.90 → 1.00, from `ts_rank` → `bm25` | `BENCHMARKS.md` |
 
 Reproducing the why-spike, for example:
 
 ```bash
 git clone https://github.com/colinhacks/zod.git /tmp/zod   # full history, not --depth 1
 export ZOD_DIR=/tmp/zod
-export DATABASE_URL="postgres://postgres:postgres@localhost:5432/cognitive_memory"
+export MEMORY_DB=/tmp/why-spike.db   # required: this mines a foreign repo, and
+                                     # the default DB is this repo's own memory
 
 pnpm --filter @cognitive-memory/eval-why-spike build
 pnpm --filter @cognitive-memory/eval-why-spike spike:capture
@@ -401,7 +399,7 @@ requires M16 to pick one with a measurement rather than an argument.
 
 This project builds itself milestone by milestone. Three chained Claude Code
 skills — `/next-milestone`, `/propose-milestone`, `/self-improve` — implement a
-milestone, test it against a real Postgres, self-review the diff, and merge it
+milestone, test it against a real database, self-review the diff, and merge it
 when CI is green, spawning a fresh session for the next one so context (and
 cost) per milestone stays flat. Anything that flags a spec deviation stops and
 waits for a human. Two hooks (`.claude/hooks/quick-typecheck.sh` and

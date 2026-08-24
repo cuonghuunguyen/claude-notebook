@@ -33,8 +33,7 @@ commit touches it. Do not verify to clear a backlog.
 
 ## Preconditions
 
-`DATABASE_URL` must be set (the SessionStart hook does this) and the packages
-must be built (`pnpm -r build`) — `self-memory.mjs` loads `dist/`, not `src/`.
+The packages must be built (`pnpm -r build`) — `self-memory.mjs` loads `dist/`, not `src/`.
 
 ## Steps
 

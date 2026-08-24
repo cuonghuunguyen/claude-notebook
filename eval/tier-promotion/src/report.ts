@@ -2,7 +2,7 @@
  * Dogfood evidence for ROADMAP.md M16 / spec.md §24.5: run the promotion
  * comparison over THIS repository's own mined history, not a synthetic corpus.
  *
- *   DATABASE_URL=... node dist/report.js [repoDir]
+ *   MEMORY_DB=/tmp/tiers.db node dist/report.js [repoDir]
  *
  * The synthetic arm in `tierPromotion.eval.test.ts` is what CI asserts on,
  * because it is deterministic and needs no clone. This script is what produces
@@ -12,28 +12,29 @@
  */
 import { captureGitHistory } from "@cognitive-memory/capture";
 import {
-  closePool,
-  getPool,
+  closeDb,
+  getDb,
   getTierDistribution,
-  runMigrations,
+  useScratchDatabase,
 } from "@cognitive-memory/graph-store";
 import { recordRetrievalAccess, settleSession } from "@cognitive-memory/tiers";
 import { buildTraffic, type TrafficModel } from "./model.js";
 import { formatDistribution, replayStrategy, score } from "./strategies.js";
 
 async function main(): Promise<void> {
-  if (!process.env["DATABASE_URL"]) {
-    throw new Error("DATABASE_URL is required (use a per-milestone database, not the shared one)");
-  }
+  // Not a leftover of the Postgres guard: this script REPLAYS traffic, so it
+  // writes `access_count`, `last_accessed`, `experience_accesses` and `tier` on
+  // every memory in whatever database it opens. Against the repo's own
+  // `.claude/memory.db` that would rewrite the live corpus's tier state with
+  // synthetic traffic, which §24.5's promotion policy then reads as real.
+  await useScratchDatabase("tiers:report");
   const repoDir = process.argv[2] ?? process.cwd();
-
-  await runMigrations();
 
   // Mine the whole repo, not just `packages/` — the commits that recorded this
   // project's own direction changes touch spec.md/ROADMAP.md at the root, and
   // a subtree-scoped mine cannot see them (CLAUDE.md).
   const captured = await captureGitHistory({ repoDir, pathScope: "", limit: 400 });
-  const { rows } = await getPool().query<{ id: string }>(`SELECT id FROM experiences ORDER BY id`);
+  const { rows } = await getDb().query<{ id: string }>(`SELECT id FROM experiences ORDER BY id`);
   const corpus = rows.map((r) => r.id);
 
   const traffic = buildTraffic(corpus);
@@ -66,7 +67,7 @@ async function main(): Promise<void> {
   // eslint-disable-next-line no-console
   console.log(out.join("\n"));
 
-  await closePool();
+  await closeDb();
 }
 
 /**

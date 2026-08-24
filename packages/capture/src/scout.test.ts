@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { SCOUT_ACTION_PREFIX as STORE_SCOUT_ACTION_PREFIX } from "@cognitive-memory/graph-store";
 import {
   BareLocationsError,
   MIN_PROSE_WORDS,
   MIN_UNDERSTANDING_CHARS,
+  SCOUT_ACTION_PREFIX,
   assertSynthesizedUnderstanding,
   proseWordCount,
   scoutAction,
@@ -90,5 +92,22 @@ describe("scout-report guardrail (spec.md §24.2.1)", () => {
   it("tags the memory's provenance with the reporting session when one is given", () => {
     expect(scoutAction("session-abc")).toBe("scout-report session-abc");
     expect(scoutAction()).toBe("scout-report");
+  });
+});
+
+describe("the scout-report export (spec.md §25.5 decision 2)", () => {
+  it("identifies reports by the same action prefix this package writes", () => {
+    // The port's one-shot scout export lives in `graph-store` and cannot import
+    // this constant: `capture` depends on `graph-store`, not the reverse. So the
+    // prefix is duplicated there, and this is the assertion that keeps the two
+    // from drifting.
+    //
+    // Drift here is not a cosmetic bug. The export filters on
+    // `action LIKE prefix || '%'`, so a stale prefix returns zero rows and reads
+    // as "this database had no scout reports" — silently losing the one class of
+    // memory spec.md §25.5 says is NOT reproducible from git.
+    expect(STORE_SCOUT_ACTION_PREFIX).toBe(SCOUT_ACTION_PREFIX);
+    expect(scoutAction()).toBe(SCOUT_ACTION_PREFIX);
+    expect(scoutAction("session-1").startsWith(STORE_SCOUT_ACTION_PREFIX)).toBe(true);
   });
 });

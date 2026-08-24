@@ -22,7 +22,7 @@ the protocol, and shouldn't drift from any of the three skills.
   bar) that apply whether a human or an automated run is driving.
 - **`.claude/skills/next-milestone/SKILL.md`** — the protocol for planned
   work: find the next unchecked `ROADMAP.md` milestone, implement it, test
-  it for real against a real Postgres, open a PR, subscribe to that PR's
+  it for real against a real database, open a PR, subscribe to that PR's
   activity. Once `ROADMAP.md` is fully checked, hands off to
   `/propose-milestone` rather than stopping.
 - **`.claude/skills/propose-milestone/SKILL.md`** — the protocol for
@@ -54,9 +54,10 @@ the protocol, and shouldn't drift from any of the three skills.
   memory: `/next-milestone` step 2 reads its last 3 lines before handing
   off to `/propose-milestone`, and stops instead of chaining further if all
   3 are empty-cycle outcomes with nothing shipped between them.
-- **`.claude/hooks/session-start.sh`** — runs `pnpm install` +
-  `scripts/setup-dev-db.sh` and exports `DATABASE_URL` automatically, so no
-  session (human or automated) starts without a working DB.
+- **`.claude/hooks/session-start.sh`** — runs `pnpm install`. It used to also
+  provision a Postgres and export `DATABASE_URL`; since M17 (spec.md §25) the
+  store is a SQLite file created on first write, so there is nothing to
+  provision and no session can start without a working DB.
 - **PR-based delivery, not direct pushes.** Milestones, proposals, and
   self-improve cycles all ship as PRs into
   `master`, not direct commits to it.

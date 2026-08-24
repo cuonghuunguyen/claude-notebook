@@ -30,10 +30,6 @@ REPORT=".claude/scout-report.json"
 # calls this hook the dogfood producer; `dist/` is gitignored, so in a fresh
 # checkout the build simply has not run yet, and exiting 0 without a word would
 # make the producer look like it worked while dropping the prose on the floor.
-if [ -z "${DATABASE_URL:-}" ]; then
-  printf '{"systemMessage":"Scout report left at %s — no DATABASE_URL to record it into."}\n' "$REPORT"
-  exit 0
-fi
 if [ ! -f packages/capture/dist/index.js ]; then
   printf '{"systemMessage":"Scout report left at %s — packages/capture is not built (run pnpm build)."}\n' "$REPORT"
   exit 0

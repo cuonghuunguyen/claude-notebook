@@ -2,17 +2,19 @@
  * Supersede chains at the storage layer (spec.md §24.2 decision 4 / §24.6,
  * ROADMAP.md M13).
  *
- * The behaviour under test is entirely SQL — a partial predicate on five
- * queries, two recursive walks, and three refusals — so it is tested against a
- * real Postgres rather than a mock. A mocked version of these assertions would
+ * The behaviour under test is entirely SQL — a partial predicate on every
+ * experience query, two recursive walks, and three refusals — so it runs against
+ * a real database rather than a mock. A mocked version of these assertions would
  * only be checking that this file and the implementation agree on a string.
  *
- * `DATABASE_URL`-gated like every other integration suite in the repo.
+ * Each suite gets its own SQLite file (`useTemporaryDatabase`); there is no
+ * connection string to configure and therefore nothing to skip on
+ * (spec.md §25.4).
  */
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Experience } from "@cognitive-memory/core";
-import { closePool, getPool } from "./db.js";
+import { closeDb, withTransaction } from "./db.js";
 import {
   getSupersedeHead,
   listSupersedeChain,
@@ -25,10 +27,8 @@ import {
   supersedeExperience,
   getExperienceById,
 } from "./experiences.js";
-import { runMigrations } from "./migrate.js";
+import { useTemporaryDatabase } from "./testing.js";
 
-const hasDb = Boolean(process.env["DATABASE_URL"]);
-const d = hasDb ? describe : describe.skip;
 
 /** Unique per run so parallel vitest workers and re-runs never collide. */
 const tag = randomUUID().slice(0, 8);
@@ -61,9 +61,9 @@ const IDS = {
   mergeHead: `${tag}-merge-head`,
 };
 
-d("supersede chains (M13)", () => {
+describe("supersede chains (M13)", () => {
   beforeAll(async () => {
-    await runMigrations();
+    await useTemporaryDatabase();
     // A three-link chain: v1 <- v2 <- v3. All three say TERM, so all three are
     // reachable by the same query and only the filter can tell them apart.
     await recordExperience(experience(IDS.v1, `${TERM} first answer`, "2026-01-01T00:00:00Z"));
@@ -84,8 +84,8 @@ d("supersede chains (M13)", () => {
     await supersedeExperience(IDS.mergeB, IDS.mergeHead);
   });
 
-  afterAll(async () => {
-    await closePool();
+  afterAll(() => {
+    closeDb();
   });
 
   // --- ROADMAP M13 acceptance: "supersede chain of length 3 returns only the head"
@@ -234,40 +234,55 @@ d("supersede chains (M13)", () => {
     // this test holds open, which is exactly the window the second must not be
     // allowed to read through — so this is not a timing lottery.
     //
-    // Honest about what it proves: removing the advisory lock does NOT make it
-    // fail. Migration 0007's foreign key takes a `FOR KEY SHARE` lock on the
-    // referenced row, which conflicts with the other transaction's
-    // `FOR UPDATE`, so an unlocked version deadlocks instead of committing a
-    // cycle (measured — see `supersedeExperience`'s note). What this pins is
-    // therefore the OUTCOME the lock is there to guarantee: the second caller
-    // waits rather than reading through the open window, no cycle exists
-    // afterwards, one memory is still a head, and the loser gets the specific
-    // cycle refusal rather than an opaque `deadlock detected`.
+    // Honest about what it proves. Under Postgres this pinned the outcome of a
+    // transaction-scoped advisory lock, and the note in `supersedeExperience`
+    // records that removing that lock did not make the test fail — the foreign
+    // key's implicit `FOR KEY SHARE` lock deadlocked the pair instead, so the
+    // difference the lock bought was a specific refusal rather than an opaque
+    // `deadlock detected`.
+    //
+    // spec.md §25.4 deletes both locks, so what serializes this now is SQLite's
+    // single write lock plus `withTransaction`'s in-process queue (`db.ts`). The
+    // assertion is unchanged and that is the point: the second caller waits
+    // rather than reading through the open window, no cycle exists afterwards,
+    // one memory is still a head, and the loser gets the cycle refusal by name.
+    //
+    // Removing the queue DOES make this fail, which is what makes it a test of
+    // the new mechanism rather than of the engine: two concurrent transactions
+    // on one connection would interleave their statements between BEGIN and
+    // COMMIT.
     const x = `${tag}-race-x`;
     const y = `${tag}-race-y`;
     await recordExperience(experience(x, "race x", "2026-01-01T00:00:00Z"));
     await recordExperience(experience(y, "race y", "2026-01-02T00:00:00Z"));
 
-    const held = await getPool().connect();
-    let second: Promise<unknown>;
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    // The first supersede runs inside a transaction held open until `release`.
+    const first = withTransaction(async (tx) => {
+      await supersedeExperience(x, y, { db: tx });
+      await held;
+    });
+
+    // Started from OUTSIDE that transaction's async context on purpose:
+    // `withTransaction` refuses to nest, and a call made from inside the
+    // callback would be a nesting error rather than a queued competitor.
     let settled = false;
-    try {
-      await held.query("BEGIN");
-      await supersedeExperience(x, y, { db: held });
+    const second = supersedeExperience(y, x);
+    second.then(
+      () => (settled = true),
+      () => (settled = true)
+    );
 
-      second = supersedeExperience(y, x);
-      second.then(
-        () => (settled = true),
-        () => (settled = true)
-      );
-      // With the lock this cannot settle: the first transaction still holds it.
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      expect(settled).toBe(false);
+    // While the first transaction is open the second cannot proceed at all.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(settled).toBe(false);
 
-      await held.query("COMMIT");
-    } finally {
-      held.release();
-    }
+    release();
+    await first;
 
     // Once the first commits, the second can see the link and refuses.
     await expect(second).rejects.toThrow(/cycle/);

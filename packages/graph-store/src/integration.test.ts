@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { closePool, getPool } from "./db.js";
+import { closeDb, getDb } from "./db.js";
 import { runMigrations } from "./migrate.js";
+import { useTemporaryDatabase } from "./testing.js";
 import {
   queryExperiencesByTask,
   recordExperience,
@@ -10,19 +11,14 @@ import {
 import { appendEvent, listEventsSince, type MemoryEvent } from "./events.js";
 import { isRetiredEventType, replayEvents, wipeMaterializedGraph } from "./materializer.js";
 
-// Integration tests only run against a real Postgres — set DATABASE_URL to
-// enable them locally / in CI. They're skipped (not failed) otherwise, per
-// ROADMAP.md M0/M1 acceptance criteria.
-const hasDb = Boolean(process.env["DATABASE_URL"]);
-const d = hasDb ? describe : describe.skip;
 
-d("graph-store integration", () => {
+describe("graph-store integration", () => {
   beforeAll(async () => {
-    await runMigrations();
+    await useTemporaryDatabase();
   });
 
-  afterAll(async () => {
-    await closePool();
+  afterAll(() => {
+    closeDb();
   });
 
   it("migrations are idempotent", async () => {
@@ -30,10 +26,14 @@ d("graph-store integration", () => {
     expect(first.applied).toEqual([]); // already applied in beforeAll
   });
 
-  it("the structural graph's tables are gone (migration 0008)", async () => {
-    const { rows } = await getPool().query<{ table_name: string }>(
-      `SELECT table_name FROM information_schema.tables
-        WHERE table_schema = 'public' AND table_name IN ('nodes', 'edges')`
+  it("the structural graph has no schema surface at all (spec.md §24.7 / §25.5 decision 1)", async () => {
+    // Under Postgres this asserted that migration 0008 had DROPPED `nodes` and
+    // `edges`. The SQLite baseline is a rewrite rather than a translation of
+    // 0001->0008, so the stronger statement is available and is the one worth
+    // pinning: those tables were never created, and no migration in the tree
+    // mentions them.
+    const { rows } = await getDb().query<{ name: string }>(
+      `SELECT name FROM sqlite_master WHERE name IN ('nodes', 'edges')`
     );
     expect(rows).toEqual([]);
   });
@@ -99,30 +99,38 @@ d("graph-store integration", () => {
     // row is from the future turns a partial recovery into no recovery.
   });
 
-  it("smoke-checks the pool is reachable", async () => {
-    const pool = getPool();
-    const { rows } = await pool.query("SELECT 1 as one");
+  it("smoke-checks the database is reachable, with the pragmas the port relies on", async () => {
+    const { rows } = await getDb().query<{ one: number }>("SELECT 1 as one");
     expect(rows[0]?.one).toBe(1);
+
+    // Not decoration: `foreign_keys` is OFF by default in SQLite, and both the
+    // supersede link and the (memory, session) access join are foreign keys
+    // that spec.md §24.5/§24.6 rely on being enforced. WAL is what replaces
+    // what the two `pg_advisory_lock` calls simulated (§25.4).
+    const { rows: fk } = await getDb().query<{ foreign_keys: number }>("PRAGMA foreign_keys");
+    expect(fk[0]?.foreign_keys).toBe(1);
+    const { rows: journal } = await getDb().query<{ journal_mode: string }>("PRAGMA journal_mode");
+    expect(journal[0]?.journal_mode).toBe("wal");
   });
 
   // Last in the file deliberately: wipeMaterializedGraph/rebuildFromEvents
-  // TRUNCATEs experiences for the whole database, not just this test's own
-  // rows. Every `it` above already ran and asserted before this one starts
-  // (vitest runs one file's `it`s in declaration order), so wiping here
-  // doesn't retroactively break them. Safe with respect to OTHER packages'
-  // test suites too: pnpm's topological script ordering means no package that
-  // depends on graph-store starts its own test script until this entire file
-  // has finished, so nothing else is touching the shared Postgres instance
-  // while this runs.
+  // deletes every experience row in the database, not just this test's own.
+  // Every `it` above already ran and asserted before this one starts (vitest
+  // runs one file's `it`s in declaration order), so wiping here doesn't
+  // retroactively break them.
+  //
+  // Cross-suite safety used to need arranging and no longer does: every suite
+  // now opens its own SQLite file in `beforeAll` (`useTemporaryDatabase`), so
+  // this wipe cannot reach a sibling file's fixtures. That is what let
+  // `vitest.config.ts` drop `fileParallelism: false`, which existed purely
+  // because this test shared one Postgres with every other suite in the repo.
   it("rebuild-from-events: wiping the materialized memory and replaying the event log reproduces the same state (spec.md §14)", async () => {
-    // Scoped to this test's OWN events (from this point forward), not
-    // `rebuildFromEvents()`'s full `listEventsSince(0)` — the events table
-    // is shared across every suite that has ever run against this
-    // database, and this test only controls the well-formedness of its own
-    // contribution to it, not every fixture any other package's tests have
-    // ever written. `wipeMaterializedGraph` + a scoped `replayEvents` still
-    // exercises the exact same wipe-then-replay mechanism
-    // `rebuildFromEvents` uses internally.
+    // Scoped to this test's OWN events (from this point forward) rather than
+    // `rebuildFromEvents()`'s full `listEventsSince(0)`: the earlier `it`s in
+    // this file have already written events, and this test only controls the
+    // well-formedness of its own contribution to the log. `wipeMaterializedGraph`
+    // + a scoped `replayEvents` still exercises the exact same wipe-then-replay
+    // mechanism `rebuildFromEvents` uses internally.
     const replayFromId = (await listEventsSince(0)).at(-1)?.id ?? 0;
 
     const task = `rebuild-test-${randomUUID()}`;

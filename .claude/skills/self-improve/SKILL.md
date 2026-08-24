@@ -81,7 +81,7 @@ does so having shipped nothing.
    - **Performance:** run the existing eval harnesses
      (`eval/why-spike`, `eval/link-spike`, `eval/tier-promotion`) or a
      targeted script against
-     real Postgres and look for a hot path — an unindexed filter, an N+1
+     real database and look for a hot path — an unindexed filter, an N+1
      query, a redundant re-fetch, an avoidable full table scan as data
      volume grows (the M4 PR's `experiences.task` index is the template for
      what this looks like).
@@ -102,13 +102,13 @@ does so having shipped nothing.
    outcome, not a failure), skip to step 14's "nothing found" branch.
 5. **Baseline measurement.** Before writing the fix, measure the current
    state with a real, reproducible method — a timed script against actual
-   Postgres, a failing test, a query-count assertion, whatever fits the
+   database, a failing test, a query-count assertion, whatever fits the
    candidate. Write down exactly how you measured it; the PR description
    needs to let a human reproduce this, not just trust the number.
 6. **Branch.** Create `improve/<short-slug>` from the latest
    `master`.
-7. **Environment.** `DATABASE_URL` should already be set by the
-   SessionStart hook. If not, `bash scripts/setup-dev-db.sh` and export it.
+7. **Environment.** Nothing to set up since M17: the store is a SQLite file
+   and each integration suite creates its own throwaway one.
 8. **Implement.** The smallest change that gets the improvement — no
    speculative refactoring beyond what step 4's candidate needs.
 9. **Re-measure, same methodology.** Run the exact same measurement from
@@ -118,7 +118,7 @@ does so having shipped nothing.
    step 4, don't force a BENCHMARKS.md entry to justify the branch already
    existing.
 10. **Test for real.** Unit tests unconditionally; integration tests with
-    `DATABASE_URL` set (never check anything off on a skipped or failing
+    every suite running (never check anything off on a skipped or failing
     test). Run the full `pnpm -r test`, not just the touched package — an
     improvement that regresses an unrelated package isn't an improvement.
 11. **Self-review.** Run the `code-review` skill against the diff (or a
@@ -202,7 +202,9 @@ fix.
 
 ## Non-negotiables
 
-- Stack is locked (pnpm + TS workspaces, Postgres+pgvector+pg_trgm). There
+- Stack is locked (pnpm + TS workspaces, SQLite via `better-sqlite3` as the
+  only backend since M17 — spec.md §25; Postgres, pgvector, pg_trgm and
+  `DATABASE_URL` are all gone). There
   is no parser in it since M15 removed ts-morph and tree-sitter with the
   structural graph, and spec.md §24.2 point 7 forbids reintroducing a
   per-language dependency on the load-bearing path. An improvement that would require a different one isn't a

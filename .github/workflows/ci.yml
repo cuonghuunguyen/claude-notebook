@@ -9,24 +9,9 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: cognitive_memory_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    env:
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/cognitive_memory_test
-
+    # No service container. The store is a SQLite file the test setup creates
+    # per suite (spec.md §25.4 / §25.2), so there is nothing to provision and no
+    # DATABASE_URL to configure — which was the adoption cost §25.1 measured.
     steps:
       - uses: actions/checkout@v4
 
@@ -51,5 +36,5 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Test (unit + integration against real Postgres)
+      - name: Test (unit + integration, SQLite)
         run: pnpm test

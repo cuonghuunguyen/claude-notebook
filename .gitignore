@@ -5,3 +5,7 @@ dist/
 .env.local
 coverage/
 .claude/scout-report.json
+.claude/memory.db
+.claude/memory.db-wal
+.claude/memory.db-shm
+.serena/

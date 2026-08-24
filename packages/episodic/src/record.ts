@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { Experience } from "@cognitive-memory/core";
 import {
   appendEvent,
-  getPool,
   recordExperience as storeExperience,
+  withTransaction,
   type Queryable,
   type TransactionClient,
 } from "@cognitive-memory/graph-store";
@@ -43,14 +43,15 @@ export async function recordExperience(
    * Same pattern (and same reason) as graph-store's `Queryable` parameters:
    * M13's read-repair records a correction and links it to the memory it
    * replaces, and those two writes must land together — a correction without
-   * its link is a second competing answer, not a missing detail. Passing the
-   * caller's client keeps this on ONE connection rather than borrowing a second
-   * one that would then wait on the first's row locks.
+   * its link is a second competing answer, not a missing detail.
    *
-   * Typed as a client rather than `Queryable` deliberately: `Queryable` is also
-   * satisfied by the pool, and passing the pool would silently mean "no BEGIN,
-   * possibly two different connections" — the exact non-atomicity this
-   * parameter exists to prevent.
+   * Typed as a `TransactionClient` rather than `Queryable` deliberately. Under
+   * Postgres that ruled out passing the pool, which would have meant "no BEGIN,
+   * possibly two different connections". SQLite has one connection, so the type
+   * now rules out the remaining version of the same mistake: passing the shared
+   * handle to a parameter that promises the write lands with the caller's, i.e.
+   * writing outside the transaction the caller thinks it is in. Only
+   * `withTransaction` can mint one.
    *
    * Omitted ⇒ unchanged behaviour: this function owns the transaction.
    */
@@ -77,17 +78,5 @@ export async function recordExperience(
   };
 
   if (db) return write(db);
-
-  const client = await getPool().connect();
-  try {
-    await client.query("BEGIN");
-    const saved = await write(client);
-    await client.query("COMMIT");
-    return saved;
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
-  }
+  return withTransaction(write);
 }

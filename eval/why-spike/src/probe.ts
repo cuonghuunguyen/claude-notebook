@@ -13,7 +13,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { closePool } from "@cognitive-memory/graph-store";
+import { closeDb, useScratchDatabase } from "@cognitive-memory/graph-store";
 import { repoDir, resultsDir } from "./config.js";
 import { QUESTIONS } from "./questions.js";
 import { byMeaning, renderWhyContext, type ScoredExperience } from "./retrieve.js";
@@ -22,6 +22,7 @@ const cites = (hits: ScoredExperience[], sha: string): number =>
   hits.findIndex((h) => (h.experience.action ?? "").includes(sha));
 
 async function main(): Promise<void> {
+  await useScratchDatabase("why-spike");
   const root = repoDir();
   const rows: Record<string, unknown>[] = [];
   const contexts: Record<string, string> = {};
@@ -62,7 +63,7 @@ async function main(): Promise<void> {
   fs.writeFileSync(path.join(resultsDir(), "probe.json"), JSON.stringify(summary, null, 2));
   fs.writeFileSync(path.join(resultsDir(), "contexts.json"), JSON.stringify(contexts, null, 2));
   console.log("\n" + JSON.stringify({ byMeaning: summary.byMeaning }, null, 2));
-  await closePool();
+  await closeDb();
 }
 
 main().catch((err) => {

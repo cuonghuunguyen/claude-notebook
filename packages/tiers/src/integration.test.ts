@@ -10,13 +10,13 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
-  closePool,
-  getPool,
+  closeDb,
+  getDb,
   getTierDistribution,
   getTierState,
   listIdleShortTermExperienceIds,
   recordExperience,
-  runMigrations,
+  useTemporaryDatabase,
 } from "@cognitive-memory/graph-store";
 import {
   applyTierDecisions,
@@ -26,8 +26,6 @@ import {
   settleSession,
 } from "./index.js";
 
-const hasDb = Boolean(process.env["DATABASE_URL"]);
-const d = hasDb ? describe : describe.skip;
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const daysAgo = (n: number) => new Date(Date.now() - n * MS_PER_DAY);
@@ -58,7 +56,7 @@ async function memory(options: { writerSession?: string; capturedAt?: Date } = {
     { writerSession: options.writerSession }
   );
   if (options.capturedAt) {
-    await getPool().query(`UPDATE experiences SET tier_changed_at = $2 WHERE id = $1`, [
+    await getDb().query(`UPDATE experiences SET tier_changed_at = $2 WHERE id = $1`, [
       saved.id,
       options.capturedAt,
     ]);
@@ -66,12 +64,12 @@ async function memory(options: { writerSession?: string; capturedAt?: Date } = {
   return saved;
 }
 
-d("memory tiers — access accounting (spec.md §24.5)", () => {
+describe("memory tiers — access accounting (spec.md §24.5)", () => {
   beforeAll(async () => {
-    await runMigrations();
+    await useTemporaryDatabase();
   });
   afterAll(async () => {
-    await closePool();
+    await closeDb();
   });
 
   it("lands captured memories in short-term with no access credit", async () => {
@@ -333,7 +331,7 @@ d("memory tiers — access accounting (spec.md §24.5)", () => {
       Array.from({ length: 7 }, () => memory({ capturedAt: daysAgo(400) }))
     );
     for (const m of idle) {
-      await getPool().query(`UPDATE experiences SET tier = 'mid' WHERE id = $1`, [m.id]);
+      await getDb().query(`UPDATE experiences SET tier = 'mid' WHERE id = $1`, [m.id]);
     }
 
     // pageSize 2 over 7 rows = four pages, the last one short.

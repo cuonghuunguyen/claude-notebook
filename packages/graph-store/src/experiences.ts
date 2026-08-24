@@ -1,8 +1,21 @@
 import type { Anchor, Experience, MemoryTier } from "@cognitive-memory/core";
 import { anchorsFromRelatedNodes } from "@cognitive-memory/core";
-import { getPool, type Queryable, type TransactionClient } from "./db.js";
-import { toVectorLiteral } from "./vector.js";
+import { getDb, withTransaction, type Queryable, type TransactionClient } from "./db.js";
+import { requireIsoUtc, toIsoUtc } from "./time.js";
+import { wordSimilarity } from "./trigram.js";
+import { cosineSimilarity, decodeEmbedding, encodeEmbedding } from "./vector.js";
 
+/**
+ * A row exactly as SQLite returns it (spec.md §25.5's type mapping): JSON
+ * columns are TEXT, booleans are 0/1, timestamps are ISO-8601 UTC strings.
+ *
+ * Written out as the storage shape rather than the domain shape on purpose. The
+ * Postgres driver parsed `jsonb` into arrays and `timestamptz` into `Date`
+ * before any of this code saw it, so the decoding was invisible and impossible
+ * to get wrong; here it is explicit, in one place (`rowToExperience`), which is
+ * the only way a missed conversion shows up as a type error rather than as
+ * `"[]"` where an array was expected.
+ */
 interface ExperienceRow {
   id: string;
   task: string;
@@ -10,17 +23,17 @@ interface ExperienceRow {
   hypothesis: string | null;
   action: string | null;
   result: string | null;
-  lessons: string[];
-  related_nodes: string[];
-  anchors: Anchor[];
-  suspect: boolean;
+  lessons: string;
+  related_nodes: string;
+  anchors: string;
+  suspect: number;
   suspect_reason: string | null;
   superseded_by: string | null;
-  superseded_at: Date | null;
-  verified_at: Date | null;
+  superseded_at: string | null;
+  verified_at: string | null;
   confidence: number;
-  timestamp: Date;
-  cold: boolean;
+  timestamp: string;
+  cold: number;
   /** spec.md §24.5. Read out onto search hits, never onto `Experience` — tier is storage/ranking metadata, not part of §8's contract. */
   tier: MemoryTier;
 }
@@ -29,7 +42,14 @@ interface ScoredExperienceRow extends ExperienceRow {
   score: number;
 }
 
+function parseJsonArray<T>(text: string): T[] {
+  const parsed = JSON.parse(text) as unknown;
+  return Array.isArray(parsed) ? (parsed as T[]) : [];
+}
+
 function rowToExperience(row: ExperienceRow): Experience {
+  const relatedNodes = parseJsonArray<string>(row.related_nodes);
+  const anchors = parseJsonArray<Anchor>(row.anchors);
   return {
     id: row.id,
     task: row.task,
@@ -37,42 +57,45 @@ function rowToExperience(row: ExperienceRow): Experience {
     hypothesis: row.hypothesis ?? undefined,
     action: row.action ?? undefined,
     result: row.result ?? undefined,
-    lessons: row.lessons,
-    relatedNodes: row.related_nodes,
+    lessons: parseJsonArray<string>(row.lessons),
+    relatedNodes,
     // A memory written before migration 0006 has an empty `anchors` column but
     // may well carry paths in `related_nodes` (M11's capture put them there).
     // Falling back keeps every pre-M12 memory checkable by the §24.2.3
     // staleness pass instead of silently exempting it — and it is a read-time
     // derivation, so nothing is rewritten and the fallback stays reversible.
-    anchors: row.anchors.length > 0 ? row.anchors : anchorsFromRelatedNodes(row.related_nodes),
-    suspect: row.suspect,
+    anchors: anchors.length > 0 ? anchors : anchorsFromRelatedNodes(relatedNodes),
+    suspect: row.suspect === 1,
     suspectReason: row.suspect_reason ?? undefined,
     supersededBy: row.superseded_by ?? undefined,
-    supersededAt: row.superseded_at?.toISOString(),
-    verifiedAt: row.verified_at?.toISOString(),
+    supersededAt: row.superseded_at ?? undefined,
+    verifiedAt: row.verified_at ?? undefined,
     confidence: row.confidence,
-    timestamp: row.timestamp.toISOString(),
+    timestamp: row.timestamp,
   };
 }
 
 const EXPERIENCE_COLUMNS = `id, task, observation, hypothesis, action, result, lessons, related_nodes, anchors, suspect, suspect_reason, superseded_by, superseded_at, verified_at, confidence, "timestamp", cold, tier`;
 
 /**
- * The same column list qualified with the `e` alias, for the recursive-chain
- * queries that join `experiences` against a CTE which also has an `id` column
- * (Postgres rejects the unqualified list there as ambiguous). Derived rather
- * than written out twice so a future column cannot be added to one and not the
- * other.
+ * The same column list qualified with the `e` alias, for the queries that join
+ * `experiences` against something else carrying an `id` column (the recursive
+ * chain walks, and the FTS5 leg). Derived rather than written out twice so a
+ * future column cannot be added to one and not the other.
  */
 const EXPERIENCE_COLUMNS_QUALIFIED = EXPERIENCE_COLUMNS.split(", ")
   .map((column) => `e.${column}`)
   .join(", ");
 
+/** A JSON array parameter, for the `json_each` sites spec.md §25.5's table names. */
+function jsonArray(values: readonly unknown[]): string {
+  return JSON.stringify(values);
+}
 
 /**
  * Append-only per spec.md §8 — there is deliberately no update/delete
  * export in this module. If you need to "correct" an experience, record a
- * new one; the promotion pipeline (M3) reasons over the full history.
+ * new one; read-repair's supersede chain (M13) is the supported path.
  */
 export interface RecordExperienceOptions {
   /**
@@ -87,13 +110,13 @@ export interface RecordExperienceOptions {
 
 export async function recordExperience(
   experience: Experience,
-  db: Queryable = getPool(),
+  db: Queryable = getDb(),
   options: RecordExperienceOptions = {}
 ): Promise<Experience> {
   const { rows } = await db.query<ExperienceRow>(
     `
     INSERT INTO experiences (id, task, observation, hypothesis, action, result, lessons, related_nodes, anchors, confidence, "timestamp", writer_session)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, COALESCE($11::timestamptz, now()), $12)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, COALESCE($11, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), $12)
     RETURNING ${EXPERIENCE_COLUMNS}
     `,
     [
@@ -109,14 +132,18 @@ export async function recordExperience(
       // — a memory is born trusted, and only the staleness pass may flag it.
       JSON.stringify(experience.anchors ?? []),
       experience.confidence,
-      // Previously omitted, so the column always fell back to its `DEFAULT
-      // now()` and every caller-supplied timestamp was silently dropped.
-      // That is load-bearing for spec.md §24 capture: a memory mined from git
-      // history must carry the *commit's* date, or §24.2.3's "is the last
-      // commit touching my anchors newer than this memory?" staleness test is
+      // Load-bearing for spec.md §24 capture: a memory mined from git history
+      // must carry the *commit's* date, or §24.2.3's "is the last commit
+      // touching my anchors newer than this memory?" staleness test is
       // meaningless — every mined memory would look newer than the history it
       // was mined from.
-      experience.timestamp ?? null,
+      //
+      // Normalized to UTC here rather than stored as given: capture supplies
+      // git's `%aI`, which is offset form, and a TEXT column holding a mix of
+      // `+02:00` and `Z` sorts wrong (see `time.ts`). Postgres's `timestamptz`
+      // did this normalization itself, so this preserves the old behaviour
+      // rather than adding a new one.
+      toIsoUtc(experience.timestamp ?? null),
       options.writerSession ?? null,
     ]
   );
@@ -135,8 +162,8 @@ export interface ExperienceQueryOptions {
    *
    * Applied to EVERY experience query in this module, not just the by-meaning
    * legs M13's acceptance names. A retracted memory that stays reachable
-   * through by-node or by-task is retracted in name only, and those are the
-   * paths `runPipeline` and the promotion pipeline read.
+   * through by-task is retracted in name only, and that is a path
+   * `runPipeline` and the promotion pipeline read.
    */
   includeSuperseded?: boolean;
 }
@@ -145,24 +172,27 @@ export interface ExperienceQueryOptions {
  * The default-retrieval predicate shared by every query below, as SQL text.
  *
  * Written once because it is a policy, not a detail: "cold and superseded rows
- * are out unless explicitly asked for" has to hold identically across five
- * queries, and the previous copy-paste of the cold half is exactly how the
+ * are out unless explicitly asked for" has to hold identically across every
+ * query, and the previous copy-paste of the cold half is exactly how the
  * superseded half would come to be missing from one of them.
  *
  * `coldParam`/`supersededParam` are 1-based placeholder numbers supplied by the
  * caller — the callers' other parameters are already numbered, so this cannot
- * own the numbering.
+ * own the numbering. `alias` qualifies the columns for the queries that join.
+ *
+ * The flags bind as SQLite integers (0/1) and `NOT cold` reads a 0/1 column, so
+ * the predicate is the same text it was under Postgres booleans.
  */
-function defaultVisibility(coldParam: number, supersededParam: number): string {
-  return `($${coldParam} OR NOT cold) AND ($${supersededParam} OR superseded_by IS NULL)`;
+function defaultVisibility(coldParam: number, supersededParam: number, alias = ""): string {
+  const prefix = alias ? `${alias}.` : "";
+  return `($${coldParam} OR NOT ${prefix}cold) AND ($${supersededParam} OR ${prefix}superseded_by IS NULL)`;
 }
 
 export async function queryExperiencesByTask(
   task: string,
   options: ExperienceQueryOptions = {}
 ): Promise<Experience[]> {
-  const pool = getPool();
-  const { rows } = await pool.query<ExperienceRow>(
+  const { rows } = await getDb().query<ExperienceRow>(
     `SELECT ${EXPERIENCE_COLUMNS} FROM experiences
      WHERE task = $1 AND ${defaultVisibility(2, 3)}
      ORDER BY "timestamp" DESC`,
@@ -188,28 +218,32 @@ export async function queryExperiencesByTask(
  * not act on them, see `gc/src/idleTier.ts` for why.
  */
 export async function markExperienceCold(id: string): Promise<void> {
-  const pool = getPool();
-  await pool.query(`UPDATE experiences SET cold = true WHERE id = $1`, [id]);
+  await getDb().query(`UPDATE experiences SET cold = 1 WHERE id = $1`, [id]);
 }
 
 // ---------------------------------------------------------------------------
-// Content search over knowledge (spec.md §24.2.1 / ROADMAP.md M11).
+// Content search over knowledge (spec.md §24.2.1 / ROADMAP.md M11), on SQLite
+// (spec.md §25.3).
 //
 // The three functions below are the storage primitives for by-meaning
 // retrieval: they find an experience by what it *says*, with no reference to
 // any structural node — and since M15 there is no structural node to refer to.
-// `packages/episodic`'s `queryByMeaning` composes them into one hybrid query;
-// the shape is §9's, which `packages/retrieval` used to implement over node
-// text before it retired with the graph.
+// `packages/episodic`'s `queryByMeaning` composes them into one hybrid query.
+//
+// Two of the three are now full scans scored in JS rather than SQL predicates.
+// That is spec.md §25.1's own argument, applied where it was measured: the
+// corpus is hundreds-to-thousands of memories, cosine over 300x that is 19 ms,
+// and neither an HNSW index nor a GIN trigram index was buying anything at this
+// size. §25.7 names the corpus size at which that stops being true. Only the
+// full-text leg — the strongest one — keeps a real index, FTS5.
 //
 // Every one of them honours §18's cold flag the same way `queryExperiencesByTask`
 // does. Note what `cold` now means: nothing marks a memory cold automatically
 // any more (the edge-based rule went with the edges, see `packages/gc`), so in
-// practice the flag is only set by an explicit `markExperienceCold` call or
-// carried by a row written before M15.
+// practice the flag is only set by an explicit `markExperienceCold` call.
 // ---------------------------------------------------------------------------
 
-/** The searched text: exactly what migration 0004's indexes are built over. */
+/** The searched text: exactly what the FTS5 index and the trigram scan are built over. */
 const EXPERIENCE_TEXT = `(task || ' ' || observation)`;
 
 export interface ExperienceSearchHit {
@@ -233,13 +267,43 @@ function rowToHit(row: ScoredExperienceRow): ExperienceSearchHit {
 }
 
 /**
- * Full-text leg. `tsQuery` is a ready-made `tsquery` *string* rather than a
- * raw question, because the useful query shape here is caller policy, not
- * storage policy: WHY_MEMORY_SPIKE.md's 0.75 came from OR-joining the
- * question's content words (a "why" question shares only a few terms with the
- * commit body that answers it), which neither `plainto_tsquery` nor
- * `websearch_to_tsquery` produces — both AND their terms. `packages/episodic`
- * owns that construction; this function owns the ranking.
+ * `a | b` (the `tsquery` form `packages/episodic` builds) to an FTS5 MATCH
+ * expression.
+ *
+ * `toExperienceTsQuery`'s output format is deliberately NOT changed: it is
+ * exported, the eval harnesses reproduce the exact query the shipped path
+ * builds, and the OR-of-content-words shape is the caller policy that
+ * WHY_MEMORY_SPIKE.md's 0.75 came from. What changes is only the dialect it is
+ * spoken in, and that translation belongs to the storage leg.
+ *
+ * Every term is double-quoted so it is a literal string to FTS5 rather than
+ * syntax. Episodic already reduces each term to `[a-z0-9_]`, and `_` is a token
+ * separator for `unicode61`, which makes such a term a two-token phrase — quoting
+ * is what keeps that a phrase instead of a syntax error.
+ */
+export function toFts5Match(orQuery: string): string {
+  const terms = orQuery
+    .split("|")
+    .map((term) => term.trim())
+    .filter((term) => term.length > 0)
+    .map((term) => `"${term.replace(/"/g, '""')}"`);
+  return terms.join(" OR ");
+}
+
+/**
+ * Full-text leg. FTS5 over `task || ' ' || observation`, ranked by `bm25()`.
+ *
+ * `tsQuery` is a ready-made OR-joined term list rather than a raw question,
+ * because the useful query shape here is caller policy, not storage policy:
+ * WHY_MEMORY_SPIKE.md's 0.75 came from OR-joining the question's content words
+ * (a "why" question shares only a few terms with the commit body that answers
+ * it), which neither `plainto_tsquery` nor `websearch_to_tsquery` produced —
+ * both ANDed their terms, and FTS5's default is an AND too.
+ * `packages/episodic` owns that construction; this function owns the ranking.
+ *
+ * `bm25()` returns a negative number where more-negative is better, so the score
+ * is negated to keep the "higher is better" convention every leg reports in and
+ * `fuseLegs` is unchanged (it reads rank order, never the scale — spec.md §25.3).
  *
  * Passing an empty string returns nothing rather than throwing, so a question
  * made entirely of stopwords degrades to "no lexical hits".
@@ -249,48 +313,95 @@ export async function searchExperiencesByFullText(
   limit = 10,
   options: ExperienceQueryOptions = {}
 ): Promise<ExperienceSearchHit[]> {
-  if (!tsQuery.trim()) return [];
-  const { rows } = await getPool().query<ScoredExperienceRow>(
-    `SELECT ${EXPERIENCE_COLUMNS},
-            ts_rank(to_tsvector('english', ${EXPERIENCE_TEXT}), to_tsquery('english', $1)) AS score
-       FROM experiences
-      WHERE to_tsvector('english', ${EXPERIENCE_TEXT}) @@ to_tsquery('english', $1)
-        AND ${defaultVisibility(3, 4)}
-      ORDER BY score DESC, "timestamp" DESC, id
+  const match = toFts5Match(tsQuery);
+  if (!match) return [];
+  const { rows } = await getDb().query<ScoredExperienceRow>(
+    `SELECT ${EXPERIENCE_COLUMNS_QUALIFIED}, -bm25(experiences_fts) AS score
+       FROM experiences_fts
+       JOIN experiences e ON e.rowid = experiences_fts.rowid
+      WHERE experiences_fts MATCH $1
+        AND ${defaultVisibility(3, 4, "e")}
+      ORDER BY score DESC, e."timestamp" DESC, e.id
       LIMIT $2`,
-    [tsQuery, limit, options.includeCold ?? false, options.includeSuperseded ?? false]
+    [match, limit, options.includeCold ?? false, options.includeSuperseded ?? false]
   );
   return rows.map(rowToHit);
 }
 
+/** One scan row for the two legs that score in JS. */
+interface ScanRow {
+  id: string;
+  timestamp: string;
+  search_text?: string;
+  embedding?: Buffer | null;
+}
+
 /**
- * Trigram leg (spec.md §9's `pg_trgm` choice, pointed at experience text).
+ * Orders JS-scored candidates the way the SQL legs did — `score DESC,
+ * "timestamp" DESC, id` — and truncates.
  *
- * Uses `word_similarity` / `<%` rather than `similarity` / `%`: whole-string
- * trigram similarity between a one-line question and a multi-paragraph commit
- * body is always near zero, so `%` would return nothing useful. Word similarity
- * asks the question §9 actually cares about — how well does the query match the
- * best-matching *extent* of this text.
+ * The tie-breakers are not decoration. Two memories can score identically (the
+ * trigram leg's threshold makes exact ties common on short questions), and
+ * `fuseLegs` reads *rank*, so a nondeterministic order inside a leg would make
+ * the fused result nondeterministic — which would defeat the gate spec.md §25.5
+ * sets on this port.
+ */
+function rankScanned(
+  scored: ReadonlyArray<{ row: ScanRow; score: number }>,
+  limit: number
+): Array<{ id: string; score: number }> {
+  return [...scored]
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        b.row.timestamp.localeCompare(a.row.timestamp) ||
+        a.row.id.localeCompare(b.row.id)
+    )
+    .slice(0, limit)
+    .map(({ row, score }) => ({ id: row.id, score }));
+}
+
+/** Hydrates full rows for already-ranked ids, preserving the ranking. */
+async function hydrateRanked(
+  ranked: ReadonlyArray<{ id: string; score: number }>
+): Promise<ExperienceSearchHit[]> {
+  if (ranked.length === 0) return [];
+  const { rows } = await getDb().query<ExperienceRow>(
+    `SELECT ${EXPERIENCE_COLUMNS} FROM experiences
+      WHERE id IN (SELECT value FROM json_each($1))`,
+    [jsonArray(ranked.map((entry) => entry.id))]
+  );
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return ranked.flatMap((entry) => {
+    const row = byId.get(entry.id);
+    return row ? [rowToHit({ ...row, score: entry.score })] : [];
+  });
+}
+
+/**
+ * Trigram leg (spec.md §9's `pg_trgm` choice, pointed at experience text),
+ * recomputed in JS (`trigram.ts`).
  *
  * `query` is the caller's whole question, deliberately. That means this leg is
- * a character-level whole-question matcher, not the per-identifier rescue an
- * earlier draft of this comment claimed: it will find a body that shares an
- * unstemmed spelling with the question (`regexes.ts`, `$ZodCatch`, `__proto__`)
- * because those trigrams push the score up, but it does not isolate those
- * fragments and score them on their own. Measured on a real eval pair,
- * whole-question word similarity against the answering body was 0.49 against a
- * 0.35 floor, while the isolated identifier scored 0.83 — so isolating terms
- * would be a genuinely stronger leg, and is left as a follow-up rather than
- * asserted here as already done.
+ * a character-level whole-question matcher, not a per-identifier rescue: it will
+ * find a body that shares an unstemmed spelling with the question (`regexes.ts`,
+ * `$ZodCatch`, `__proto__`) because those trigrams push the score up, but it
+ * does not isolate those fragments and score them on their own. Measured on a
+ * real eval pair, whole-question word similarity against the answering body was
+ * 0.49 against a 0.35 floor, while the isolated identifier scored 0.83 — so
+ * isolating terms would be a genuinely stronger leg, and is left as a follow-up
+ * rather than asserted here as already done.
  *
- * The `<%` operator reads its threshold from a GUC, so a GUC is the only way to
- * feed it. It is set with `set_config(..., is_local => true)` inside an
- * explicit transaction, so the setting dies with the transaction rather than
- * riding along on a pooled connection for the rest of its life. (The node-search
- * equivalent removed in M15 used `set_limit()` instead, which sets a different
- * GUC — `pg_trgm.similarity_threshold`, for `%` — and leaks it session-wide.
- * Recorded here because it was the tempting precedent and it was the wrong
- * one; there is no longer any code in the tree doing it.)
+ * `threshold` is a plain argument now. Under Postgres it could only be a GUC
+ * (`<%` reads `pg_trgm.word_similarity_threshold`), which forced this function
+ * to open an explicit transaction just to `set_config(..., is_local => true)` so
+ * the setting died with it instead of riding a pooled connection for the rest of
+ * its life. spec.md §25.4 deletes that whole apparatus: there is no session
+ * state to leak, so there is no transaction here either.
+ *
+ * The scan selects only id/timestamp/text — not the full row, and above all not
+ * `embedding`, which is 6 KB per memory. Full rows are fetched for the survivors
+ * only.
  */
 export async function searchExperiencesByTrigram(
   query: string,
@@ -299,51 +410,48 @@ export async function searchExperiencesByTrigram(
   options: ExperienceQueryOptions = {}
 ): Promise<ExperienceSearchHit[]> {
   if (!query.trim()) return [];
-  const client = await getPool().connect();
-  try {
-    await client.query("BEGIN");
-    await client.query("SELECT set_config('pg_trgm.word_similarity_threshold', $1, true)", [
-      String(threshold),
-    ]);
-    const { rows } = await client.query<ScoredExperienceRow>(
-      `SELECT ${EXPERIENCE_COLUMNS}, word_similarity($1, ${EXPERIENCE_TEXT}) AS score
-         FROM experiences
-        WHERE $1 <% ${EXPERIENCE_TEXT}
-          AND ${defaultVisibility(3, 4)}
-        ORDER BY score DESC, "timestamp" DESC, id
-        LIMIT $2`,
-      [query, limit, options.includeCold ?? false, options.includeSuperseded ?? false]
-    );
-    await client.query("COMMIT");
-    return rows.map(rowToHit);
-  } catch (err) {
-    await client.query("ROLLBACK").catch(() => {});
-    throw err;
-  } finally {
-    client.release();
-  }
+  const { rows } = await getDb().query<ScanRow>(
+    `SELECT id, "timestamp", ${EXPERIENCE_TEXT} AS search_text
+       FROM experiences
+      WHERE ${defaultVisibility(1, 2)}`,
+    [options.includeCold ?? false, options.includeSuperseded ?? false]
+  );
+  const scored = rows
+    // The threshold is passed down as a pruning floor, not just used to filter:
+    // it is what bounds the extent search (see `wordSimilarity`), and without it
+    // this leg measured 3.9 s per question against the full-text leg's 9 ms.
+    // Scores below it are therefore approximate, which is sound because they are
+    // exactly the ones being discarded on the next line.
+    .map((row) => ({ row, score: wordSimilarity(query, row.search_text ?? "", threshold) }))
+    .filter((entry) => entry.score >= threshold);
+  return hydrateRanked(rankScanned(scored, limit));
 }
 
 /**
- * Vector leg. `1 - (a <=> b)` as the score, so cosine *similarity* (higher is
- * better) is what callers see, not cosine distance — the same convention the
- * node-embedding search used before M15 removed it.
+ * Vector leg. Cosine similarity (higher is better), the same convention the
+ * pgvector leg exposed with `1 - (a <=> b)`.
+ *
+ * Brute force over every embedded memory, no index — spec.md §25.1 measured
+ * that at 19 ms for 300x this corpus, which is why there is no vector extension
+ * in the stack any more. §25.7 names the ceiling.
  */
 export async function searchExperiencesByEmbedding(
   embedding: number[],
   limit = 10,
   options: ExperienceQueryOptions = {}
 ): Promise<ExperienceSearchHit[]> {
-  const { rows } = await getPool().query<ScoredExperienceRow>(
-    `SELECT ${EXPERIENCE_COLUMNS}, 1 - (embedding <=> $1) AS score
+  const { rows } = await getDb().query<ScanRow>(
+    `SELECT id, "timestamp", embedding
        FROM experiences
       WHERE embedding IS NOT NULL
-        AND ${defaultVisibility(3, 4)}
-      ORDER BY embedding <=> $1, "timestamp" DESC, id
-      LIMIT $2`,
-    [toVectorLiteral(embedding), limit, options.includeCold ?? false, options.includeSuperseded ?? false]
+        AND ${defaultVisibility(1, 2)}`,
+    [options.includeCold ?? false, options.includeSuperseded ?? false]
   );
-  return rows.map(rowToHit);
+  const scored = rows.map((row) => ({
+    row,
+    score: row.embedding ? cosineSimilarity(embedding, decodeEmbedding(row.embedding)) : 0,
+  }));
+  return hydrateRanked(rankScanned(scored, limit));
 }
 
 /**
@@ -358,9 +466,9 @@ export async function searchExperiencesByEmbedding(
  * experience says. (Corrections are M13's `supersedes` chain.)
  */
 export async function upsertExperienceEmbedding(id: string, embedding: number[]): Promise<void> {
-  await getPool().query(`UPDATE experiences SET embedding = $2 WHERE id = $1`, [
+  await getDb().query(`UPDATE experiences SET embedding = $2 WHERE id = $1`, [
     id,
-    toVectorLiteral(embedding),
+    encodeEmbedding(embedding),
   ]);
 }
 
@@ -376,16 +484,16 @@ export async function upsertExperienceEmbedding(id: string, embedding: number[])
  * vector leg can therefore never see again.
  */
 export async function listExperienceIdsMissingEmbedding(limit = 1000): Promise<string[]> {
-  const { rows } = await getPool().query<{ id: string }>(
+  const { rows } = await getDb().query<{ id: string }>(
     `SELECT id FROM experiences WHERE embedding IS NULL ORDER BY "timestamp" LIMIT $1`,
     [limit]
   );
-  return rows.map((r) => r.id);
+  return rows.map((row) => row.id);
 }
 
 /** Full text of one experience, for computing its embedding. */
 export async function getExperienceById(id: string): Promise<Experience | undefined> {
-  const { rows } = await getPool().query<ExperienceRow>(
+  const { rows } = await getDb().query<ExperienceRow>(
     `SELECT ${EXPERIENCE_COLUMNS} FROM experiences WHERE id = $1`,
     [id]
   );
@@ -400,11 +508,11 @@ export async function getExperienceById(id: string): Promise<Experience | undefi
  * commit abc12345?" must not hydrate a full experience row per candidate.
  */
 export async function listExperienceActions(prefix = ""): Promise<string[]> {
-  const { rows } = await getPool().query<{ action: string }>(
+  const { rows } = await getDb().query<{ action: string }>(
     `SELECT DISTINCT action FROM experiences WHERE action IS NOT NULL AND action LIKE $1 || '%'`,
     [prefix]
   );
-  return rows.map((r) => r.action);
+  return rows.map((row) => row.action);
 }
 
 // ---------------------------------------------------------------------------
@@ -416,29 +524,34 @@ export async function listExperienceActions(prefix = ""): Promise<string[]> {
  * Memories anchored to any of `paths` — the query the sync-time staleness pass
  * runs once per batch of changed paths.
  *
- * Uses jsonb containment (`anchors @> '[{"path": ...}]'`) so migration 0006's
- * GIN index does the work. Containment is per-object subset matching, so a
- * path-level trigger also finds `{ path, symbol }` anchors on that path — which
- * is exactly M12's file-level trigger semantics, for free.
+ * Postgres did this with jsonb containment (`anchors @> '[{"path": ...}]'`)
+ * riding a GIN index. SQLite has neither, so spec.md §25.5's table replaces it
+ * with `json_each` + `json_extract`: the anchors array is unnested per row and
+ * each element's `path` compared against the changed-path set, also unnested
+ * from a JSON parameter. `EXISTS` rather than a join, so a memory anchored to
+ * three changed paths still comes back once.
  *
- * `OR` across paths in one statement rather than one statement per path: a
- * commit range can touch hundreds of files, and the caller wants one round trip.
+ * What was lost with the GIN index is the index, not the semantics — and the
+ * semantics are the part that was load-bearing. Containment matched
+ * `{"path": x, "symbol": y}` for a path-level trigger because it is per-object
+ * subset matching; `json_extract(value, '$.path') = ?` matches the same rows for
+ * the same reason, without needing the symbol to be absent. This is a full scan
+ * now, accepted per the note at the end of `migrations/0001_baseline.sql`: it
+ * runs once per sync, not once per retrieval.
  *
  * The second leg over `related_nodes` is the pre-M12 half, and it is not
  * optional: every memory M11's capture recorded has its paths ONLY in
  * `related_nodes`, so an `anchors`-only predicate would make the entire existing
  * corpus permanently invisible to the staleness pass — the flag would work only
- * for memories written after this migration. `rowToExperience` already derives
- * anchors from `related_nodes` on read; this is the same fallback pushed down to
- * the lookup so those memories are candidates in the first place. It rides
- * migration 0001's `experiences_related_nodes_idx`, so it costs an index scan,
- * not a table scan.
+ * for memories written after M12. `rowToExperience` already derives anchors from
+ * `related_nodes` on read; this is the same fallback pushed down to the lookup so
+ * those memories are candidates in the first place.
  *
  * One asymmetry to know about: `related_nodes` holds anchors in *text* form, so
  * this leg matches a bare path exactly and will not find a legacy
  * `path#symbol` entry from a path-level trigger. New writes populate `anchors`
- * where containment handles that case properly; nothing is silently wrong, the
- * older form is just coarser.
+ * where the object comparison handles that case properly; nothing is silently
+ * wrong, the older form is just coarser.
  *
  * Superseded memories are EXCLUDED, unlike cold ones — the two flags look
  * similar and are not. A cold memory (§18) is still the current answer, merely
@@ -450,26 +563,20 @@ export async function listExperienceActions(prefix = ""): Promise<string[]> {
  * count — the very number the read-repair loop watches to see whether repairs
  * are landing — since a retired memory stays older than the commits that
  * flagged it forever.
- *
- * Cold memories are INCLUDED here, unlike every retrieval query in this module.
- * §18's cold flag governs what retrieval surfaces by default; it says nothing
- * about whether a memory is still true. A cold memory that `includeCold` later
- * brings back must not carry a staleness verdict that silently stopped being
- * maintained while it was out of the hot path.
  */
 export async function listExperiencesByAnchorPaths(paths: readonly string[]): Promise<Experience[]> {
-  const distinct = [...new Set(paths.filter((p) => p.trim().length > 0))];
+  const distinct = [...new Set(paths.filter((path) => path.trim().length > 0))];
   if (distinct.length === 0) return [];
-  const { rows } = await getPool().query<ExperienceRow>(
+  const { rows } = await getDb().query<ExperienceRow>(
     `SELECT ${EXPERIENCE_COLUMNS} FROM experiences
-      WHERE (anchors @> ANY ($1::jsonb[])
-         OR related_nodes @> ANY ($2::jsonb[]))
+      WHERE (EXISTS (SELECT 1 FROM json_each(anchors) a
+                      WHERE json_extract(a.value, '$.path')
+                            IN (SELECT value FROM json_each($1)))
+         OR EXISTS (SELECT 1 FROM json_each(related_nodes) r
+                     WHERE r.value IN (SELECT value FROM json_each($1))))
         AND superseded_by IS NULL
       ORDER BY "timestamp" DESC, id`,
-    [
-      distinct.map((path) => JSON.stringify([{ path }])),
-      distinct.map((path) => JSON.stringify([path])),
-    ]
+    [jsonArray(distinct)]
   );
   return rows.map(rowToExperience);
 }
@@ -482,37 +589,41 @@ export async function listExperiencesByAnchorPaths(paths: readonly string[]): Pr
  * to what the memory says. The memory's own text is untouched, and correcting
  * content remains M13's `supersedes` chain.
  *
- * One statement for the whole batch via `unnest`, so marking 300 memories after
- * a big merge is one round trip rather than 300. Idempotent — re-running the
- * same sync re-writes the same verdict.
+ * One statement for the whole batch, so marking 300 memories after a big merge
+ * is one round trip rather than 300. `unnest($1::text[], $2::text[])` became
+ * `json_each` over a single JSON array of objects (spec.md §25.5) — one
+ * parameter instead of two parallel arrays, which also removes the possibility
+ * of the two arrays disagreeing in length. Idempotent: re-running the same sync
+ * re-writes the same verdict.
  */
 export async function markExperiencesSuspect(
   entries: ReadonlyArray<{ id: string; reason: string }>
 ): Promise<number> {
   if (entries.length === 0) return 0;
-  const { rowCount } = await getPool().query(
-    `UPDATE experiences AS e
-        SET suspect = true, suspect_reason = v.reason
-       FROM unnest($1::text[], $2::text[]) AS v(id, reason)
-      WHERE e.id = v.id`,
-    [entries.map((e) => e.id), entries.map((e) => e.reason)]
+  const { rowCount } = await getDb().query(
+    `UPDATE experiences
+        SET suspect = 1,
+            suspect_reason = (
+              SELECT json_extract(v.value, '$.reason') FROM json_each($1) v
+               WHERE json_extract(v.value, '$.id') = experiences.id)
+      WHERE id IN (SELECT json_extract(v.value, '$.id') FROM json_each($1) v)`,
+    [jsonArray(entries)]
   );
-  return rowCount ?? 0;
+  return rowCount;
 }
 
 /**
  * Clears the suspect flag on one memory.
  *
- * M12 never calls this — nothing in this milestone can establish that a
+ * M12 never calls this — nothing in that milestone can establish that a
  * suspect memory is actually still correct, and pretending otherwise is how a
  * staleness system starts lying. It exists because M13's read-repair is the
  * step that CAN establish it (verify against current code, then either clear or
- * supersede), and leaving the setter without its inverse would make that
- * milestone's first move a schema change instead of a behaviour change.
+ * supersede).
  */
 export async function clearExperienceSuspect(id: string): Promise<void> {
-  await getPool().query(
-    `UPDATE experiences SET suspect = false, suspect_reason = NULL WHERE id = $1`,
+  await getDb().query(
+    `UPDATE experiences SET suspect = 0, suspect_reason = NULL WHERE id = $1`,
     [id]
   );
 }
@@ -551,13 +662,13 @@ export async function markExperienceVerified(
   id: string,
   verifiedAt: string = new Date().toISOString()
 ): Promise<boolean> {
-  const { rowCount } = await getPool().query(
+  const { rowCount } = await getDb().query(
     `UPDATE experiences
-        SET suspect = false, suspect_reason = NULL, verified_at = $2::timestamptz
+        SET suspect = 0, suspect_reason = NULL, verified_at = $2
       WHERE id = $1`,
-    [id, verifiedAt]
+    [id, requireIsoUtc(verifiedAt)]
   );
-  return (rowCount ?? 0) > 0;
+  return rowCount > 0;
 }
 
 /**
@@ -567,13 +678,6 @@ export async function markExperienceVerified(
  * never returns. Far above any chain a real repair history produces.
  */
 const MAX_CHAIN_DEPTH = 1000;
-
-/**
- * Advisory-lock key serializing every `supersedeExperience` call. Arbitrary but
- * fixed, and distinct from `migrate.ts`'s key — any two processes using this
- * module agree on it, which is the whole point.
- */
-const SUPERSEDE_LOCK_KEY = "4812003117260002";
 
 /** Thrown by `supersedeExperience` when the link asked for is not representable. */
 export class SupersedeError extends Error {
@@ -605,7 +709,7 @@ export interface SupersedeResult {
  *
  *  - a memory superseding itself: the row would satisfy no default retrieval
  *    (`superseded_by IS NULL` fails) and have no successor to answer in its
- *    place. Also enforced by migration 0007's CHECK.
+ *    place. Also enforced by the baseline's CHECK.
  *  - a memory already superseded by something ELSE: overwriting the pointer
  *    orphans the previous correction — it stays a head, so BOTH corrections
  *    answer, which is the fork the single-column design exists to prevent.
@@ -615,32 +719,31 @@ export interface SupersedeResult {
  *    memory being retired, linking closes a loop in which every member fails
  *    `superseded_by IS NULL` and the whole chain vanishes from retrieval.
  *
- * ## Why the whole operation takes one global lock
+ * ## How the check-then-write is serialized now
  *
- * `FOR UPDATE` on the old row serializes two runs racing on the SAME memory,
- * but the cycle check reads *other* rows, and under READ COMMITTED it cannot
- * see another transaction's uncommitted pointer. Two runs doing
- * `supersede(X, Y)` and `supersede(Y, X)` concurrently lock different rows and
- * each walks a snapshot in which the other's link does not exist, so both cycle
- * checks pass.
+ * Under Postgres this needed real work, and the analysis is worth keeping
+ * because the hazard it describes is a property of the data model, not of the
+ * engine. `FOR UPDATE` on the old row serialized two runs racing on the SAME
+ * memory, but the cycle check reads *other* rows, and under READ COMMITTED it
+ * could not see another transaction's uncommitted pointer: two runs doing
+ * `supersede(X, Y)` and `supersede(Y, X)` concurrently locked different rows and
+ * each walked a snapshot in which the other's link did not exist, so both cycle
+ * checks passed. What actually prevented a committed cycle was the foreign key
+ * taking an implicit `FOR KEY SHARE` lock, which deadlocked the pair — a fine
+ * outcome to have and a bad one to rely on, since it surfaced as
+ * `deadlock detected` rather than the specific refusal below. A
+ * transaction-scoped advisory lock was added to make the refusal the observable
+ * one.
  *
- * What saves that case *without* this lock is not the check — it is migration
- * 0007's foreign key. Writing `superseded_by` takes a `FOR KEY SHARE` lock on
- * the referenced row, which conflicts with the other transaction's
- * `FOR UPDATE` on that same row, so the two updates deadlock and Postgres
- * kills one. Measured, not assumed: replaying the exact statement sequence on
- * two connections produces `deadlock detected` on one side and leaves a single
- * clean link behind. So a cycle cannot actually be committed today.
- *
- * That is a fine outcome to have and a bad one to rely on. It depends on an
- * implicit lock the FK happens to take, it surfaces as an opaque
- * `deadlock detected` rather than the specific refusal this function is written
- * to give, and it is not what any of the three refusals above says is
- * happening. A transaction-scoped advisory lock makes the check-then-write
- * genuinely atomic against every other supersede, so the loser waits and then
- * gets the real reason. Serializing all supersedes globally costs nothing —
- * a supersede is an agent-driven repair, not a hot path — and the lock dies
- * with its transaction, so a crashed run cannot wedge it.
+ * SQLite has one global write lock, so both halves of that are the engine's
+ * default across processes, and `withTransaction` provides the in-process half
+ * (see `db.ts`: two concurrent async transactions on one connection would
+ * otherwise interleave). `BEGIN IMMEDIATE` takes the write lock before the check
+ * reads anything, so the check and the write are atomic against every other
+ * supersede, and the loser gets the real reason rather than a deadlock.
+ * spec.md §25.4 therefore *deletes* both `pg_advisory_lock` uses and the
+ * `FOR UPDATE` rather than porting them — there is nothing left for them to
+ * simulate.
  */
 export async function supersedeExperience(
   oldId: string,
@@ -652,13 +755,9 @@ export async function supersedeExperience(
   }
   const supersededAt = options.supersededAt ?? new Date().toISOString();
 
-  const run = async (db: TransactionClient): Promise<SupersedeResult> => {
-    // Transaction-scoped, so it is released by COMMIT/ROLLBACK whatever
-    // happens below — including a throw out of one of the refusals.
-    await db.query("SELECT pg_advisory_xact_lock($1)", [SUPERSEDE_LOCK_KEY]);
-
+  const run = async (db: Queryable): Promise<SupersedeResult> => {
     const { rows: oldRows } = await db.query<{ superseded_by: string | null }>(
-      `SELECT superseded_by FROM experiences WHERE id = $1 FOR UPDATE`,
+      `SELECT superseded_by FROM experiences WHERE id = $1`,
       [oldId]
     );
     const existing = oldRows[0];
@@ -705,28 +804,16 @@ export async function supersedeExperience(
     // dogfooding loop watches would never come down as repairs land.
     await db.query(
       `UPDATE experiences
-          SET superseded_by = $2, superseded_at = $3::timestamptz,
-              suspect = false, suspect_reason = NULL
+          SET superseded_by = $2, superseded_at = $3,
+              suspect = 0, suspect_reason = NULL
         WHERE id = $1`,
-      [oldId, newId, supersededAt]
+      [oldId, newId, requireIsoUtc(supersededAt)]
     );
     return { linked: true, supersededAt };
   };
 
   if (options.db) return run(options.db);
-
-  const client = await getPool().connect();
-  try {
-    await client.query("BEGIN");
-    const result = await run(client);
-    await client.query("COMMIT");
-    return result;
-  } catch (err) {
-    await client.query("ROLLBACK").catch(() => {});
-    throw err;
-  } finally {
-    client.release();
-  }
+  return withTransaction(run);
 }
 
 /**
@@ -767,7 +854,7 @@ export async function supersedeExperience(
  * same way regardless.
  */
 export async function listSupersedeChain(id: string): Promise<Experience[]> {
-  const { rows } = await getPool().query<ExperienceRow & { depth: number }>(
+  const { rows } = await getDb().query<ExperienceRow & { depth: number }>(
     `WITH RECURSIVE forward(id, depth) AS (
          SELECT id, 0 FROM experiences WHERE id = $1
        UNION
@@ -800,7 +887,7 @@ export async function listSupersedeChain(id: string): Promise<Experience[]> {
  * hint that it has been corrected.
  */
 export async function getSupersedeHead(id: string): Promise<Experience | undefined> {
-  const { rows } = await getPool().query<ExperienceRow>(
+  const { rows } = await getDb().query<ExperienceRow>(
     `WITH RECURSIVE forward(id, depth) AS (
          SELECT id, 0 FROM experiences WHERE id = $1
        UNION ALL
@@ -808,7 +895,7 @@ export async function getSupersedeHead(id: string): Promise<Experience | undefin
            FROM experiences e JOIN forward f ON e.id = f.id
           WHERE e.superseded_by IS NOT NULL AND f.depth < ${MAX_CHAIN_DEPTH}
      )
-     SELECT ${EXPERIENCE_COLUMNS}
+     SELECT ${EXPERIENCE_COLUMNS_QUALIFIED}
        FROM experiences e
       WHERE e.id = (SELECT id FROM forward ORDER BY depth DESC LIMIT 1)`,
     [id]

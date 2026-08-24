@@ -9,7 +9,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { closePool } from "@cognitive-memory/graph-store";
+import { closeDb, useScratchDatabase } from "@cognitive-memory/graph-store";
 import { createFakeEmbedder } from "@cognitive-memory/core";
 import { commitLimit, pathScope, repoDir, resultsDir } from "./config.js";
 import { buildAdjacency, mineKnowledgeLinks, readCommitLog, readCorpusRevision } from "./miner.js";
@@ -70,6 +70,7 @@ const score = (question: LinkQuestion, result: ArmResult): ArmScore => ({
 });
 
 async function main(): Promise<void> {
+  await useScratchDatabase("link-spike");
   const revision = await readCorpusRevision(repoDir());
   const commits = await readCommitLog(repoDir(), pathScope(), commitLimit());
   const links = mineKnowledgeLinks(commits);
@@ -198,7 +199,7 @@ async function main(): Promise<void> {
         2
       )
   );
-  await closePool();
+  await closeDb();
 }
 
 const round = (n: number): number => Number(n.toFixed(3));

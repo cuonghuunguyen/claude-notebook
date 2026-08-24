@@ -11,11 +11,12 @@
  * writes now.
  */
 import { captureGitHistory } from "@cognitive-memory/capture";
-import { closePool } from "@cognitive-memory/graph-store";
+import { closeDb, useScratchDatabase } from "@cognitive-memory/graph-store";
 import { createFakeEmbedder } from "@cognitive-memory/core";
 import { commitLimit, pathScope, repoDir } from "./config.js";
 
 async function main(): Promise<void> {
+  await useScratchDatabase("link-spike");
   const result = await captureGitHistory({
     repoDir: repoDir(),
     pathScope: pathScope(),
@@ -35,7 +36,7 @@ async function main(): Promise<void> {
       2
     )
   );
-  await closePool();
+  await closeDb();
 }
 
 main().catch((err) => {

@@ -2,10 +2,10 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createFakeEmbedder } from "@cognitive-memory/core";
 import {
-  closePool,
+  closeDb,
   getTierState,
   markExperienceCold,
-  runMigrations,
+  useTemporaryDatabase,
   upsertExperienceEmbedding,
 } from "@cognitive-memory/graph-store";
 import { settleSession } from "@cognitive-memory/tiers";
@@ -25,18 +25,14 @@ describe("packages/episodic public API", () => {
   });
 });
 
-// Same DATABASE_URL-gating convention as every other integration suite in
-// this repo — skipped, not failed, without a real Postgres.
-const hasDb = Boolean(process.env["DATABASE_URL"]);
-const d = hasDb ? describe : describe.skip;
 
-d("packages/episodic integration", () => {
+describe("packages/episodic integration", () => {
   beforeAll(async () => {
-    await runMigrations();
+    await useTemporaryDatabase();
   });
 
   afterAll(async () => {
-    await closePool();
+    await closeDb();
   });
 
   it("round-trips a recorded experience through queryByTask", async () => {
@@ -62,13 +58,13 @@ d("packages/episodic integration", () => {
   });
 });
 
-d("by-meaning retrieval (spec.md §24.2.1 / ROADMAP.md M11)", () => {
+describe("by-meaning retrieval (spec.md §24.2.1 / ROADMAP.md M11)", () => {
   beforeAll(async () => {
-    await runMigrations();
+    await useTemporaryDatabase();
   });
 
   afterAll(async () => {
-    await closePool();
+    await closeDb();
   });
 
   it("finds a memory by what it says, with related_nodes empty — retrieval is not node-gated", async () => {

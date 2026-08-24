@@ -1,25 +1,21 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
-  closePool,
-  getPool,
+  closeDb,
+  getDb,
   recordExperience,
-  runMigrations,
+  useTemporaryDatabase,
 } from "@cognitive-memory/graph-store";
 import { DEFAULT_TIER_THRESHOLDS } from "@cognitive-memory/tiers";
 import { listIdleShortTermCandidates } from "./idleTier.js";
 import { runGC } from "./run.js";
 
-// Same DATABASE_URL-gating convention as every other integration suite in
-// this repo — skipped, not failed, without a real Postgres.
-const hasDb = Boolean(process.env["DATABASE_URL"]);
-const d = hasDb ? describe : describe.skip;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const IDLE_DAYS = DEFAULT_TIER_THRESHOLDS.idleDays.short;
 
 async function backdateTierClock(id: string, when: Date): Promise<void> {
-  await getPool().query(
+  await getDb().query(
     `UPDATE experiences SET tier_changed_at = $1, last_accessed = NULL WHERE id = $2`,
     [when, id]
   );
@@ -50,13 +46,13 @@ async function makeShortTermMemory(daysIdle: number, now: Date): Promise<string>
  * `cold` is a hard filter on every by-meaning leg and §24.5 forbids retrieval
  * missing a correct memory outright.
  */
-d("packages/gc integration (spec.md §18 / §24.5 retention signal)", () => {
+describe("packages/gc integration (spec.md §18 / §24.5 retention signal)", () => {
   beforeAll(async () => {
-    await runMigrations();
+    await useTemporaryDatabase();
   });
 
   afterAll(async () => {
-    await closePool();
+    await closeDb();
   });
 
   it("counts a short-term memory idle past its window, and not one inside it", async () => {
@@ -81,10 +77,14 @@ d("packages/gc integration (spec.md §18 / §24.5 retention signal)", () => {
     // The whole point: still warm, still retrievable by default. A GC pass
     // that quietly moved this memory out of the hot path would be the §24.5
     // violation `idleTier.ts` exists to refuse.
-    const { rows } = await getPool().query<{ cold: boolean; tier: string }>(
+    // `cold` is INTEGER 0/1 (spec.md §25.5 — SQLite has no boolean type), and
+    // this reads the raw column deliberately: the assertion is about what is
+    // STORED, so decoding it through `rowToExperience` first would be asserting
+    // on the decoder rather than on the GC pass.
+    const { rows } = await getDb().query<{ cold: number; tier: string }>(
       `SELECT cold, tier FROM experiences WHERE id = $1`,
       [idle]
     );
-    expect(rows[0]).toEqual({ cold: false, tier: "short" });
+    expect(rows[0]).toEqual({ cold: 0, tier: "short" });
   });
 });

@@ -21,10 +21,10 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
-  closePool,
+  closeDb,
   getTierState,
   recordExperience,
-  runMigrations,
+  useTemporaryDatabase,
 } from "@cognitive-memory/graph-store";
 import { recordRetrievalAccess, settleSession } from "@cognitive-memory/tiers";
 import { buildTraffic } from "./model.js";
@@ -112,15 +112,13 @@ describe("spec.md §24.5 — access is not correctness (M16's measured decision)
   });
 });
 
-const hasDb = Boolean(process.env["DATABASE_URL"]);
-const d = hasDb ? describe : describe.skip;
 
-d("§24.5 — the shipped path agrees with the simulator", () => {
+describe("§24.5 — the shipped path agrees with the simulator", () => {
   beforeAll(async () => {
-    await runMigrations();
+    await useTemporaryDatabase();
   });
   afterAll(async () => {
-    await closePool();
+    await closeDb();
   });
 
   it("three confirmed distinct sessions walk a real memory short → mid → long", async () => {

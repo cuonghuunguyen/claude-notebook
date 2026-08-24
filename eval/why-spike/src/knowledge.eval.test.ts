@@ -30,17 +30,13 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { captureGitHistory } from "@cognitive-memory/capture";
 import { buildFixtureRepo, type FixtureRepo } from "@cognitive-memory/capture/testing";
 import { queryByMeaning } from "@cognitive-memory/episodic";
-import { closePool, listExperiencesByAnchorPaths, runMigrations } from "@cognitive-memory/graph-store";
+import { closeDb, listExperiencesByAnchorPaths, useTemporaryDatabase } from "@cognitive-memory/graph-store";
 import {
   DISTRACTORS_PER_ANCHOR,
   KNOWLEDGE_EVAL_COMMITS,
   KNOWLEDGE_EVAL_QUESTIONS,
 } from "./knowledgeCases.js";
 
-// Same DATABASE_URL-gating convention as every other integration/eval suite
-// in this repo — skipped, not failed, without a real Postgres.
-const hasDb = Boolean(process.env["DATABASE_URL"]);
-const d = hasDb ? describe : describe.skip;
 
 /** The node-gated MRR `WHY_MEMORY_SPIKE.md` measured, for reference. */
 const ANCHOR_RECENCY_BASELINE_MRR = 0.13;
@@ -71,7 +67,7 @@ const QUESTIONS = KNOWLEDGE_EVAL_QUESTIONS.map((q) => ({
   answerSubject: stamp(q.answerSubject),
 }));
 
-d("knowledge retrieval eval (spec.md §24.2.1 / ROADMAP.md M11)", () => {
+describe("knowledge retrieval eval (spec.md §24.2.1 / ROADMAP.md M11)", () => {
   let repo: FixtureRepo;
   /** question id -> the experience id that actually answers it. */
   const answerByQuestion = new Map<string, string>();
@@ -79,7 +75,7 @@ d("knowledge retrieval eval (spec.md §24.2.1 / ROADMAP.md M11)", () => {
   const anchorRecencyRanks: number[] = [];
 
   beforeAll(async () => {
-    await runMigrations();
+    await useTemporaryDatabase();
     repo = await buildFixtureRepo(COMMITS);
 
     // Capture through the shipped package, exactly as a real sync would. Every
@@ -125,7 +121,7 @@ d("knowledge retrieval eval (spec.md §24.2.1 / ROADMAP.md M11)", () => {
     // Guarded: if beforeAll threw before assigning `repo`, an unguarded
     // `repo.dir` here raises a TypeError that masks the real failure.
     if (repo) rmSync(repo.dir, { recursive: true, force: true });
-    await closePool();
+    await closeDb();
   });
 
   it.each(QUESTIONS)("[by-meaning] $id", ({ id }) => {

@@ -54,10 +54,9 @@ const [graphStore, pipelineMod, episodic, capture, staleness, core] = await Prom
   import(path.join(ROOT, "packages/core/dist/index.js")),
 ]);
 
-const { closePool, getPool, runMigrations } = graphStore;
+const { closeDb, getDb, runMigrations } = graphStore;
 
 async function sync() {
-  await runMigrations();
 
   // Our own history, through the shipped capture package. Idempotent by
   // contract (spec.md §24.2.1) — re-running after a merge only records commits
@@ -100,7 +99,7 @@ async function sync() {
       2
     )
   );
-  await closePool();
+  await closeDb();
 }
 
 /**
@@ -153,7 +152,7 @@ async function ask(question) {
     }
     console.log(`${k.observation.split("\n").slice(0, 14).join("\n")}\n`);
   }
-  await closePool();
+  await closeDb();
 }
 
 /** Appends one experience — how a session, or the quality hook, writes back. */
@@ -178,7 +177,7 @@ async function record(json) {
     confidence: input.confidence ?? 0.7,
   });
   console.log(JSON.stringify({ id: saved.id, anchors: saved.anchors?.length ?? 0 }));
-  await closePool();
+  await closeDb();
 }
 
 /**
@@ -201,7 +200,7 @@ async function scout(file) {
     embedder: core.createFakeEmbedder(),
   });
   console.log(JSON.stringify({ id: saved.id, anchors: saved.relatedNodes.length }));
-  await closePool();
+  await closeDb();
 }
 
 /**
@@ -210,9 +209,8 @@ async function scout(file) {
  * half when no new commits are worth capturing as knowledge.
  */
 async function stale() {
-  await runMigrations();
   const result = await staleness.markSuspectFromHistory({ repoDir: ROOT, limit: 500 });
-  const { rows } = await getPool().query(
+  const { rows } = await getDb().query(
     `SELECT id, task, suspect_reason FROM experiences
       WHERE suspect AND superseded_by IS NULL
       ORDER BY "timestamp" DESC LIMIT 10`
@@ -229,7 +227,7 @@ async function stale() {
       2
     )
   );
-  await closePool();
+  await closeDb();
 }
 
 /**
@@ -244,7 +242,7 @@ async function stale() {
  */
 async function suspects(limitArg) {
   const limit = Number(limitArg) > 0 ? Number(limitArg) : 10;
-  const { rows } = await getPool().query(
+  const { rows } = await getDb().query(
     `SELECT id, task, action, anchors, suspect_reason, "timestamp", verified_at
        FROM experiences
       WHERE suspect AND superseded_by IS NULL
@@ -258,16 +256,19 @@ async function suspects(limitArg) {
         id: r.id,
         task: r.task,
         source: r.action,
-        written: r.timestamp.toISOString().slice(0, 10),
-        verifiedAt: r.verified_at?.toISOString().slice(0, 10),
-        anchors: (r.anchors ?? []).map((a) => (a.symbol ? `${a.path}#${a.symbol}` : a.path)),
+        // TEXT ISO-8601 UTC columns since the SQLite port (spec.md §25.5), so
+        // the date is a string slice rather than a Date round-trip, and
+        // `anchors` is JSON text rather than a driver-parsed array.
+        written: r.timestamp.slice(0, 10),
+        verifiedAt: r.verified_at?.slice(0, 10),
+        anchors: JSON.parse(r.anchors ?? "[]").map((a) => (a.symbol ? `${a.path}#${a.symbol}` : a.path)),
         why: r.suspect_reason,
       })),
       null,
       2
     )
   );
-  await closePool();
+  await closeDb();
 }
 
 /** One memory in full, plus its supersede chain — step 2 of the refine skill. */
@@ -277,7 +278,7 @@ async function show(id) {
   const target = chain.find((e) => e.id === id);
   if (!target) {
     console.log(JSON.stringify({ error: `no such memory: ${id}` }));
-    await closePool();
+    await closeDb();
     return;
   }
   console.log(
@@ -301,7 +302,7 @@ async function show(id) {
       2
     )
   );
-  await closePool();
+  await closeDb();
 }
 
 /**
@@ -322,7 +323,7 @@ async function verify(id, asOf) {
   if (Number.isNaN(Date.parse(verifiedAt))) throw new Error(`unparseable instant: ${asOf}`);
   const ok = await episodic.recordVerification(id, verifiedAt);
   console.log(JSON.stringify({ id, verified: ok, verifiedAt, stampedFrom: asOf ? "read-instant" : "now" }));
-  await closePool();
+  await closeDb();
 }
 
 /**
@@ -402,7 +403,7 @@ async function supersede(file) {
       2
     )
   );
-  await closePool();
+  await closeDb();
 }
 
 /** The whole supersede chain for one memory, oldest first — "what did we believe before". */
@@ -422,21 +423,27 @@ async function history(id) {
       2
     )
   );
-  await closePool();
+  await closeDb();
 }
 
 async function stats() {
-  const pool = getPool();
+  const db = getDb();
+  // `count(*) FILTER (WHERE ...)` -> `sum(CASE WHEN ... THEN 1 ELSE 0 END)`
+  // (spec.md §25.5), and every count is aliased: SQLite names a bare `count(*)`
+  // column `count(*)`, so an unaliased one reads back as `undefined`.
   const [experiences, tiers, flags, latest] = await Promise.all([
-    pool.query("SELECT count(*) FROM experiences"),
-    pool.query("SELECT tier, count(*) FROM experiences GROUP BY tier"),
-    pool.query(
-      `SELECT count(*) FILTER (WHERE suspect AND superseded_by IS NULL) AS suspect,
-              count(*) FILTER (WHERE superseded_by IS NOT NULL) AS superseded,
-              count(*) FILTER (WHERE cold) AS cold
+    db.query("SELECT count(*) AS count FROM experiences"),
+    db.query("SELECT tier, count(*) AS count FROM experiences GROUP BY tier"),
+    db.query(
+      // COALESCE because `sum()` over ZERO rows is NULL where the
+      // `count(*) FILTER (WHERE ...)` it replaces was 0 — on an empty memory
+      // this printed `"suspect": null` (and `NaN` once `Number()` saw it).
+      `SELECT coalesce(sum(CASE WHEN suspect AND superseded_by IS NULL THEN 1 ELSE 0 END), 0) AS suspect,
+              coalesce(sum(CASE WHEN superseded_by IS NOT NULL THEN 1 ELSE 0 END), 0) AS superseded,
+              coalesce(sum(CASE WHEN cold THEN 1 ELSE 0 END), 0) AS cold
          FROM experiences`
     ),
-    pool.query('SELECT task, action FROM experiences ORDER BY "timestamp" DESC LIMIT 5'),
+    db.query('SELECT task, action FROM experiences ORDER BY "timestamp" DESC LIMIT 5'),
   ]);
   console.log(
     JSON.stringify(
@@ -452,7 +459,7 @@ async function stats() {
       2
     )
   );
-  await closePool();
+  await closeDb();
 }
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -476,7 +483,15 @@ if (!run) {
   );
   process.exit(1);
 }
-run().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// Every command migrates, not just the writing ones. `getDb()` creates the file
+// on open, so a read command against a database that does not exist yet used to
+// fail with `no such table: experiences` — which reads as "the memory is broken"
+// rather than "run sync first", and is reachable simply by following README's
+// order (`ask` before `sync`). `runMigrations` is idempotent and takes ~1 ms on
+// an up-to-date database.
+runMigrations()
+  .then(run)
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

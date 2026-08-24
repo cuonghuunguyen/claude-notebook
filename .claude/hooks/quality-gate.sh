@@ -55,18 +55,15 @@ run "typecheck" pnpm -r --if-present typecheck
 run "lint" pnpm lint
 [ $? -eq 0 ] && RESULTS="${RESULTS}lint ✓ ${DURATION}s · " || RESULTS="${RESULTS}lint ✗ · "
 
-# Tests only for packages that changed, and only when a database is available —
-# the integration suites need one (scripts/setup-dev-db.sh).
-if [ -n "${DATABASE_URL:-}" ]; then
-  for pkg in $PKGS; do
-    [ -f "$pkg/package.json" ] || continue
-    grep -q '"test"' "$pkg/package.json" || continue
-    run "tests ($pkg)" pnpm --filter "./$pkg" test
-    [ $? -eq 0 ] && RESULTS="${RESULTS}$(basename "$pkg") ✓ · " || RESULTS="${RESULTS}$(basename "$pkg") ✗ · "
-  done
-else
-  RESULTS="${RESULTS}tests skipped (no DATABASE_URL) · "
-fi
+# Tests only for packages that changed. There is no longer a "database
+# available" condition to check: since spec.md §25 the store is a SQLite file the
+# test setup creates per suite, so the integration suites always run.
+for pkg in $PKGS; do
+  [ -f "$pkg/package.json" ] || continue
+  grep -q '"test"' "$pkg/package.json" || continue
+  run "tests ($pkg)" pnpm --filter "./$pkg" test
+  [ $? -eq 0 ] && RESULTS="${RESULTS}$(basename "$pkg") ✓ · " || RESULTS="${RESULTS}$(basename "$pkg") ✗ · "
+done
 
 VERDICT="pass"; [ -n "$FAILURES" ] && VERDICT="FAIL"
 STAMP=$(date -u +"%Y-%m-%d %H:%M")
@@ -89,7 +86,7 @@ printf '| %s | %s | %s | %s |\n' "$STAMP" "$VERDICT" "$FILE_COUNT" "${RESULTS% �
 
 # --- record into our own memory --------------------------------------------
 # Best effort: a memory write must never be the reason a task cannot finish.
-if [ -n "${DATABASE_URL:-}" ] && [ -f scripts/self-memory.mjs ]; then
+if [ -f scripts/self-memory.mjs ]; then
   OBSERVATION="Quality gate ${VERDICT} after a task touching ${FILE_COUNT} TypeScript file(s). Checks: ${RESULTS% · }."
   [ -n "$FAILURES" ] && OBSERVATION="${OBSERVATION} Failures:${FAILURES}"
   printf '%s' "$INPUT" | python3 -c "

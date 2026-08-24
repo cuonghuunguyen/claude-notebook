@@ -28,11 +28,11 @@ import type { Experience } from "@cognitive-memory/core";
 import {
   appendEvent,
   getExperienceById,
-  getPool,
   getSupersedeHead,
   listSupersedeChain,
   markExperienceVerified,
   supersedeExperience,
+  withTransaction,
 } from "@cognitive-memory/graph-store";
 import { recordExperience, type RecordExperienceInput } from "./record.js";
 
@@ -95,36 +95,28 @@ export async function recordSupersedingExperience(
     throw new Error(`recordSupersedingExperience: no such experience to supersede: ${supersedes}`);
   }
 
-  const client = await getPool().connect();
-  try {
-    await client.query("BEGIN");
+  return withTransaction(async (tx) => {
     const experience = await recordExperience(
       {
         ...rest,
         relatedNodes: rest.relatedNodes ?? previous.relatedNodes,
         anchors: rest.anchors ?? previous.anchors,
       },
-      client
+      tx
     );
     const link = await supersedeExperience(previous.id, experience.id, {
       supersededAt,
-      db: client,
+      db: tx,
     });
     await appendEvent(
       {
         eventType: "ExperienceSuperseded",
         payload: { oldId: previous.id, newId: experience.id, supersededAt: link.supersededAt },
       },
-      client
+      tx
     );
-    await client.query("COMMIT");
     return { experience, superseded: previous };
-  } catch (err) {
-    await client.query("ROLLBACK").catch(() => {});
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 /**

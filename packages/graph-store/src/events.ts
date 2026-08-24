@@ -1,4 +1,4 @@
-import { getPool, type Queryable } from "./db.js";
+import { getDb, type Queryable } from "./db.js";
 
 /**
  * The spec.md §14 event vocabulary, in full.
@@ -35,60 +35,62 @@ export interface MemoryEvent<TPayload = unknown> {
   occurredAt?: string;
 }
 
-// `events.id` is `bigserial` (bigint); node-postgres returns bigint columns
-// as strings (it can't safely widen them to JS `number` without risking
-// precision loss), but `MemoryEvent.id` is declared `number` and callers
-// compare ids with `>`. Converting explicitly here is safe: event ids won't
-// approach Number.MAX_SAFE_INTEGER in this system's lifetime, and without
-// the conversion `id > $1` on the un-widened string would silently do
-// lexicographic comparison (`"10" > "9"` is false) once ids cross a digit
-// boundary.
-function toEventId(id: string): number {
-  return Number(id);
-}
-
 /**
- * `db` defaults to the shared pool but accepts a checked-out `PoolClient`, so
+ * `db` defaults to the shared connection but accepts a `TransactionClient`, so
  * a caller appending an event as part of its own transaction (e.g. episodic's
  * `recordSupersedingExperience`, which writes the correction and its link
  * together) gets the event committed/rolled back atomically with the mutation
  * it describes, instead of the event surviving a rollback of the write it was
  * supposed to describe.
+ *
+ * `events.id` is `INTEGER PRIMARY KEY AUTOINCREMENT` (spec.md §25.5's
+ * replacement for `bigserial`), which SQLite hands back as a JS number
+ * directly. The explicit string->number conversion the Postgres driver needed —
+ * node-postgres returns `bigint` columns as strings, and `id > $1` on the
+ * un-widened string would have compared lexicographically once ids crossed a
+ * digit boundary — is therefore gone, not forgotten.
+ *
+ * `payload` is TEXT holding JSON, so it is parsed here rather than by the
+ * driver. `occurred_at` is already ISO-8601 UTC in the column (see `time.ts`),
+ * so it is returned as-is instead of round-tripped through a Date.
  */
-export async function appendEvent(event: MemoryEvent, db: Queryable = getPool()): Promise<MemoryEvent> {
-  const { rows } = await db.query<{
-    id: string;
-    event_type: EventType;
-    payload: unknown;
-    occurred_at: Date;
-  }>(
+interface EventRow {
+  id: number;
+  event_type: EventType;
+  payload: string;
+  occurred_at: string;
+}
+
+function rowToEvent(row: EventRow): MemoryEvent {
+  return {
+    id: row.id,
+    eventType: row.event_type,
+    payload: JSON.parse(row.payload) as unknown,
+    occurredAt: row.occurred_at,
+  };
+}
+
+export async function appendEvent(
+  event: MemoryEvent,
+  db: Queryable = getDb()
+): Promise<MemoryEvent> {
+  const { rows } = await db.query<EventRow>(
     `INSERT INTO events (event_type, payload) VALUES ($1, $2)
      RETURNING id, event_type, payload, occurred_at`,
     [event.eventType, JSON.stringify(event.payload)]
   );
   const row = rows[0];
   if (!row) throw new Error("appendEvent: no row returned");
-  return {
-    id: toEventId(row.id),
-    eventType: row.event_type,
-    payload: row.payload,
-    occurredAt: row.occurred_at.toISOString(),
-  };
+  return rowToEvent(row);
 }
 
-export async function listEventsSince(id: number, db: Queryable = getPool()): Promise<MemoryEvent[]> {
-  const { rows } = await db.query<{
-    id: string;
-    event_type: EventType;
-    payload: unknown;
-    occurred_at: Date;
-  }>(`SELECT id, event_type, payload, occurred_at FROM events WHERE id > $1 ORDER BY id ASC`, [
-    id,
-  ]);
-  return rows.map((row) => ({
-    id: toEventId(row.id),
-    eventType: row.event_type,
-    payload: row.payload,
-    occurredAt: row.occurred_at.toISOString(),
-  }));
+export async function listEventsSince(
+  id: number,
+  db: Queryable = getDb()
+): Promise<MemoryEvent[]> {
+  const { rows } = await db.query<EventRow>(
+    `SELECT id, event_type, payload, occurred_at FROM events WHERE id > $1 ORDER BY id ASC`,
+    [id]
+  );
+  return rows.map(rowToEvent);
 }

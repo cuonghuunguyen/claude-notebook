@@ -1,0 +1,9 @@
+Codebase Cognitive Memory
+Copyright 2026 Cuong Huu Nguyen
+
+This product includes software developed by Cuong Huu Nguyen.
+
+The JSON files under eval/*/results/ contain excerpts (commit messages, symbol
+names, benchmark answers) derived from the public MIT-licensed repositories
+colinhacks/zod and lodash/lodash, retained as measurement evidence for the
+benchmarks documented in BENCHMARKS.md and E2E_BENCHMARK_MULTI_REPO.md.

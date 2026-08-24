@@ -2,6 +2,7 @@
   "name": "claude-notebook",
   "private": true,
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "description": "Codebase Cognitive Memory — knowledge memory for coding agents: the reasoning behind a codebase, mined from its history and retrieved by meaning",
   "engines": {
     "node": ">=20"

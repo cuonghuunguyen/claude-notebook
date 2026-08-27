@@ -1,0 +1,213 @@
+{
+  "date": "2026-08-27",
+  "model": "claude-sonnet (Claude Code 2.1.247)",
+  "workers": "20 Orca terminals, 2 batches of 10, cwd=/tmp/zod",
+  "corpus": "165 explanatory commits, SQLite /tmp/why-spike.db (post-M17)",
+  "retrieval": {
+    "recall": 1,
+    "mrr": 0.883
+  },
+  "judge": "blind A/B by Fable 5 + keyword groups + commit verification",
+  "runs": [
+    {
+      "id": "jit-leak",
+      "c": "git-only",
+      "turns": 13,
+      "cost": 0.4531162000000001,
+      "ms": 53525,
+      "kw": "3/3",
+      "sha": true,
+      "answer": "This is the pre-`z.compile` fastpass in `schemas.ts` ($ZodObjectJIT), a distinct earlier codegen for the same optin/optout-optional branch. Answer:\n\nThe early return (skipping the assignment when the key's failing check still ran) fixes a value-leak: a `superRefine` that both adds an issue and mutates `ctx.value` on an absent optional key produced a *successful* parse whose result still contained that mutated value, because the branch suppressed the issue but still executed `newResult[key] = id.value`. E.g. `z.object({ a: z.string().optional().superRefine((_v,ctx)=>{ctx.addIssue(...); ctx.value=\"leaked\"}) }).safeParse({})` returned `{success:true, data:{a:\"leaked\"}}` in JIT mode, vs `{success:true, data:{}}` interpreted/jitless — a JIT-only divergence, since the interpreted path already returned early in this case (and async went through the interpreter). Fixed in commit `69be843f` (\"stop the object JIT fastpass keeping a swallowed issue's value\", #6407): only assign the checked value when the key is present or genuinely non-`undefined`, matching the interpreter's behavior of dropping the value along with the swallowed issue."
+    },
+    {
+      "id": "jit-leak",
+      "c": "memory",
+      "turns": 1,
+      "cost": 0.12667,
+      "ms": 6636,
+      "kw": "3/3",
+      "sha": true,
+      "answer": "Commit 69be843f fixed a JIT-only leak: the `optin`/`optout`-optional codegen branch suppressed the issue for an absent key, but still ran the assignment afterward. If a `superRefine` on that optional key added an issue but also set `ctx.value`, the leaked value landed in a \"successful\" result, even though the key was absent and validation failed:\n\n```ts\nconst schema = z.object({\n  a: z.string().optional().superRefine((_v, ctx) => {\n    ctx.addIssue({ code: \"custom\", message: \"bad\" });\n    ctx.value = \"leaked\";\n  }),\n});\nschema.safeParse({}); // JIT: { success: true, data: { a: \"leaked\" } }\n```\n\nInterpreted path (and async) returns early in this case, so no leak — divergence was JIT-only. Fix: make the fastpass branch return early too, matching interpreted-path semantics, instead of falling through to the assignment."
+    },
+    {
+      "id": "proto-record",
+      "c": "git-only",
+      "turns": 8,
+      "cost": 0.2564858,
+      "ms": 27549,
+      "kw": "3/3",
+      "sha": true,
+      "answer": "This closed-key pass-through (`packages/zod/src/v4/core/schemas.ts:3186-3191`, `def.mode === \"loose\"` branch) writes unrecognized input keys into a plain `payload.value = {}` via `payload.value[key] = input[key]`. Assigning to the literal `__proto__` key on a plain object hits the inherited setter and replaces the result's own prototype instead of creating a data property — a prototype-pollution vector, since `JSON.parse('{\"__proto__\":{\"isAdmin\":true}}')` produces `__proto__` as a real own key.\n\nHistory: commit 4cc4053d (\"fix: honor loose mode for closed record key schemas\", #6157) added this loose-mode pass-through, then a follow-up commit in the same PR fixed it to skip `__proto__`, explaining: \"The open-key branch and `z.object`'s catchall loop already skip it; mirror that\" — those two spots were hardened earlier in 76e8f706 (#5898) and 31384464 (#6371). Referenced advisory: GHSA-r34p-xfmx-58wv."
+    },
+    {
+      "id": "proto-record",
+      "c": "memory",
+      "turns": 1,
+      "cost": 0.10096920000000001,
+      "ms": 8008,
+      "kw": "3/3",
+      "sha": true,
+      "answer": "Skips `__proto__` because the closed-key pass-through assembles the result with a plain `for...in` loop into `{}`; an own `\"__proto__\"` key (e.g. from `JSON.parse`) would go through the inherited setter and replace the result's prototype instead of setting a normal property — prototype pollution. Fixed in commit 4cc4053d (\"fix(record): don't pass __proto__ through looseRecord's closed key path\"), which mirrors the guard already present in the open-key branch and in `z.object`'s catchall loop (itself from 76e8f706, #5898). Same root issue as the broader `__proto__`-assignment bug family in this codebase (see also 9c540db8, ead9fcb3) — any `output[key] = value` assembly into a fresh object is unsafe for input-derived or key-schema-derived `__proto__` keys unless guarded or done via `defineProperty`."
+    },
+    {
+      "id": "xor-matches",
+      "c": "git-only",
+      "turns": 8,
+      "cost": 0.18120440000000002,
+      "ms": 19945,
+      "kw": "2/3",
+      "sha": true,
+      "answer": "`matches` (option indices) was added in commit 4c27fe87 (#6376, fixing #6342).\n\nReason: before this fix, when multiple `z.xor()` options matched the input, the issue carried `errors: []` and `inclusive: false` but no detail on *which* options overlapped — English locale had no message case for it, so users just saw \"Invalid input\" with no diagnostic info. `matches` gives the granular channel identifying the overlapping options (locale renders \"received 2 (options 0, 1)\"), replacing the empty/bare message. Zero-match path was left unchanged (still per-option `errors`)."
+    },
+    {
+      "id": "xor-matches",
+      "c": "memory",
+      "turns": 2,
+      "cost": 0.119033,
+      "ms": 9572,
+      "kw": "3/3",
+      "sha": true,
+      "answer": "`matches` confirmed in errors.ts (current code).\n\nBecause a zero-match failure and a multiple-match failure are different defects needing different diagnostics, but originally both collapsed into the same `invalid_union` issue with `errors: []`, giving a bare \"Invalid input\" for the multi-match case. Commit 4c27fe87 (PR #6376) added `matches` — indices of options that matched — so the en locale can report \"expected exactly one matching option, received N (options i, j)\" instead of a message with no info about the overlap. `matches` is the sole granular channel (no restated count/indices in the message itself, per a follow-up simplification in the same PR). Zero-match path is unchanged, still reporting each option's own errors."
+    },
+    {
+      "id": "domain-lookahead",
+      "c": "git-only",
+      "turns": 5,
+      "cost": 0.1516694,
+      "ms": 17623,
+      "kw": "3/3",
+      "sha": true,
+      "answer": "Lookahead `(?=.{1,253}$)` caps total domain length at 253 chars (RFC 1035 max), checked before the main pattern matches. Without it, the length-check quantifiers only bound individual labels (each ≤63 via `{0,61}` + boundary chars), not the whole string — a domain could chain unlimited labels.\n\nAdded in commit 2a5164f5 (#6035, \"enforce RFC 1035 length limits in regexes.domain\"), to match `hostname`'s existing lookahead and close issue #5965. Same commit also capped the TLD label at 63 chars (`{2,63}`, previously unbounded `{2,}`)."
+    },
+    {
+      "id": "domain-lookahead",
+      "c": "memory",
+      "turns": 3,
+      "cost": 0.1336678,
+      "ms": 17010,
+      "kw": "3/3",
+      "sha": true,
+      "answer": "The leading `(?=.{1,253}$)` enforces the RFC 1035 total-length cap of 253 characters. The rest of the pattern only bounds each label to 63 chars via `{0,61}` repeated per group — nothing in a repeated-group quantifier can cap the *sum* across all repetitions, so without a separate assertion an arbitrarily long domain of short labels would pass. The lookahead checks total string length up front, mirroring what `regexes.hostname` already did.\n\nAdded in commit `2a5164f5` (#6035, closes #5965): \"Adds the RFC 1035 length limits that `regexes.hostname` already enforced: a 253-character total via a leading lookahead, and a 63-character cap on the TLD label.\""
+    },
+    {
+      "id": "anchor-helper",
+      "c": "git-only",
+      "turns": 5,
+      "cost": 0.166342,
+      "ms": 17773,
+      "kw": "3/3",
+      "sha": true,
+      "answer": "Bundle-size fix for esbuild's dead-code elimination, not a code-organization choice.\n\nBefore: `date` was `/*@__PURE__*/ new RegExp(\\`^${dateSource}$\\`)`. esbuild refuses to drop a `@__PURE__`-annotated call when its own argument is a template literal with interpolation — so even when `date` was unreachable (tree-shaken elsewhere), the `new RegExp(...)` call and `dateSource` survived into every bundle, including `zod/mini`.\n\nFix: move the interpolation into a separate `anchor()` function body, so the `@__PURE__` call site (`anchor(dateSource)`) has no interpolation itself — esbuild then tree-shakes it when unused. Rollup already handled the original form correctly (byte-identical either way); this is esbuild-specific.\n\nCommit e25b68e1 (\"perf(v4): let three dead declarations tree-shake under esbuild\", #6381): gzip savings of -11.2% (`z.boolean()`), -9.6% (`z.string()`), -7.5% (3-key object) under esbuild."
+    },
+    {
+      "id": "anchor-helper",
+      "c": "memory",
+      "turns": 5,
+      "cost": 0.17135060000000002,
+      "ms": 16594,
+      "kw": "3/3",
+      "sha": true,
+      "answer": "esbuild won't tree-shake a `@__PURE__`-annotated call whose argument interpolates a variable — only a call whose argument is a static literal qualifies for removal. Writing `anchor(new RegExp(\\`^${dateSource}$\\`))` inline pins `date` into every bundle since the interpolation sits at the annotated call site. Moving the interpolation into `anchor()`'s own body, and annotating `anchor(dateSource)` (no interpolation at the call site) instead, lets esbuild drop the whole declaration when unused. Confirmed byte-identical rollup output and up to -11.2% gzip on esbuild bundles (e.g. `z.boolean()`) in commit e25b68e1 (`perf(v4): let three dead declarations tree-shake under esbuild`, #6381)."
+    },
+    {
+      "id": "prototype-methods",
+      "c": "git-only",
+      "turns": 4,
+      "cost": 0.15057140000000002,
+      "ms": 18378,
+      "kw": "3/3",
+      "sha": true,
+      "answer": "I have enough. Answering directly.\n\nPrototype placement is deliberate, from commit `3063993a` (#6318, \"perf(v4): cut per-schema memory ~90% by moving methods to the prototype\"). Before it, methods were own properties, pushing instances past V8's inline-slot limit — 7709 bytes retained for `z.string()`, 198 MB for a 500-schema catalogue. Moving methods to the prototype (materializing via getters on first access) cut retained size ~90% and made construction 45–83% faster.\n\nWhat got measurably worse: **bundle size**, the one axis this commit itself regressed — +150–200 B gzipped (+1% classic, +5% mini). Separately, follow-up commit `bf010ad1` fixed a regression where redefining an accessor (`~standard`) off the prototype demoted instances to V8 dictionary mode, costing 2x on `z.object().parse`."
+    },
+    {
+      "id": "prototype-methods",
+      "c": "memory",
+      "turns": 1,
+      "cost": 0.1105752,
+      "ms": 4714,
+      "kw": "3/3",
+      "sha": true,
+      "answer": "Schema methods moved from own properties to the prototype in commit 3063993a (#6318). Instances that define methods as own properties push V8 past its inline-slot threshold — the memory step function jumps at 13 and 21 own properties, so eager per-instance methods forced instances into the expensive tier. Moving methods to the prototype (materializing lazily via getters on first access) cut retained size ~90% (`z.string()` 7709→816 bytes) and made construction 45–83% faster, with parse throughput unchanged.\n\nWhat got measurably worse: bundle size, by a fixed ~150–200 B gzipped per build (+1% classic, +5% mini) — the one axis that regressed."
+    },
+    {
+      "id": "catch-optin",
+      "c": "git-only",
+      "turns": 7,
+      "cost": 0.22473500000000002,
+      "ms": 24659,
+      "kw": "3/3",
+      "sha": true,
+      "answer": "**Commit `1cab6938` (PR #5939, fixing #5937).**\n\nBefore it, `$ZodCatch`'s `optin` deferred to its inner schema's `optin`. When v4.4.0 tightened object parsing to reject absent keys unless `optin === \"optional\"`, that made `z.preprocess(...).catch([])`-style fields (inner schema not itself `optin`) fail on `{}` — even though `.catch()` should always tolerate a missing key and substitute its catch value. Catch's handler runs on `undefined` regardless of the inner schema's optionality, so `optin` must unconditionally be `\"optional\"` to advertise that to `$ZodObject`. The commit also added a `caught` flag on `ParsePayload` so `.catch().optional()` still short-circuits to `undefined` rather than surfacing the catch value."
+    },
+    {
+      "id": "catch-optin",
+      "c": "memory",
+      "turns": 1,
+      "cost": 0.11203719999999999,
+      "ms": 5747,
+      "kw": "3/3",
+      "sha": true,
+      "answer": "$ZodCatch is unconditionally `optin === \"optional\"` because catch's handler always tolerates missing input (runs with `undefined`, produces a catch value) — so `$ZodObject` must be told absent keys are legal wherever `.catch()` sits, not just when the inner schema separately allows it.\n\nRestored regression: `.catch()` had previously deferred `optin` to the inner schema. When v4.4.0 tightened object parsing to reject absent keys unless `optin === \"optional\"`, patterns like `z.preprocess(...).catch([])` started failing on `{}` even though catch should have recovered. Fixed in commit 1cab6938 (#5937/#5939).\n\nSide effect handled in the same commit: to keep `.catch().optional()` short-circuiting to `undefined` on missing input (rather than surfacing the catch value), a `caught` flag was added to `ParsePayload`, set whenever `catchValue` fires, read by `handleOptionalResult` to override with `undefined`. (Later generalized/renamed across #5941 and #6419 — see `fallback`/three-rung `optin` refactor.)"
+    },
+    {
+      "id": "iso-cycle",
+      "c": "git-only",
+      "turns": 4,
+      "cost": 0.15722260000000002,
+      "ms": 15904,
+      "kw": "3/3",
+      "sha": true,
+      "answer": "Fix for a circular-import bug: commit dfd8766b (`fix(v4): break circular import between classic schemas and iso (#5275) (#5926)`).\n\nCause: `schemas.ts` imported `iso.ts` to forward deprecated `ZodString.{datetime,date,time,duration}` proxies; `iso.ts` imported back from `schemas.ts` to extend `ZodStringFormat`. Two-way cycle, flagged by Rollup (`CIRCULAR_DEPENDENCY`) when bundling.\n\nFix moved the `ZodISODateTime`/`ZodISODate`(/`Duration`/`Time`) class definitions into `schemas.ts`, next to their `ZodStringFormat` base, and made the deprecated proxies call `core._iso*` builders directly instead of going through `iso.ts`. `iso.ts` became a thin facade: re-exports the classes from `schemas.ts`, exposes `z.iso.*` builder functions. Public API unchanged. A regression test (`no-circular-imports.test.ts`, DFS over the import graph) now guards against reintroducing the cycle."
+    },
+    {
+      "id": "iso-cycle",
+      "c": "memory",
+      "turns": 1,
+      "cost": 0.10665920000000001,
+      "ms": 7057,
+      "kw": "3/3",
+      "sha": true,
+      "answer": "Because `iso.ts` importing `schemas.ts` (for `ZodStringFormat` base) while `schemas.ts` imported `iso.ts` (to forward deprecated `ZodString.datetime/date/time/duration` proxies) formed a two-way cycle that bundlers like Rollup flagged.\n\nFix (commit `dfd8766b`, PR #5275/#5926): move `ZodISODateTime`/`ZodISODate`/`ZodISOTime`/`ZodISODuration` class definitions into `schemas.ts`, next to their `ZodStringFormat` base, and have the deprecated proxies call the underlying `core._iso*` builders directly. `iso.ts` becomes a thin namespace facade re-exporting those classes plus the `z.iso.*` builder functions.\n\nPublic API unchanged (`z.iso.datetime()`, `z.iso.ZodISODateTime`, top-level `ZodISODateTime`, `z.string().datetime()` all work as before); the cycle is just gone. Two regression tests guard it: a static import-graph DFS in `classic/tests/no-circular-imports.test.ts`, and a Rollup-bundling check in `packages/treeshake`."
+    },
+    {
+      "id": "base64-revert",
+      "c": "git-only",
+      "turns": 4,
+      "cost": 0.14260899999999999,
+      "ms": 14902,
+      "kw": "3/3",
+      "sha": true,
+      "answer": "Yes — implemented twice and currently active on `main`.\n\n1. `91a7d0d1` fixed it: `atob()` strips whitespace before decoding, so `\"123 \"`-style strings slipped past the length%4 check in `isValidBase64` (ref #5865).\n2. `23edf484` reverted it minutes later — not a correctness issue, but process: the commit landed directly on `main` because a worktree's upstream tracking pointed at `origin/main` instead of a feature branch, so the push went to the wrong ref. Reverted so it could go through a normal PR.\n3. `584b1089` (#5888) re-applied the identical fix via proper PR.\n\nCurrent `isValidBase64` in `packages/zod/src/v4/core/schemas.ts` still has the whitespace rejection."
+    },
+    {
+      "id": "base64-revert",
+      "c": "memory",
+      "turns": 2,
+      "cost": 0.11595820000000001,
+      "ms": 9517,
+      "kw": "3/3",
+      "sha": true,
+      "answer": "Yes, implemented twice. First attempt (91a7d0d1) landed directly on `main` by accident — meant for a new branch, but worktree upstream tracking pointed at `main`, so the push went there. It was reverted (23edf484) so the change could go through a normal PR review instead of being force-committed. The same fix was then re-applied properly via PR #5888 (584b1089), now current on `main`."
+    },
+    {
+      "id": "tuple-length",
+      "c": "git-only",
+      "turns": 7,
+      "cost": 0.22394600000000003,
+      "ms": 28592,
+      "kw": "3/3",
+      "sha": true,
+      "answer": "Found the answer in git history. Here's the explanation.\n\n## Why the optin/optout walk, not `prefixItems.length`\n\n**Correctness bug, not style.** Commit `97edd70a` (#6194) fixed it: `minItems` was `prefixItems.length` before, so a tuple with an optional/defaulted tail element — `z.tuple([z.string(), z.number().optional()])` — emitted `minItems: 2`, but `.safeParse([\"a\"])` succeeds at runtime. The JSON Schema was stricter than the parser it was supposed to describe.\n\n`$ZodTuple`'s own runtime bound is `getTupleOptStart(items, \"optin\"|\"optout\")`, not `items.length` — the parser already walks the tail for trailing optional/defaulted items to compute the true minimum arity. `minItems` was made to derive from that same walk so the emitted schema tracks what `.parse()` actually accepts, instead of the naive prefix count.\n\nFollow-up `eb4682c9` (#6418) later fixed a second divergence: in input mode the walk read the runtime `optin` flag, which diverges from the *declared* input type for `.preprocess()`/`.transform()`-wrapped items (they set `optin` at runtime but their static input type is still required) — routed through `inputOptin()` to match `objectProcessor`'s `required` handling (#6133). See `wiki/optionality.md`."
+    },
+    {
+      "id": "tuple-length",
+      "c": "memory",
+      "turns": 1,
+      "cost": 0.1092572,
+      "ms": 8293,
+      "kw": "3/3",
+      "sha": true,
+      "answer": "`prefixItems.length` counts declared items, not minimum required ones — optional/defaulted trailing elements don't need to be present at runtime. `$ZodTuple` itself derives its minimum arity via `getTupleOptStart(items, \"optin\"|\"optout\")`, walking back from the end to find where optional/defaulted items start; `minItems` must mirror that or the emitted schema is stricter than `.parse()` accepts.\n\nConfirmed by history: commit 97edd70a (#6194) fixed openapi-3.0 emitting `minItems: prefixItems.length`, so `z.tuple([z.string(), z.number().optional()])` got `minItems: 2` while `.safeParse([\"a\"])` succeeds — the length-based count was simply wrong. Commit eb4682c9 (#6418) then fixed the same walk in input mode to use `inputOptin` (declared input type) instead of the runtime `optout` flag, since a `.preprocess()`/transform can make input and output optionality diverge.\n\nSo: it tracks the parser's actual acceptance boundary, not schema array length."
+    }
+  ]
+}

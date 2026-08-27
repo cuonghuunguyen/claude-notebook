@@ -1,46 +1,40 @@
-# Spike: memory of *why*, not memory of *where*
+# Spike: memory of why, not memory of where
 
 **Run date:** 2026-08-16 · **Branch:** `claude/github-repo-benchmark-61eabd` · **Harness:** `eval/why-spike/` · **Raw data:** `eval/why-spike/results/*.json`
 
-## What this tests
+## Scope
 
-`E2E_BENCHMARK_MULTI_REPO.md` concluded the system loses to grep at finding
-code. That benchmark asked 24 questions whose answers were all sitting in a
-file — the terrain where search wins by construction.
+Prior conclusion (`E2E_BENCHMARK_MULTI_REPO.md`): the system loses to grep at
+finding code, over 24 questions whose answers sat in a file — the regime search
+wins by construction. This spike measures the opposite question type: why the
+code is as it is (why a branch returns early, what the obvious implementation
+broke, what was tried and reverted), not recoverable from the source. It also
+fixes what made the earlier cross-session test vacuous: the memory now holds
+knowledge mined from the repository's own history.
 
-This spike asks the opposite kind of question: **why is the code like this?**
-Why does this branch return early, what did the obvious implementation break,
-what was tried and reverted. None of it is recoverable by reading the source.
+## Fact: the memory was empty before
 
-It also fixes what made the earlier cross-session test vacuous: the memory now
-contains real knowledge, mined from the repository's own history.
+- Promised: `spec.md` §1 ("recover architectural invariants and **design
+  decisions**", "recall previous **debugging/fixing experiences**"), §4
+  (`git_commit`, `pull_request` as provenance source types), §7–§8 (promotion
+  lifecycle).
+- Actual: no writer in `packages/`. Non-test callers of `recordExperience` /
+  `recordObservation` are benchmark harnesses and one test fixture only;
+  `git_commit` and `pull_request` are type literals with no producer; the only
+  ingestion path is ts-morph over source files.
+- Consequence: the memory could hold only what the code says, which is grep's
+  strength. **The earlier benchmark measured a knowledge system with an empty
+  knowledge layer.**
+- Schema tell: `experiences` has indexes on `related_nodes` (gin) and
+  `timestamp`, none on a text column — it cannot search knowledge by content.
 
-## Why the memory was empty before
+## Method: capture layer (`src/corpus.ts`, `src/capture.ts`)
 
-`spec.md` §1 promises an agent can "recover architectural invariants and
-**design decisions**" and "recall previous **debugging/fixing experiences**".
-§4 declares `git_commit` and `pull_request` as provenance source types. §7–§8
-specify the whole promotion lifecycle.
-
-Nothing in `packages/` ever writes one. Grepping for non-test callers of
-`recordExperience` / `recordObservation` returns only benchmark harnesses and a
-test fixture. `git_commit` and `pull_request` exist as type literals with no
-producer anywhere. The only ingestion path is ts-morph reading source files.
-
-So the memory could only ever hold what the code already says — which is
-exactly what grep is good at. **The earlier benchmark measured a knowledge
-system with an empty knowledge layer.**
-
-There is a second structural tell: the `experiences` table has indexes on
-`related_nodes` (gin) and `timestamp`, and none on any text column. The schema
-cannot search knowledge by content.
-
-## The capture layer (`src/corpus.ts`, `src/capture.ts`)
-
-Mines zod's git history for commits that *explain themselves* — a body over
-200 characters containing reasoning, not a bare "fix typo" whose knowledge is
-re-derivable from the diff. Each becomes a real `Experience` through the
-shipped `recordExperience`, bound to the file nodes it touched.
+Mines zod git history for self-explaining commits: body over 200 characters
+containing reasoning, excluding bare messages such as "fix typo" whose
+knowledge is re-derivable from the diff. Each becomes an `Experience` via the
+shipped `recordExperience`, bound to the file nodes its commit touched. Nothing
+in `packages/` was modified.
 
 | | |
 |---|---|
@@ -49,32 +43,25 @@ shipped `recordExperience`, bound to the file nodes it touched.
 | Recorded as experiences bound to code | **94** |
 | Distinct files covered | 91 |
 
-Nothing in `packages/` was modified — the spike is self-contained.
+## Result 1 — retrieval
 
-## Result 1 — retrieval: the shipped path buries the answer
-
-Each question has a known commit that explains it, so retrieval is scored
-without involving an agent at all.
+Each question has a known answering commit; scored without an agent.
 
 | | recall | MRR |
 |---|---|---|
 | **node-gated** — the shipped design (traverse code, hydrate experiences on exactly those node ids) | 0.70 | **0.13** |
 | **by-meaning** — match the question against the knowledge text itself | **0.90** | **0.75** |
 
-The shipped path returned 10 hits for *every* question, ordered by
-`timestamp DESC`. Once `core/schemas.ts` carries 41 commits' worth of history,
-any traversal touching it pulls a recency-ordered firehose with no relevance
-signal. **This gets worse as the memory grows** — the opposite of what a memory
-layer should do.
-
-Retrieving by meaning ranks the correct commit **first in 6 of 10** and second
-in 3 more.
+- Node-gated returned 10 hits per question, ordered `timestamp DESC`.
+  `core/schemas.ts` carries 41 commits, so any traversal touching it returns a
+  recency-ordered list with no relevance signal. Degrades as memory grows.
+- By-meaning ranks the correct commit first in 6 of 10 questions, second in 3
+  more.
 
 ## Result 2 — against an agent that already has git
 
-The baseline here is not grep. It is the same agent with `git log`, `git show`,
-`git blame` and `git grep` — it can mine the very commits the memory was built
-from. That is the honest bar, and it is a high one.
+Baseline: same agent with `git log`, `git show`, `git blame`, `git grep`, able
+to mine the same commits the memory was built from.
 
 | | git-only baseline | with memory |
 |---|---|---|
@@ -85,9 +72,8 @@ from. That is the honest bar, and it is a high one.
 | Mean duration | 21.7s | **9.7s** (−55%) |
 | Cost, 10 questions | $0.717 | **$0.380** (−47%) |
 
-In 9 of 10 questions the memory condition answered in **a single turn**, with
-no tool calls at all. The baseline needed 3–16 turns of history archaeology to
-reach the same explanation.
+9 of 10 memory answers took a single turn with no tool calls; the baseline
+needed 3–16 turns of history archaeology for the same explanation.
 
 Per-question turns, git-only → memory:
 
@@ -99,67 +85,59 @@ domain-lookahead    4 → 5     iso-cycle           9 → 1
 base64-revert       5 → 1     tuple-length        6 → 1
 ```
 
-**`domain-lookahead` is the control that proves the mechanism.** It is the one
-question where by-meaning retrieval missed the answering commit — and it is the
-one question where memory made the agent *slower* (4 → 5 turns). Retrieval
-quality decides whether context is an asset or a debt, exactly as the earlier
-benchmark found. The correlation holds in both directions.
+`domain-lookahead` is the control: the only question where by-meaning missed
+the answering commit, and the only one where memory made the agent slower
+(4 → 5 turns). Retrieval quality decides whether context is an asset or a debt,
+matching the earlier benchmark; the correlation holds both directions.
 
-## Honest reading of the accuracy number
+## Reading of the accuracy number
 
-The 0.93 → 1.00 gap is the weakest claim here and should not be leaned on.
-Grading counts synonym groups drawn from the real commit message, and the
-memory condition is handed that message — so it is easier for it to hit the
-words. Inspecting the two baseline "misses" shows one is a genuine gap (it
-explained the prototype-methods memory win but never mentioned the bundle-size
-regression that came with it) and one is a wording difference (it explained
-`__proto__` skipping as prototype pollution, correct, but did not mention the
-`JSON.parse` origin the commit gives).
+- The 0.93 → 1.00 gap is the weakest claim here; do not rely on it. Grading
+  counts synonym groups drawn from the real commit message, which the memory
+  condition is handed, so hitting those words is easier for it.
+- Baseline miss 1, a genuine gap: explained the prototype-methods memory win,
+  never mentioned the bundle-size regression that came with it.
+- Baseline miss 2, a wording difference: explained `__proto__` skipping as
+  prototype pollution (correct) without the `JSON.parse` origin the commit
+  gives.
+- **Robust finding is efficiency, not accuracy:** 5.5× fewer turns, 47% lower
+  cost, against an agent that could and did find the same answers itself. The
+  knowledge is recoverable on demand but expensive; the memory precomputes it.
 
-**The robust finding is efficiency, not accuracy:** 5.5× fewer turns and 47%
-lower cost, measured on an agent that could and did find the same answers
-itself. The knowledge is recoverable on demand — it is just expensive, and
-precomputing it is what the memory is selling.
+## Conclusion on direction
 
-## What this says about direction
-
-The earlier benchmark and this spike are the same system measured on two
-different jobs:
+Same system, two jobs:
 
 | | code location | recorded reasoning |
 |---|---|---|
 | Baseline to beat | grep, ~2–3 turns | git archaeology, ~8 turns |
 | Result | **loses** (0.46 vs 0.67 recall) | **wins** (−82% turns) |
 
-The value was never going to come from finding files faster than grep. It comes
-from holding knowledge that **is not in the code at all** and that is expensive
-to reconstruct — which is what you described wanting.
-
-Three changes are what the evidence supports, in order:
+Value comes from holding knowledge absent from the code and expensive to
+reconstruct, not from finding files faster than grep. Changes the evidence
+supports, in order:
 
 1. **Build the capture layer.** It does not exist. Git history is the cheapest
-   source and it is already sitting in every repo; session-end capture and PR
-   review threads are the natural next two, and both provenance types are
-   already declared in the spec.
-2. **Retrieve knowledge by its own content**, with code binding used to enrich
-   and rank rather than to gate. Node-gated hydration ordered by recency is a
-   firehose that degrades as the memory fills.
-3. **Give experiences a text index.** The current schema physically cannot
-   search them.
+   source and present in every repo; session-end capture and PR review threads
+   are next, both provenance types already declared in the spec.
+2. **Retrieve knowledge by its own content**, code binding used to enrich and
+   rank rather than gate. Node-gated hydration ordered by recency degrades as
+   memory fills.
+3. **Give experiences a text index.** The current schema cannot search them.
 
-## Limits
+## Limitations
 
 - **n = 10 questions, one repo, single runs.** Trend, not statistics.
 - **Lexical retrieval, not embeddings.** No embedding API here, so by-meaning
-  uses Postgres full-text ranking. A real embedder should only raise that
-  number, which makes 0.75 MRR a floor rather than a ceiling.
-- **Questions were written by reading the answering commits.** They are real
-  questions about real decisions, but a developer who hit these problems
-  organically might phrase them with less overlap with the commit text.
+  uses Postgres full-text ranking. A real embedder should only raise it, making
+  0.75 MRR a floor, not a ceiling.
+- **Questions were written by reading the answering commits.** Real questions
+  about real decisions, but a developer hitting these problems organically
+  might phrase them with less overlap with the commit text.
 - **Only commit messages were mined.** PR discussion, review comments and
   session history — likely richer sources of "why" — were not touched.
-- **zod has unusually good commit messages.** A repo full of "fix stuff" commits
-  would yield far less. Worth re-running somewhere with mediocre history before
+- **zod has unusually good commit messages.** A repo of low-information commit
+  messages would yield far less. Re-run on a repo with mediocre history before
   generalising.
 
 ## Reproducing

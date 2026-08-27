@@ -1,0 +1,149 @@
+{
+  "date": "2026-08-27",
+  "design": "5 seeded regressions: zod worktree at fix^ (fix not in history), symptom-only bug report, Sonnet worker with Read/Grep/Glob/Edit/Write + git log/show/blame/grep, no test running; graded by applying the fix commit test files and running vitest. memory = queryByMeaning(symptom) top-5 from the 165-commit corpus (answering commit rank 1 on 4/5, rank 2 on base64).",
+  "tasks": [
+    {
+      "id": "base64",
+      "sha": "584b1089",
+      "tests": [
+        "packages/zod/src/v4/classic/tests/string.test.ts",
+        "packages/zod/src/v4/mini/tests/string.test.ts"
+      ],
+      "symptom": "z.base64() accepts strings that contain whitespace. Example: z.base64().safeParse(\"aGVs bG8=\") and z.base64().safeParse(\"aGVsbG8=\\n\") both report success. They should be rejected as invalid base64. Fix this in the zod v4 source."
+    },
+    {
+      "id": "record",
+      "sha": "4cc4053d",
+      "tests": [
+        "packages/zod/src/v4/classic/tests/record.test.ts"
+      ],
+      "symptom": "z.looseRecord with a closed key schema does not pass unrecognized keys through: z.looseRecord(z.enum([\"foo\",\"bar\"]), z.any()).parse({foo:1, bar:{}, baz:null}) throws on `baz` instead of returning it. Loose mode must keep unrecognized keys (recognized keys still validated; plain z.record must still reject them). While fixing this, make sure an input key named __proto__ coming from JSON.parse cannot change the prototype of the parsed result. Fix this in the zod v4 source."
+    },
+    {
+      "id": "tuple",
+      "sha": "97edd70a",
+      "tests": [
+        "packages/zod/src/v4/classic/tests/to-json-schema.test.ts"
+      ],
+      "symptom": "z.toJSONSchema does not constrain closed tuple length. For schema = z.tuple([z.string(), z.string(), z.object({lang:z.string()})]): target draft-2020-12 output lacks items:false, minItems:3, maxItems:3; draft-7 lacks additionalItems:false, minItems, maxItems; openapi-3.0 lacks maxItems. For z.tuple([z.string(), z.number().optional()]) the expected output is minItems:1, maxItems:2 (trailing optional/defaulted items do not count toward minItems; in input mode use input optionality). Explicit .min()/.max() checks must still take precedence. Fix this in the zod v4 source."
+    },
+    {
+      "id": "jit",
+      "sha": "69be843f",
+      "tests": [
+        "packages/zod/src/v4/classic/tests/optional.test.ts"
+      ],
+      "symptom": "With schema = z.object({ a: z.string().optional().superRefine((_v, ctx) => { ctx.addIssue({code:\"custom\", message:\"bad\"}); ctx.value = \"leaked\"; }) }), calling schema.safeParse({}) returns { success: true, data: { a: \"leaked\" } }. Expected: success true and no `a` key in data (the issue is swallowed for the absent optional key, and the value written alongside it must be dropped too). schema.safeParse({}, { jitless: true }) and safeParseAsync already behave correctly; only the default synchronous path is wrong. A present key ({a:\"x\"}) must still fail. Fix this in the zod v4 source."
+    },
+    {
+      "id": "domain",
+      "sha": "2a5164f5",
+      "tests": [
+        "packages/zod/src/v4/classic/tests/string.test.ts"
+      ],
+      "symptom": "z.httpUrl() accepts hosts that violate RFC 1035 length limits. http://<five labels of 50 'a' chars>.com (258 chars total) is accepted; it must be rejected because the total hostname exceeds 253 characters. http://example.<64 'a' chars> is accepted; it must be rejected because a TLD label exceeds 63 characters. A host of exactly 253 chars must still be accepted. Fix this in the zod v4 source (regexes)."
+    }
+  ],
+  "runs": [
+    {
+      "task": "base64",
+      "condition": "bare",
+      "turns": 5,
+      "costUsd": 0.14592159999999998,
+      "durationMs": 12385,
+      "testsPass": true,
+      "diff": "diff --git a/packages/zod/src/v4/core/schemas.ts b/packages/zod/src/v4/core/schemas.ts\nindex ee66f3fc..12ffb466 100644\n--- a/packages/zod/src/v4/core/schemas.ts\n+++ b/packages/zod/src/v4/core/schemas.ts\n@@ -887,6 +887,8 @@ export const $ZodCIDRv6: core.$constructor<$ZodCIDRv6> = /*@__PURE__*/ core.$con\n //////////////////////////////   ZodBase64   //////////////////////////////\n export function isValidBase64(data: string): boolean {\n   if (data === \"\") return true;\n+  // atob ignores whitespace, so reject it up front.\n+  if (/\\s/.test(data)) return false;\n   if (data.length % 4 !== 0) return false;\n   try {\n     // @ts-ignore\n",
+      "answer": "Changed `packages/zod/src/v4/core/schemas.ts`: `isValidBase64` now rejects whitespace before the length check, since `atob()` strips whitespace internally and would otherwise let strings like `\"aGVs bG8=\"` slip past the mod-4 length guard."
+    },
+    {
+      "task": "base64",
+      "condition": "memory",
+      "turns": 6,
+      "costUsd": 0.1670816,
+      "durationMs": 22606,
+      "testsPass": true,
+      "diff": "diff --git a/packages/zod/src/v4/core/schemas.ts b/packages/zod/src/v4/core/schemas.ts\nindex ee66f3fc..12ffb466 100644\n--- a/packages/zod/src/v4/core/schemas.ts\n+++ b/packages/zod/src/v4/core/schemas.ts\n@@ -887,6 +887,8 @@ export const $ZodCIDRv6: core.$constructor<$ZodCIDRv6> = /*@__PURE__*/ core.$con\n //////////////////////////////   ZodBase64   //////////////////////////////\n export function isValidBase64(data: string): boolean {\n   if (data === \"\") return true;\n+  // atob ignores whitespace, so reject it up front.\n+  if (/\\s/.test(data)) return false;\n   if (data.length % 4 !== 0) return false;\n   try {\n     // @ts-ignore\n",
+      "answer": "Changed: `packages/zod/src/v4/core/schemas.ts` — `isValidBase64` now rejects whitespace before the length check, since `atob()` silently strips whitespace and let padded-looking strings with embedded/trailing spaces or newlines pass."
+    },
+    {
+      "task": "record",
+      "condition": "bare",
+      "turns": 14,
+      "costUsd": 0.33892540000000004,
+      "durationMs": 72585,
+      "testsPass": true,
+      "diff": "diff --git a/packages/zod/src/v4/core/schemas.ts b/packages/zod/src/v4/core/schemas.ts\nindex d5f186d8..521e4bee 100644\n--- a/packages/zod/src/v4/core/schemas.ts\n+++ b/packages/zod/src/v4/core/schemas.ts\n@@ -3014,6 +3014,10 @@ export const $ZodRecord: core.$constructor<$ZodRecord> = /*@__PURE__*/ core.$con\n       let unrecognized!: string[];\n       for (const key in input) {\n         if (!recordKeys.has(key)) {\n+          if (def.mode === \"loose\") {\n+            if (key !== \"__proto__\") payload.value[key] = input[key];\n+            continue;\n+          }\n           unrecognized = unrecognized ?? [];\n           unrecognized.push(key);\n         }\n",
+      "answer": "That's fine, `/tmp/check_loose.ts` was never used and is harmless outside this worktree.\n\n**File changed:** `packages/zod/src/v4/core/schemas.ts` — in `$ZodRecord`'s closed-key-schema branch (`def.keyType._zod.values` set, e.g. `z.enum`), unrecognized keys now pass through unchanged when `def.mode === \"loose\"` (matching the pattern-key branch's existing loose behavior) instead of always erroring, with a `__proto__` guard so a JSON-parsed key of that name can't repoint the result's prototype."
+    },
+    {
+      "task": "record",
+      "condition": "memory",
+      "turns": 9,
+      "costUsd": 0.277905,
+      "durationMs": 44171,
+      "testsPass": true,
+      "diff": "diff --git a/packages/zod/src/v4/core/schemas.ts b/packages/zod/src/v4/core/schemas.ts\nindex d5f186d8..6b3d0d01 100644\n--- a/packages/zod/src/v4/core/schemas.ts\n+++ b/packages/zod/src/v4/core/schemas.ts\n@@ -3014,8 +3014,15 @@ export const $ZodRecord: core.$constructor<$ZodRecord> = /*@__PURE__*/ core.$con\n       let unrecognized!: string[];\n       for (const key in input) {\n         if (!recordKeys.has(key)) {\n-          unrecognized = unrecognized ?? [];\n-          unrecognized.push(key);\n+          if (def.mode === \"loose\") {\n+            // skip __proto__ so it can't replace the result prototype via the\n+            // assignment setter on the plain {} we build into\n+            if (key === \"__proto__\") continue;\n+            payload.value[key] = input[key];\n+          } else {\n+            unrecognized = unrecognized ?? [];\n+            unrecognized.push(key);\n+          }\n         }\n       }\n       if (unrecognized && unrecognized.length > 0) {\n",
+      "answer": "Changed `packages/zod/src/v4/core/schemas.ts`: in `$ZodRecord`'s closed-key-set branch, unrecognized keys now pass through unchanged when `def.mode === \"loose\"` (matching the open-key branch's behavior) instead of always raising `unrecognized_keys`, with `__proto__` explicitly skipped to prevent prototype pollution via the plain-object assignment."
+    },
+    {
+      "task": "tuple",
+      "condition": "bare",
+      "turns": 35,
+      "costUsd": 0.7334446000000001,
+      "durationMs": 170809,
+      "testsPass": false,
+      "diff": "diff --git a/packages/zod/src/v4/core/json-schema-processors.ts b/packages/zod/src/v4/core/json-schema-processors.ts\nindex c8aab8e7..499a79b4 100644\n--- a/packages/zod/src/v4/core/json-schema-processors.ts\n+++ b/packages/zod/src/v4/core/json-schema-processors.ts\n@@ -374,10 +374,21 @@ export const tupleProcessor: Processor<schemas.$ZodTuple> = (schema, ctx, _json,\n       })\n     : null;\n \n+  // trailing optional/defaulted items don't count toward minItems\n+  let requiredCount = def.items.length;\n+  while (requiredCount > 0) {\n+    const v = def.items[requiredCount - 1]!._zod;\n+    const isOptional = ctx.io === \"input\" ? v.optin !== undefined : v.optout !== undefined;\n+    if (!isOptional) break;\n+    requiredCount--;\n+  }\n+\n   if (ctx.target === \"draft-2020-12\") {\n     json.prefixItems = prefixItems;\n     if (rest) {\n       json.items = rest;\n+    } else {\n+      json.items = false;\n     }\n   } else if (ctx.target === \"openapi-3.0\") {\n     json.items = {\n@@ -387,7 +398,7 @@ export const tupleProcessor: Processor<schemas.$ZodTuple> = (schema, ctx, _json,\n     if (rest) {\n       json.items.anyOf!.push(rest);\n     }\n-    json.minItems = prefixItems.length;\n+    json.minItems = requiredCount;\n     if (!rest) {\n       json.maxItems = prefixItems.length;\n     }\n@@ -395,9 +406,16 @@ export const tupleProcessor: Processor<schemas.$ZodTuple> = (schema, ctx, _json,\n     json.items = prefixItems;\n     if (rest) {\n       json.additionalItems = rest;\n+    } else {\n+      json.additionalItems = false;\n     }\n   }\n \n+  if (!rest) {\n+    json.minItems = requiredCount;\n+    json.maxItems = prefixItems.length;\n+  }\n+\n   // length\n   const { minimum, maximum } = schema._zod.bag as {\n     minimum?: number;\n",
+      "answer": "I've verified the fix manually via `play.ts` (restored to original afterward) rather than running the test suite, per your instructions.\n\n**File changed:** `packages/zod/src/v4/core/json-schema-processors.ts` (`tupleProcessor`)\n\n**Rationale:** For closed tuples (no `rest`), the processor now sets `items: false` (draft-2020-12) / `additionalItems: false` (draft-7) and derives `minItems`/`maxItems` from the item count — with `minItems` excluding a trailing run of optional/defaulted items (checked via `optin`/`optout` per the `io` mode, matching how `objectProcessor` computes required keys) — while the existing explicit `.min()`/`.max()` bag override still applies last and takes precedence."
+    },
+    {
+      "task": "tuple",
+      "condition": "memory",
+      "turns": 13,
+      "costUsd": 0.3455678,
+      "durationMs": 59964,
+      "testsPass": true,
+      "diff": "diff --git a/packages/zod/src/v4/core/json-schema-processors.ts b/packages/zod/src/v4/core/json-schema-processors.ts\nindex c8aab8e7..8cf04b3f 100644\n--- a/packages/zod/src/v4/core/json-schema-processors.ts\n+++ b/packages/zod/src/v4/core/json-schema-processors.ts\n@@ -374,11 +374,23 @@ export const tupleProcessor: Processor<schemas.$ZodTuple> = (schema, ctx, _json,\n       })\n     : null;\n \n+  const optKey = ctx.io === \"input\" ? \"optin\" : \"optout\";\n+  let minItems = def.items.length;\n+  while (minItems > 0 && (def.items[minItems - 1] as schemas.SomeType)._zod[optKey] === \"optional\") {\n+    minItems--;\n+  }\n+  const maxItems = def.items.length;\n+  const isClosed = !def.rest;\n+\n   if (ctx.target === \"draft-2020-12\") {\n     json.prefixItems = prefixItems;\n-    if (rest) {\n+    if (isClosed) {\n+      json.items = false;\n+    } else if (rest) {\n       json.items = rest;\n     }\n+    if (minItems > 0) json.minItems = minItems;\n+    if (isClosed) json.maxItems = maxItems;\n   } else if (ctx.target === \"openapi-3.0\") {\n     json.items = {\n       anyOf: prefixItems,\n@@ -387,18 +399,20 @@ export const tupleProcessor: Processor<schemas.$ZodTuple> = (schema, ctx, _json,\n     if (rest) {\n       json.items.anyOf!.push(rest);\n     }\n-    json.minItems = prefixItems.length;\n-    if (!rest) {\n-      json.maxItems = prefixItems.length;\n-    }\n+    if (minItems > 0) json.minItems = minItems;\n+    if (isClosed) json.maxItems = maxItems;\n   } else {\n     json.items = prefixItems;\n-    if (rest) {\n+    if (isClosed) {\n+      json.additionalItems = false;\n+    } else if (rest) {\n       json.additionalItems = rest;\n     }\n+    if (minItems > 0) json.minItems = minItems;\n+    if (isClosed) json.maxItems = maxItems;\n   }\n \n-  // length\n+  // explicit user-defined length checks take precedence\n   const { minimum, maximum } = schema._zod.bag as {\n     minimum?: number;\n     maximum?: number;\n",
+      "answer": "Fine, harmless scratch file outside the worktree — left in place.\n\n**File changed:** `packages/zod/src/v4/core/json-schema-processors.ts` (`tupleProcessor`).\n\nRationale: closed tuples (`!def.rest`) now emit `items: false` (draft-2020-12) / `additionalItems: false` (draft-04/07) plus `minItems`/`maxItems` bounding the tuple to its exact length; `minItems` is derived by walking trailing optional slots via the same `optin`/`optout` flag the parser uses (respecting `ctx.io`), and explicit `.min()`/`.max()` bag values still overwrite these at the end, preserving precedence."
+    },
+    {
+      "task": "jit",
+      "condition": "bare",
+      "turns": 20,
+      "costUsd": 0.4808810000000001,
+      "durationMs": 89575,
+      "testsPass": true,
+      "diff": "diff --git a/packages/zod/src/v4/core/schemas.ts b/packages/zod/src/v4/core/schemas.ts\nindex 6e8c189d..19b91c8a 100644\n--- a/packages/zod/src/v4/core/schemas.ts\n+++ b/packages/zod/src/v4/core/schemas.ts\n@@ -2087,7 +2087,7 @@ export const $ZodObjectJIT: core.$constructor<$ZodObject> = /*@__PURE__*/ core.$\n         doc.write(`const ${id} = ${parseStr(key)};`);\n \n         if (isOptionalIn && isOptionalOut) {\n-          // For optional-in/out schemas, ignore errors on absent keys\n+          // For optional-in/out schemas, ignore errors (and any value written alongside them) on absent keys\n           doc.write(`\n         if (${id}.issues.length) {\n           if (${isPresent}) {\n@@ -2095,15 +2095,20 @@ export const $ZodObjectJIT: core.$constructor<$ZodObject> = /*@__PURE__*/ core.$\n               ...iss,\n               path: iss.path ? [${k}, ...iss.path] : [${k}]\n             })));\n-          }\n-        }\n-        \n-        if (${id}.value === undefined) {\n-          if (${isPresent}) {\n-            newResult[${k}] = undefined;\n+            if (${id}.value === undefined) {\n+              newResult[${k}] = undefined;\n+            } else {\n+              newResult[${k}] = ${id}.value;\n+            }\n           }\n         } else {\n-          newResult[${k}] = ${id}.value;\n+          if (${id}.value === undefined) {\n+            if (${isPresent}) {\n+              newResult[${k}] = undefined;\n+            }\n+          } else {\n+            newResult[${k}] = ${id}.value;\n+          }\n         }\n \n       `);\n",
+      "answer": "That's fine, it's just a temp scratch file outside the worktree — leaving it.\n\n**Changed:** `packages/zod/src/v4/core/schemas.ts` — in `$ZodObjectJIT`'s `generateFastpass`, the optional-in/out branch pushed issues conditionally on key presence but always wrote `newResult[key]` regardless, unlike the non-JIT `handlePropertyResult` which fully skips the assignment when swallowing an absent optional key's issues; now the JIT-generated code mirrors that same skip."
+    },
+    {
+      "task": "jit",
+      "condition": "memory",
+      "turns": 16,
+      "costUsd": 0.3957038,
+      "durationMs": 63116,
+      "testsPass": true,
+      "diff": "diff --git a/packages/zod/src/v4/core/schemas.ts b/packages/zod/src/v4/core/schemas.ts\nindex 6e8c189d..d5f186d8 100644\n--- a/packages/zod/src/v4/core/schemas.ts\n+++ b/packages/zod/src/v4/core/schemas.ts\n@@ -2087,23 +2087,21 @@ export const $ZodObjectJIT: core.$constructor<$ZodObject> = /*@__PURE__*/ core.$\n         doc.write(`const ${id} = ${parseStr(key)};`);\n \n         if (isOptionalIn && isOptionalOut) {\n-          // For optional-in/out schemas, ignore errors on absent keys\n+          // For optional-in/out schemas, ignore errors on absent keys — and,\n+          // like the interpreted path, drop the value produced alongside them.\n           doc.write(`\n-        if (${id}.issues.length) {\n-          if (${isPresent}) {\n+        const ${id}_present = ${isPresent};\n+        if (!${id}.issues.length || ${id}_present) {\n+          if (${id}.issues.length) {\n             payload.issues = payload.issues.concat(${id}.issues.map(iss => ({\n               ...iss,\n               path: iss.path ? [${k}, ...iss.path] : [${k}]\n             })));\n           }\n-        }\n-        \n-        if (${id}.value === undefined) {\n-          if (${isPresent}) {\n-            newResult[${k}] = undefined;\n+\n+          if (${id}.value !== undefined || ${id}_present) {\n+            newResult[${k}] = ${id}.value;\n           }\n-        } else {\n-          newResult[${k}] = ${id}.value;\n         }\n \n       `);\n@@ -2126,11 +2124,7 @@ export const $ZodObjectJIT: core.$constructor<$ZodObject> = /*@__PURE__*/ core.$\n         }\n \n         if (${id}_present) {\n-          if (${id}.value === undefined) {\n-            newResult[${k}] = undefined;\n-          } else {\n-            newResult[${k}] = ${id}.value;\n-          }\n+          newResult[${k}] = ${id}.value;\n         }\n \n       `);\n",
+      "answer": "That's fine, `/tmp/check-6407.ts` was outside the worktree and never used. The in-repo scratch file is removed.\n\n**Changed:** `packages/zod/src/v4/core/schemas.ts` — the object JIT's `optin`/`optout`-optional codegen branch suppressed a swallowed key's issue but still ran `newResult[k] = id.value`, leaking a value a failing check wrote; gated the whole issue-concat + assignment behind `!id.issues.length || id_present` (matching the interpreted path), and collapsed the required-in branch's identical `undefined`/value arms into one assignment."
+    },
+    {
+      "task": "domain",
+      "condition": "bare",
+      "turns": 12,
+      "costUsd": 0.329432,
+      "durationMs": 56655,
+      "testsPass": true,
+      "diff": "diff --git a/packages/zod/src/v4/core/regexes.ts b/packages/zod/src/v4/core/regexes.ts\nindex db09762f..2d2a37de 100644\n--- a/packages/zod/src/v4/core/regexes.ts\n+++ b/packages/zod/src/v4/core/regexes.ts\n@@ -86,7 +86,7 @@ export const base64url: RegExp = /^[A-Za-z0-9_-]*$/;\n export const hostname: RegExp =\n   /^(?=.{1,253}\\.?$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[-0-9a-zA-Z]{0,61}[0-9a-zA-Z])?)*\\.?$/;\n \n-export const domain: RegExp = /^([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}$/;\n+export const domain: RegExp = /^(?=.{1,253}$)([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,63}$/;\n \n export const httpProtocol: RegExp = /^https?$/;\n \n",
+      "answer": "Fixed `packages/zod/src/v4/core/regexes.ts` — the `domain` regex (used as `httpUrl`'s hostname check in both classic and mini) now anchors total hostname length to `{1,253}` via a lookahead, and bounds the TLD label to `{2,63}` instead of unbounded `{2,}`. Per-label 63-char bound for non-final labels was already correct."
+    },
+    {
+      "task": "domain",
+      "condition": "memory",
+      "turns": 11,
+      "costUsd": 0.3070590000000001,
+      "durationMs": 51060,
+      "testsPass": true,
+      "diff": "diff --git a/packages/zod/src/v4/core/regexes.ts b/packages/zod/src/v4/core/regexes.ts\nindex db09762f..28041a35 100644\n--- a/packages/zod/src/v4/core/regexes.ts\n+++ b/packages/zod/src/v4/core/regexes.ts\n@@ -86,7 +86,8 @@ export const base64url: RegExp = /^[A-Za-z0-9_-]*$/;\n export const hostname: RegExp =\n   /^(?=.{1,253}\\.?$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[-0-9a-zA-Z]{0,61}[0-9a-zA-Z])?)*\\.?$/;\n \n-export const domain: RegExp = /^([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}$/;\n+export const domain: RegExp =\n+  /^(?=.{1,253}$)([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,63}$/;\n \n export const httpProtocol: RegExp = /^https?$/;\n \n",
+      "answer": "I'll skip the node sanity check (blocked by sandbox approval) and rely on regex reasoning, which is sound: the leading `(?=.{1,253}$)` lookahead bounds total hostname length to 253, and `[a-zA-Z]{2,63}` caps the TLD label at 63.\n\n**Changed:** `packages/zod/src/v4/core/regexes.ts` — `domain` regex now has a `(?=.{1,253}$)` length lookahead and caps the TLD label at `{2,63}`, matching the RFC 1035 limits `hostname` already enforces; `z.httpUrl()` uses `regexes.domain` for hostname validation, so this fixes it there too."
+    }
+  ]
+}

@@ -1,0 +1,275 @@
+{
+  "date": "2026-08-27",
+  "design": "6 why-questions about this repository (answers in commit bodies of 54a5f63 / 6be2099 / d1853ab), Sonnet worker in the repo with Read/Grep/Glob + git; memory = `self-memory.mjs ask` output (first 14 lines per memory) injected. Judge: Fable 5, blind A/B.",
+  "note": "withtx-closedb sha flag false for both is a ground-truth labelling error (fix commit is d1853ab, both answers cite it).",
+  "questions": [
+    {
+      "id": "scout-broken",
+      "sha": "54a5f63",
+      "q": "Before the DATABASE_URL fix in the SessionStart hook, why had scout-report capture never worked in a default session on this machine, and what was the fix approach?",
+      "must": [
+        [
+          "5432",
+          "port"
+        ],
+        [
+          "hardcoded",
+          "hard-coded",
+          "two copies",
+          "second copy",
+          "duplicate"
+        ],
+        [
+          "RESOLVED_DATABASE_URL",
+          "setup-dev-db",
+          "detect"
+        ]
+      ]
+    },
+    {
+      "id": "trigram-js",
+      "sha": "6be2099",
+      "q": "In the SQLite port, why is the trigram retrieval leg a JavaScript reimplementation of pg_trgm word_similarity rather than FTS5 tokenize='trigram'?",
+      "must": [
+        [
+          "substring",
+          "matcher"
+        ],
+        [
+          "threshold",
+          "0.35",
+          "score"
+        ],
+        [
+          "0.75",
+          "load-bearing",
+          "3 of 10",
+          "top hit"
+        ]
+      ]
+    },
+    {
+      "id": "withtx-closedb",
+      "sha": "6be2099",
+      "q": "What defect did the SQLite port's review find in withTransaction around closeDb(), what could it have caused, and how was it fixed?",
+      "must": [
+        [
+          "getDb",
+          "handle"
+        ],
+        [
+          "closeDb",
+          "reopen",
+          "re-open"
+        ],
+        [
+          "live memory",
+          "memory.db",
+          "default database",
+          "defaultDatabasePath"
+        ],
+        [
+          "call time",
+          "captures",
+          "captured"
+        ]
+      ]
+    },
+    {
+      "id": "gate-moved",
+      "sha": "6be2099",
+      "q": "Why did the by-meaning MRR move from 0.85 to 0.883 in the SQLite port, and which retrieval leg was responsible?",
+      "must": [
+        [
+          "bm25",
+          "full-text",
+          "fts"
+        ],
+        [
+          "ts_rank"
+        ],
+        [
+          "domain-lookahead",
+          "24"
+        ]
+      ]
+    },
+    {
+      "id": "trigram-bound",
+      "sha": "6be2099",
+      "q": "During the SQLite port, a first tightened pruning bound in trigram.ts passed the performance test but failed all 1,420 Postgres fixture pairs. Why?",
+      "must": [
+        [
+          "min"
+        ],
+        [
+          "max"
+        ],
+        [
+          "1/|q|",
+          "rise",
+          "rose",
+          "first iteration",
+          "every extent"
+        ]
+      ]
+    },
+    {
+      "id": "port-5433",
+      "sha": "54a5f63",
+      "q": "Why did setup-dev-db.sh publish the pgvector container on port 5433 instead of the default 5432?",
+      "must": [
+        [
+          "5432"
+        ],
+        [
+          "already",
+          "unrelated",
+          "another project",
+          "container",
+          "something there"
+        ],
+        [
+          "silently",
+          "shar",
+          "same port",
+          "this bug"
+        ]
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "id": "scout-broken",
+      "c": "git-only",
+      "turns": 3,
+      "cost": 0.164,
+      "sec": 15,
+      "kw": "3/3",
+      "sha": true,
+      "judge": "correct",
+      "answer": "**Reason** (commit 54a5f63): SessionStart hook hardcoded `DATABASE_URL=postgres://postgres:postgres@localhost:5432/cognitive_memory`. Port 5432 on this machine belongs to an unrelated project's Postgres (`redacted-db-1`) — no `cognitive_memory` DB, no pgvector. Every Stop-hook scout write hit `password authentication failed` at connect. `sync` still worked because it's run by hand with an explicit correct URL, so the corpus filled with `captureGitHistory` rows only (32/34 in the dogfood DB) — the synthesized half (`WHY_MEMORY_SPIKE.md`: 7.7→1.4 turns) never landed.\n\n**Fix approach**: delete the duplicated connection string instead of correcting it (two copies is how it drifted). `scripts/setup-dev-db.sh` now detects Docker (`pgvector/pgvector:pg16` on port 5433, not 5432) vs. apt+`pg_lsclusters` fallback, and prints `RESOLVED_DATABASE_URL=<url>` as its last stdout line. `session-start.sh` reads that line instead of hardcoding; if resolution fails it exports nothing (no DB is safer than a wrong one — fails as \"no DATABASE_URL\" instead of a misleading connect error)."
+    },
+    {
+      "id": "scout-broken",
+      "c": "memory",
+      "turns": 1,
+      "cost": 0.091,
+      "sec": 5,
+      "kw": "3/3",
+      "sha": true,
+      "judge": "correct",
+      "answer": "Scout-report capture never worked because `.claude/hooks/session-start.sh` hardcoded `DATABASE_URL=\"postgres://postgres:postgres@localhost:5432/cognitive_memory\"`, but port 5432 on this machine belongs to an unrelated project's Postgres (`redacted-db-1`), which has neither a `cognitive_memory` database nor pgvector installed. Every Stop-hook write failed at connect with `FATAL: password authentication failed` (verified by running `self-memory.mjs scout` with that URL). Fix: resolve `DATABASE_URL` from `setup-dev-db.sh` instead of hardcoding it — commit 54a5f632.\n\nCaveat: this predates M17 (commit 6be2099c), which replaced Postgres/`DATABASE_URL` entirely with SQLite — the underlying mechanism no longer exists, only the historical reasoning does."
+    },
+    {
+      "id": "trigram-js",
+      "c": "git-only",
+      "turns": 4,
+      "cost": 0.143,
+      "sec": 14,
+      "kw": "3/3",
+      "sha": true,
+      "judge": "correct",
+      "answer": "Found it — spec.md §25.8 deviation 1 answers this directly, citing measured evidence and commit 6be2099.\n\n**Why:** `tokenize='trigram'` is a substring matcher; `pg_trgm`'s `word_similarity` is a scorer with a threshold. Pre-port measurement on the Postgres baseline showed the leg is load-bearing (removing it: MRR 0.85→0.75, decides top hit on 3/10 questions) and narrow (0.35 threshold → 0–3 hits/142 per question). Swapping scorer→substring-matcher would shift the fused RRF ranking in a way the port's quality gate (§25.5: retrieval quality must not change) couldn't attribute to the port vs. the algorithm change. So `word_similarity` was reimplemented in JS, pinned against 70 Postgres-produced fixture values, verified identical on 1,420 pairs (34 differ ≤0.0073, none cross threshold).\n\nCost accepted knowingly: trigram (JS scan) is 107ms vs FTS5's 2ms, O(corpus) — spec.md §25.8 names this the nearer scale ceiling, with an indexing follow-up already noted in `trigram.ts`'s docstring.\n\nCommit: `6be2099` (M17 — Storage Backend: Port to SQLite, spec.md §25, new §25.8), deviation 1 from the originally-proposed §25.3 plan."
+    },
+    {
+      "id": "trigram-js",
+      "c": "memory",
+      "turns": 4,
+      "cost": 0.158,
+      "sec": 19,
+      "kw": "3/3",
+      "sha": true,
+      "judge": "correct",
+      "answer": "Found the explicit answer in spec.md §25.8 (lines 1536-1544).\n\n**Why:** originally proposed (§25.3) as FTS5 `tokenize='trigram'`, but that's a substring matcher, not a scorer — it has no threshold and can't reproduce `word_similarity`'s continuous score. The trigram leg is load-bearing (removing it drops fused MRR 0.85→0.75; decides top hit on 3/10 gate questions) and narrow (0-3 hits/142 at the 0.35 cutoff), so swapping scorer-for-matcher would change fused ranking in a way the gate couldn't attribute to the port vs. the algorithm change. So `word_similarity` was reimplemented exactly in JS and pinned against 70 Postgres fixture values — flagged explicitly as a deviation from §25.3.\n\nContrast: the full-text leg *did* switch algorithm (bm25 vs ts_rank) because reproducing `ts_rank` exactly would mean reimplementing Snowball stemming + stopwords just \"to reproduce a worse number\" — optimizing for the gate, not the product. Trigram didn't get that pass because it's load-bearing where full-text's ranking-function swap wasn't disqualifying.\n\nCited: spec.md §25.8, \"Deviations from §25.3\" point 1 (commit 6be2099)."
+    },
+    {
+      "id": "withtx-closedb",
+      "c": "git-only",
+      "turns": 4,
+      "cost": 0.141,
+      "sec": 15,
+      "kw": "4/4",
+      "sha": false,
+      "judge": "correct",
+      "answer": "Found the answer, no more digging needed.\n\n**Defect:** `withTransaction` called `getDb()` lazily when the queued transaction actually ran, not when it was enqueued. If a transaction was queued and `closeDb()` happened before it ran, `getDb()` silently reopened `defaultDatabasePath()` — the live product database — instead of failing.\n\n**Consequence:** a test's or eval harness's writes could land in the real `.claude/memory.db` instead of the scratch DB it thought it was using, silently corrupting the dogfooded memory store.\n\n**Fix:** `withTransaction` now captures the db handle at call time and fails if the connection is already closed, rather than reopening one.\n\nCommit: `d1853ab` (\"M17: apply the review pass's findings; re-measure the gate after them\"), one of 8 defects the cold review found on the M17 SQLite-port diff; documented in spec.md §25.8."
+    },
+    {
+      "id": "withtx-closedb",
+      "c": "memory",
+      "turns": 3,
+      "cost": 0.127,
+      "sec": 12,
+      "kw": "4/4",
+      "sha": false,
+      "judge": "correct",
+      "answer": "Found it. Answer:\n\n**Defect:** `withTransaction` resolved `getDb()` only when the transaction reached the front of the queue, not at call time. So a transaction enqueued before a `closeDb()` call would run *after* it — `getDb()` then silently reopened via `defaultDatabasePath()`, meaning the transaction executed against the live default DB instead of the closed one.\n\n**Impact:** could commit a test's or harness's writes into the real `.claude/memory.db` instead of the scratch DB it thought it was using — silent cross-contamination.\n\n**Fix:** capture the DB handle at call time (not at dequeue time), and fail if that handle is already closed, instead of falling back to reopening a default.\n\nSource: commit d1853ab5 (\"M17: apply the review pass's findings; re-measure the gate after them\"), one of 8 defects found in the post-implementation cold review; fix didn't move retrieval MRR (0.883/0.933 unchanged), confirming it as correctness not tuning."
+    },
+    {
+      "id": "gate-moved",
+      "c": "git-only",
+      "turns": 6,
+      "cost": 0.171,
+      "sec": 22,
+      "kw": "3/3",
+      "sha": true,
+      "judge": "correct",
+      "answer": "Found the answer, in row 18 (`BENCHMARKS.md`, M17 SQLite port).\n\n**MRR 0.85 → 0.883 lexical-only (recall 0.90 → 1.00), PR #21 (`8eaaaa5`/`6be2099`, ROADMAP M17).**\n\nReason: trigram and vector legs are near-identical to Postgres (trigram: 1,386/1,420 pairs exact match, 34 differ ≤0.0073, no threshold crossings; vector: identical on 9/10 questions, differs only at rank 20/20 on the 10th). The full-text leg is the one that moved — `bm25()` (SQLite FTS5) ranks candidates differently than Postgres `ts_rank`. Concretely, the `domain-lookahead` question's answering commit ranked 24th under `ts_rank` (outside the leg's `LIMIT 20`, so invisible to fusion) but 1st under `bm25()`, flipping that question from a miss to a hit and lifting recall to 10/10. One other question (`base64-revert`) regressed slightly (1→3) but not enough to offset the gain.\n\nSo: not a re-baseline, not noise — a single-leg ranking-function difference (BM25 vs `ts_rank`) that happened to surface the previously-missed answer."
+    },
+    {
+      "id": "gate-moved",
+      "c": "memory",
+      "turns": 1,
+      "cost": 0.097,
+      "sec": 10,
+      "kw": "3/3",
+      "sha": true,
+      "judge": "correct",
+      "answer": "Full-text leg. Postgres used `ts_rank`; SQLite port reimplements full-text via bm25 — a genuinely different ranking function, not a like-for-like port. Trigram and vector legs were verified identical (reproduced exactly, pair-by-pair against Postgres), so they contributed no movement. Fused MRR alone can't separate a port defect from a ranking-function change — only the per-leg comparison shows bm25 as the sole source of 0.85→0.883.\n\nSource: scout-report \"M17 — port storage layer from Postgres to SQLite without moving retrieval quality\" (2026-08-21), corroborated by commit 6be2099c / 8eaaaa52 (\"M17 — Storage Backend: Port to SQLite\", spec.md §25.8, BENCHMARKS.md).\n\nNote: this memory is flagged possibly-stale (later commits touched anchored files). Confirm with `/refine-memory 24bef7af-687e-41f9-95bc-546f3a2d07b3` if you need certainty it still holds."
+    },
+    {
+      "id": "trigram-bound",
+      "c": "git-only",
+      "turns": 3,
+      "cost": 0.125,
+      "sec": 13,
+      "kw": "2/3",
+      "sha": false,
+      "judge": "WRONG: described the minScore <=/< floor defect, not the min/max bound",
+      "answer": "The bug: the pruning bound used one comparison (`<=`) against both `best` and `minScore` combined into a single `floor`. Against `best`, `<=` is safe (a tie can't raise the max). Against `minScore` it must be strict `<`, because while `distinct <= saturation` the bound equals `saturation/q.size` — not an over-estimate but the *attainable* supremum, reachable by an extent matching exactly the query's trigrams. Using `<=` there pruned extents whose true score equals `minScore`, dropping hits at the exact threshold, while `searchExperiencesByTrigram` keeps `score >= threshold` (matching pg_trgm's `<%`).\n\nThe perf fixture (70 cases) never exercised this because it needs `saturation/q.size` bit-identical to the 0.35 test threshold, i.e. `q.size` a multiple of 20 — an edge a random/generated fixture doesn't naturally hit. The full 1,420-pair cross-product against Postgres did hit it.\n\nFix + explanation: commit d1853ab (\"M17: apply the review pass's findings; re-measure the gate after them\"), found by a cold review pass, not the fixture — split into `bound <= best || bound < minScore`."
+    },
+    {
+      "id": "trigram-bound",
+      "c": "memory",
+      "turns": 4,
+      "cost": 0.157,
+      "sec": 22,
+      "kw": "3/3",
+      "sha": true,
+      "judge": "correct",
+      "answer": "This is documented directly in the fixed code's comment (`trigram.ts`, from commit 6be2099c/8eaaaa5, `M17 — Storage Backend: Port to SQLite`):\n\nThe pruning bound must be a monotonically-falling over-estimate of the best-possible score as an extent's distinct-trigram count `u` grows, so the search can stop once it drops below `minScore`. The first version computed `u' = min(u, saturation)` instead of `max(u, saturation)`. For `u < saturation`, that made the bound read `u / q` — which *rises* as `u` grows, the opposite of monotone-falling. Every extent's early evaluation therefore looked worse than reality and got pruned on its first iteration, so the function fell through to `saturation / q` (i.e. `1/q`-scale) for every input.\n\nIt still ran fast (fewer iterations = passed the perf test) but wasn't computing the real score, so all 1,420 Postgres-comparison fixture pairs failed. Fixed to `max(u, saturation)`, which correctly falls with `u`."
+    },
+    {
+      "id": "port-5433",
+      "c": "git-only",
+      "turns": 5,
+      "cost": 0.17,
+      "sec": 25,
+      "kw": "3/3",
+      "sha": true,
+      "judge": "correct",
+      "answer": "Commit `54a5f63` (fix: resolve DATABASE_URL from setup-dev-db.sh instead of hardcoding it).\n\nRoot cause: the SessionStart hook hardcoded `localhost:5432/cognitive_memory`, but port 5432 on that dev machine belonged to an unrelated project's Postgres (`redacted-db-1`), with no `cognitive_memory` DB and no pgvector extension at all. Every Stop-hook scout-report write then failed with `password authentication failed`, silently starving the memory corpus of synthesized understanding while `sync` (run manually with a correct URL) kept working — skewing the corpus to 32/34 commit-derived rows.\n\nFix: `setup-dev-db.sh` now detects Docker vs apt instead of assuming a path, and its Docker branch runs `pgvector/pgvector:pg16` published on port 5433 **deliberately, not 5432** — to avoid silently colliding with whatever Postgres a dev machine already has on the default port, which is exactly the bug being fixed.\n\n(Since M17 this is moot: Postgres/pgvector/Docker were removed entirely in favor of SQLite — see `6be2099`.)"
+    },
+    {
+      "id": "port-5433",
+      "c": "memory",
+      "turns": 4,
+      "cost": 0.162,
+      "sec": 17,
+      "kw": "3/3",
+      "sha": true,
+      "judge": "correct",
+      "answer": "Commit 54a5f63 (2026-08-21): the Docker path publishes `pgvector/pgvector:pg16` on 5433, deliberately not 5432 — because that's exactly what had broken scout-report capture. The old `.claude/hooks/session-start.sh` hardcoded `localhost:5432/cognitive_memory`, but on this machine port 5432 was already an unrelated project's Postgres (`redacted-db-1`), no `cognitive_memory` DB, no pgvector extension. Every Stop-hook write failed auth silently, so the memory corpus filled with `sync`-derived commit history (run by hand with the right URL) and almost none of the synthesized scout-report half. The fix uses 5433 to avoid ever again silently colliding with whatever else is on 5432.\n\n(Later superseded: M17, commit 6be2099, removed Postgres/Docker entirely in favor of SQLite, so this script and port no longer exist in the repo.)"
+    }
+  ]
+}

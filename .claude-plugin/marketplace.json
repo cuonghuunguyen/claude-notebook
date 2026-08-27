@@ -1,0 +1,7 @@
+{
+  "name": "claude-notebook",
+  "owner": { "name": "Cuong Huu Nguyen" },
+  "plugins": [
+    { "name": "claude-notebook", "source": "./plugin", "description": "Repo memory: why the code is the way it is, retrieved by meaning and injected into prompts." }
+  ]
+}

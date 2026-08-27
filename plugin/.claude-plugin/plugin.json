@@ -1,0 +1,9 @@
+{
+  "name": "claude-notebook",
+  "version": "0.1.0",
+  "description": "Repo memory for Claude Code: the reasoning behind the code, mined from explanatory commits and past sessions, injected into prompts and written back on stop.",
+  "author": { "name": "Cuong Huu Nguyen" },
+  "homepage": "https://github.com/cuonghuunguyen/claude-notebook",
+  "repository": "https://github.com/cuonghuunguyen/claude-notebook",
+  "license": "Apache-2.0"
+}

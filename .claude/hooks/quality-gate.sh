@@ -52,7 +52,10 @@ RESULTS=""
 run "typecheck" pnpm -r --if-present typecheck
 [ $? -eq 0 ] && RESULTS="${RESULTS}typecheck ✓ ${DURATION}s · " || RESULTS="${RESULTS}typecheck ✗ · "
 
-run "lint" pnpm lint
+# Lint only the changed files (root `pnpm lint` over the whole repo is 4s vs 1.3s
+# here). CI still lints everything, so a rule that fires on an untouched file is
+# not this hook's job.
+run "lint" npx eslint $CHANGED
 [ $? -eq 0 ] && RESULTS="${RESULTS}lint ✓ ${DURATION}s · " || RESULTS="${RESULTS}lint ✗ · "
 
 # Tests only for packages that changed. There is no longer a "database

@@ -12,32 +12,49 @@ Measured against an agent that had full `git log` / `git blame` / `git grep`
 access to the same history: **6.5 → 1.8 turns and −43% cost per question**
 (details in [Does it work](#does-it-work)).
 
-> **Status: research / dogfooding repository.** Nothing is published to npm;
-> every package is `private`. You run it from a clone. It works on any
-> repository in any language — nothing here parses source code — but the
-> ergonomics are a script, not a product.
+> **Status: early (0.1).** Published to npm as
+> [`claude-notebook`](https://www.npmjs.com/package/claude-notebook)
+> — one CLI, `claude-notebook`. It works on any repository in any language;
+> nothing here parses source code. The API is not stable yet.
 
 ---
 
 ## Install
 
-Node ≥ 20 and pnpm 10. No database server, no Docker, no connection string.
+Node ≥ 20. No database server, no Docker, no connection string.
 
 ```bash
-git clone git@github.com:cuonghuunguyen/claude-notebook.git
-cd claude-notebook
-pnpm install
-pnpm build
+npx claude-notebook sync      # in the repo you want to remember
+# or
+npm i -g claude-notebook && claude-notebook sync
 ```
 
-The store is one SQLite file, created on first write. For your own repo it
-defaults to `<your-repo>/.claude/memory.db`; `MEMORY_DB` overrides it.
+The store is one SQLite file, created on first write:
+`<your-repo>/.claude/memory.db` (`MEMORY_DB` overrides it). The repo is the
+current directory; `REPO_DIR=/other/repo` points elsewhere.
+
+From a clone of this repository, `node scripts/self-memory.mjs <cmd>` is the
+same CLI pointed at this repo (needs `pnpm install && pnpm build`).
+
+## Claude Code plugin
+
+One install wires the memory into every session of a repo: `sync` at session
+start, relevant memories injected into each substantial prompt, and the
+session's scout report recorded on stop. Adds `/claude-notebook:notebook` and
+`/claude-notebook:refine-memory`.
+
+```
+/plugin marketplace add cuonghuunguyen/claude-notebook
+/plugin install claude-notebook@claude-notebook
+```
+
+The plugin shells out to `npx -y claude-notebook`; Node ≥ 20 is the only
+requirement. Source: [`plugin/`](plugin/).
 
 ## Turn your codebase into memory
 
 ```bash
-# from the claude-notebook clone; REPO_DIR is the repo you want to remember
-REPO_DIR=/path/to/your/repo node scripts/self-memory.mjs sync
+cd /path/to/your/repo && claude-notebook sync
 ```
 
 ```json
@@ -61,7 +78,7 @@ skipped — and it also re-flags memories that newer commits have overtaken.
 ## Ask it
 
 ```bash
-REPO_DIR=/path/to/your/repo node scripts/self-memory.mjs ask "why was the base64 change reverted?"
+claude-notebook ask "why was the base64 change reverted?"
 ```
 
 ```
@@ -125,17 +142,19 @@ dropped.
 ## Daily commands
 
 ```bash
-REPO_DIR=/my/repo node scripts/self-memory.mjs sync            # after every merge (idempotent)
-REPO_DIR=/my/repo node scripts/self-memory.mjs ask "why ...?"  # the reasoning behind the code
-REPO_DIR=/my/repo node scripts/self-memory.mjs stats           # corpus size, tiers, flags
-REPO_DIR=/my/repo node scripts/self-memory.mjs suspects        # the read-repair worklist
-REPO_DIR=/my/repo node scripts/self-memory.mjs verify <id>     # checked it, still accurate
-REPO_DIR=/my/repo node scripts/self-memory.mjs supersede f.json# checked it, here is the correction
-REPO_DIR=/my/repo node scripts/self-memory.mjs history <id>    # what we used to believe
+claude-notebook sync            # after every merge (idempotent)
+claude-notebook ask "why ...?"  # the reasoning behind the code
+claude-notebook stats           # corpus size, tiers, flags
+claude-notebook suspects        # the read-repair worklist
+claude-notebook verify <id>     # checked it, still accurate
+claude-notebook supersede f.json# checked it, here is the correction
+claude-notebook history <id>    # what we used to believe
 ```
 
-Omit `REPO_DIR` and every command runs against this repository — the dogfooding
-setup, and how the project builds itself.
+Every command runs against the current directory; `REPO_DIR=/other/repo` points
+elsewhere. `node scripts/self-memory.mjs <cmd>` from a clone of this repository
+is the same CLI pinned to this repo — the dogfooding setup, and how the project
+builds itself.
 
 ## Use it from code
 

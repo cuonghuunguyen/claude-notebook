@@ -9,7 +9,7 @@
     "build": "tsc -b",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "migrate": "pnpm build && node dist/migrate.js"
+    "migrate": "pnpm build && node dist/migrate-cli.js"
   },
   "dependencies": {
     "@cognitive-memory/core": "workspace:*",

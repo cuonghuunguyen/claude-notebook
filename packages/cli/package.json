@@ -1,0 +1,50 @@
+{
+  "name": "claude-notebook",
+  "version": "0.1.0",
+  "description": "Knowledge memory for coding agents: the reasoning behind a codebase, mined from its git history and retrieved by meaning. Any language, one SQLite file.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "claude-notebook": "dist/cli.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cuonghuunguyen/claude-notebook.git"
+  },
+  "homepage": "https://github.com/cuonghuunguyen/claude-notebook#readme",
+  "keywords": [
+    "claude-code",
+    "coding-agent",
+    "memory",
+    "git-history",
+    "sqlite",
+    "rag"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "build": "esbuild src/cli.mjs --bundle --platform=node --format=esm --external:better-sqlite3 --outfile=dist/cli.mjs && rm -rf dist/migrations && cp -r ../../migrations dist/migrations && cp ../../README.md . && chmod +x dist/cli.mjs",
+    "typecheck": "node --check src/cli.mjs"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3"
+  },
+  "devDependencies": {
+    "@cognitive-memory/capture": "workspace:*",
+    "@cognitive-memory/context": "workspace:*",
+    "@cognitive-memory/core": "workspace:*",
+    "@cognitive-memory/episodic": "workspace:*",
+    "@cognitive-memory/graph-store": "workspace:*",
+    "@cognitive-memory/pipeline": "workspace:*",
+    "@cognitive-memory/staleness": "workspace:*",
+    "esbuild": "^0.24.0"
+  }
+}

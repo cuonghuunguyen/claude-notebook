@@ -5,7 +5,9 @@ import { getDb, withTransaction } from "./db.js";
 
 const dirName = dirname(fileURLToPath(import.meta.url));
 // dist/migrate.js -> packages/graph-store/dist -> repo root -> migrations/
-const migrationsDir = join(dirName, "..", "..", "..", "migrations");
+// The published CLI bundle ships its own copy and points here via the env var.
+const migrationsDir =
+  process.env["MEMORY_MIGRATIONS_DIR"] ?? join(dirName, "..", "..", "..", "migrations");
 
 /**
  * The applied-check contract is unchanged (spec.md §25.5 decision 1): one row
@@ -58,23 +60,4 @@ export async function runMigrations(): Promise<{ applied: string[] }> {
   }
 
   return { applied: newlyApplied };
-}
-
-const isMain =
-  process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
-
-if (isMain) {
-  runMigrations()
-    .then(({ applied }) => {
-      if (applied.length === 0) {
-        console.log(`No new migrations to apply (${getDb().path}).`);
-      } else {
-        console.log(`Applied to ${getDb().path}: ${applied.join(", ")}`);
-      }
-      process.exit(0);
-    })
-    .catch((err) => {
-      console.error(err);
-      process.exit(1);
-    });
 }

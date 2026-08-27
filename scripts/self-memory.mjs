@@ -37,13 +37,28 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+/**
+ * Which repository to remember. Defaults to this checkout (dogfooding); set
+ * `REPO_DIR` to point the same commands at any other repo — nothing here parses
+ * source, so the language does not matter (spec.md §24.2 point 7).
+ *
+ * A foreign repo gets its OWN database, defaulted next to it rather than to
+ * this checkout's `.claude/memory.db`: mining someone else's history into this
+ * repo's dogfooded memory has no un-mine (spec.md §25.8 made the same rule for
+ * eval harnesses, for the same reason). `MEMORY_DB` still overrides.
+ */
+const REPO = process.env["REPO_DIR"] ? path.resolve(process.env["REPO_DIR"]) : ROOT;
+if (REPO !== ROOT && !process.env["MEMORY_DB"]) {
+  process.env["MEMORY_DB"] = path.join(REPO, ".claude", "memory.db");
+}
 /**
  * Kept for the `sync` report only. It used to scope the structural graph
  * (`nodes.repo_id`); memories have never been repo-scoped — a single database
  * holds one repo's memory today, and scoping them is a separate decision
  * nothing has needed yet.
  */
-const REPO_ID = "claude-notebook";
+const REPO_ID = path.basename(REPO);
 
 const [graphStore, pipelineMod, episodic, capture, staleness, core] = await Promise.all([
   import(path.join(ROOT, "packages/graph-store/dist/index.js")),
@@ -68,7 +83,7 @@ async function sync() {
   // ROADMAP.md at the root, and a subtree-scoped mine cannot see them — which
   // made the most valuable "why" here the part the memory did not have.
   const result = await capture.captureGitHistory({
-    repoDir: ROOT,
+    repoDir: REPO,
     pathScope: "",
     limit: 500,
     embedder,
@@ -80,7 +95,7 @@ async function sync() {
   // that history has since overtaken. Runs after capture, not before: a commit
   // mined in this same pass must not flag the memory it just created (capture
   // stamps the commit's own date, and the test is strictly-newer).
-  const suspect = await staleness.markSuspectFromHistory({ repoDir: ROOT, limit: 500 });
+  const suspect = await staleness.markSuspectFromHistory({ repoDir: REPO, limit: 500 });
 
   console.log(
     JSON.stringify(
@@ -127,7 +142,7 @@ async function ask(question) {
     contextOptions: { maxExperiences: 4 },
     // spec.md §24.2.3 / M12: one git lookup, so a memory the history has
     // overtaken arrives tagged rather than silently trusted.
-    stalenessRepoDir: ROOT,
+    stalenessRepoDir: REPO,
   });
   const verdictById = new Map(verdicts.map((v) => [v.experience.id, v]));
 
@@ -165,7 +180,7 @@ async function record(json) {
   // had nothing to ask git about it, and the quality gate writes here on every
   // task, which would have made the fastest-rotting memories in the system the
   // ones staleness could never reach.
-  const anchors = files.map((f) => ({ path: path.relative(ROOT, path.resolve(ROOT, f)) }));
+  const anchors = files.map((f) => ({ path: path.relative(REPO, path.resolve(REPO, f)) }));
   const saved = await episodic.recordExperience({
     task: input.task,
     observation: input.observation,
@@ -193,10 +208,10 @@ async function record(json) {
  */
 async function scout(file) {
   if (!file) throw new Error("usage: self-memory.mjs scout <path-to-report.json>");
-  const input = JSON.parse(await readFile(path.resolve(ROOT, file), "utf-8"));
+  const input = JSON.parse(await readFile(path.resolve(REPO, file), "utf-8"));
   const saved = await capture.recordScoutReport({
     ...input,
-    anchors: (input.anchors ?? []).map((a) => path.relative(ROOT, path.resolve(ROOT, a))),
+    anchors: (input.anchors ?? []).map((a) => path.relative(REPO, path.resolve(REPO, a))),
     embedder: core.createFakeEmbedder(),
   });
   console.log(JSON.stringify({ id: saved.id, anchors: saved.relatedNodes.length }));
@@ -209,7 +224,7 @@ async function scout(file) {
  * half when no new commits are worth capturing as knowledge.
  */
 async function stale() {
-  const result = await staleness.markSuspectFromHistory({ repoDir: ROOT, limit: 500 });
+  const result = await staleness.markSuspectFromHistory({ repoDir: REPO, limit: 500 });
   const { rows } = await getDb().query(
     `SELECT id, task, suspect_reason FROM experiences
       WHERE suspect AND superseded_by IS NULL
@@ -346,7 +361,7 @@ async function verify(id, asOf) {
  */
 async function supersede(file) {
   if (!file) throw new Error("usage: self-memory.mjs supersede <path-to-correction.json>");
-  const input = JSON.parse(await readFile(path.resolve(ROOT, file), "utf-8"));
+  const input = JSON.parse(await readFile(path.resolve(REPO, file), "utf-8"));
   if (!input.supersedes) throw new Error("correction must name the memory it `supersedes`");
 
   if (!input.task) throw new Error(`correction for ${input.supersedes} needs a \`task\``);
@@ -361,7 +376,7 @@ async function supersede(file) {
   const anchors = input.anchors
     ? input.anchors.map((a) => {
         const parsed = core.parseAnchor(a);
-        return { ...parsed, path: path.relative(ROOT, path.resolve(ROOT, parsed.path)) };
+        return { ...parsed, path: path.relative(REPO, path.resolve(REPO, parsed.path)) };
       })
     : undefined;
   const { experience, superseded } = await episodic.recordSupersedingExperience({

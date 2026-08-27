@@ -124,6 +124,10 @@ scout reports sessions write back. Until M15 it also ran ts-morph over
 (`E2E_BENCHMARK_MULTI_REPO.md`) and is gone, which is why `sync` no longer
 parses anything and finishes in ~240ms:
 
+Every command takes an optional `REPO_DIR=/other/repo` to point the same
+wiring at any other repository (its own `.claude/memory.db` by default);
+omitted, it is this repo.
+
 ```bash
 node scripts/self-memory.mjs sync              # our own git history + staleness pass
 node scripts/self-memory.mjs ask "why ...?"    # the reasoning behind the code

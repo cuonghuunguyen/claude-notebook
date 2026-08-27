@@ -1,6 +1,6 @@
 # E2E benchmark, second repo: results outside zod
 
-**Run date:** 2026-08-16 · **Environment:** sandbox Linux, Node 22.22, Postgres 16 + pgvector · **Code branch:** `claude/github-repo-benchmark-61eabd` (base: M9 + PR #17) · **Harness:** `eval/e2e-benchmark/` · **Raw data:** `eval/e2e-benchmark/results/{zod,lodash}/*.json`
+**Run date:** 2026-08-16 · **Environment:** sandbox Linux, Node 22.22, Postgres 16 + pgvector · **Code branch:** `claude/github-repo-benchmark-61eabd` (base: Pipeline Orchestration + PR #17) · **Harness:** `eval/e2e-benchmark/` · **Raw data:** `eval/e2e-benchmark/results/{zod,lodash}/*.json`
 
 ## 1. Scope
 

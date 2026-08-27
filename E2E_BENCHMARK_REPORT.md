@@ -7,7 +7,7 @@
 > relevance. Remeasured over real traversal order: MRR 0.34 vs grep 0.34 —
 > **tied, not "+15%"**. Recall figures and all of §3 and §5 are unaffected.
 
-**Run date:** 2026-08-11 · **Environment:** sandbox Linux, Node 22.22, Postgres 16 + pgvector 0.6 (local) · **Code branch:** `claude/e2e-benchmark-setup-yvnqj5` (base: M9, roadmap M0–M9 complete) · **Harness:** `eval/e2e-benchmark/` · **Raw data:** `eval/e2e-benchmark/results/*.json`
+**Run date:** 2026-08-11 · **Environment:** sandbox Linux, Node 22.22, Postgres 16 + pgvector 0.6 (local) · **Code branch:** `claude/e2e-benchmark-setup-yvnqj5` (base: Pipeline Orchestration, every milestone up to it complete) · **Harness:** `eval/e2e-benchmark/` · **Raw data:** `eval/e2e-benchmark/results/*.json`
 
 ## 1. Scope
 

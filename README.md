@@ -54,14 +54,27 @@ calls. The knowledge was recoverable on demand, but expensive; precomputing it i
 the value. The accuracy delta (0.93 → 1.00) is the weakest claim in that document
 and is not relied on; the efficiency result is the robust one.
 
+Re-measured 2026-08-27 on the SQLite backend with a stronger agent (Sonnet, both
+conditions, blind-graded, every cited commit checked against `git log`;
+`BENCHMARKS.md`): git-only **6.5** turns / $0.211 / 23.9 s per question →
+memory **1.8** turns / $0.121 / 9.3 s (−72% turns, −43% cost, −61% wall).
+Accuracy is now 20/20 in both conditions, so the accuracy claim does not
+reproduce at all; the baseline is also faster than haiku was, shrinking the
+relative gain from 5.5× to 3.6×. n=10, one run per cell.
+
 **3. Retrieval must reach knowledge by its own content, not through the graph.**
 The original design hydrated experiences only for nodes that traversal had hit.
-Same question set, re-run through the shipped packages in M11 (`BENCHMARKS.md`):
+Same question set, re-run through the shipped packages (`BENCHMARKS.md`):
 
 | retrieval path | MRR |
 |---|---|
 | by-meaning (question matched against the knowledge text itself) | **0.85** lexical-only · **0.90** with the stub embedder · recall 0.90 |
 | node-gated (the original shipped design) | **0.00** |
+
+Those are the 2026-08-20 numbers on a 142-commit zod corpus. Current by-meaning
+numbers on the SQLite backend: MRR **0.883** / **0.933**, recall **1.00**, and
+**0.88** / recall **1.00** on the larger 165-commit corpus re-captured
+2026-08-27.
 
 Node-gating returns recency-ordered results: once a file carries dozens of
 commits, a `LIMIT 10` newest-on-this-file window drops the commit that explains
@@ -70,12 +83,12 @@ the decision. Accuracy degrades as the memory fills.
 **The pivot.** `spec.md` §24 (human decision, 2026-08-19) makes the knowledge
 layer the product: capture and by-meaning retrieval move into `packages/`,
 anchors become plain text (`{ path, symbol? }`, never line numbers), staleness
-becomes git-driven, and the structural graph is scheduled for decommission (M15)
-once nothing load-bearing reads it. Consequence: every mechanism in §24 is
+becomes git-driven, and the structural graph is scheduled for decommission once
+nothing load-bearing reads it. Consequence: every mechanism in §24 is
 language-agnostic by construction, whereas each parser costs its own extractor
 permanently.
 
-**M15 carried out the decommission.** A plain re-run would prove nothing: a
+**The decommission was carried out.** A plain re-run would prove nothing: a
 pipeline that still contains the structural stage says nothing about a pipeline
 without it. The gate was a 2×2 ablation — the zod v4 graph fully ingested (501
 nodes, 1171 edges) vs. an empty `nodes` table, each lexical-only and with the
@@ -86,7 +99,7 @@ and the answering commit was in none of them — the design failing at full
 coverage, not an empty database. Five packages, four eval sets and two tables
 were removed; `BENCHMARKS.md` has the table and the reproduction commands.
 
-**One hypothesis did not survive.** M14 tested whether edges *between memories*
+**One hypothesis did not survive.** The knowledge-link spike tested whether edges *between memories*
 (reverts, shared issue, temporal follow-ups) — relations absent from the source —
 pay off where call-graph edges did not. Verdict: **NO-GO**. There is a retrieval
 win (bothSlots 0.60 → 0.90) that survives a random-rewiring control, but it is
@@ -110,8 +123,8 @@ pass, in `BENCHMARKS.md`.
                            ▼
     Experience { task, observation, lessons[], anchors[], confidence, tier }
     `anchors` holds plain-text `{ path, symbol? }` — no AST node required, and
-    since M15 no AST exists. (`relatedNodes` mirrors the paths as text and
-    still carries node ids on rows written before M15 — see `spec.md` §24.7.)
+    since the decommission no AST exists. (`relatedNodes` mirrors the paths as
+    text and still carries node ids on rows written before it — `spec.md` §24.7.)
                            │
                            ▼
                    SQLite (one file: `.claude/memory.db`)
@@ -128,8 +141,8 @@ pass, in `BENCHMARKS.md`.
                    runPipeline() ──▶ AgentContext { experiences, … }
 ```
 
-The load-bearing path is `capture → experiences → queryByMeaning`. Since M15 it
-is the only path: no structural node to route through, no seed retrieval, no
+The load-bearing path is `capture → experiences → queryByMeaning`, and since the
+decommission it is the only path: no structural node to route through, no seed retrieval, no
 traversal in front of it. `runPipeline` is embed-once → by-meaning → read-time
 staleness → `buildContext`. Nothing in the tree parses source code, so the same
 mechanisms work unchanged for SQL, YAML, docs and any language (`spec.md` §24.2
@@ -214,7 +227,8 @@ for (const { experience, score, legs, reason, anchored } of hits) {
 ```
 
 The lexical legs search `task || ' ' || observation` — the memory's own text —
-which is what migration `0004` added the indexes for. `reason` is a `spec.md`
+which the FTS5 and trigram indexes in `migrations/0001_baseline.sql` are built
+for. `reason` is a `spec.md`
 §9-style tag (`text_match` / `lexical_match` / `semantic_match` /
 `hybrid_match`, the last when more than one leg agreed). Scores are comparable
 within one call only.
@@ -247,8 +261,8 @@ const { context, byMeaning, staleness } = await runPipeline(
 );
 ```
 
-No `graph` and no `reasoner`: until M15 those were required injections for the
-traversal stage. `result.byMeaning` exposes the fusion ranking that
+No `graph` and no `reasoner`: those were required injections for the traversal
+stage, which no longer exists. `result.byMeaning` exposes the fusion ranking that
 `context.experiences` loses when `buildContext` re-sorts by recency.
 `result.staleness` carries the per-memory §24.2.3 verdicts. Key those by
 `experience.id`, never by position — the two lists are ordered differently on
@@ -258,17 +272,17 @@ purpose.
 
 `scripts/self-memory.mjs` points the system at this repository: it mines this
 repo's own explaining commits and the scout reports sessions write back. It used
-to ingest structure too; M15 removed that half, which is why `sync` no longer
-parses anything and finishes in ~240ms.
+to ingest structure too; the decommission removed that half, which is why `sync`
+no longer parses anything and finishes in under 200 ms on this repo.
 
 ```bash
 node scripts/self-memory.mjs sync              # our own git history + staleness pass (idempotent)
 node scripts/self-memory.mjs ask "why ...?"    # the reasoning behind the code
 node scripts/self-memory.mjs scout report.json # persist a distilled scout report
 node scripts/self-memory.mjs stale             # re-flag what history has overtaken
-node scripts/self-memory.mjs suspects          # M13: the read-repair worklist
-node scripts/self-memory.mjs verify <id>       # M13: checked it, still accurate
-node scripts/self-memory.mjs supersede fix.json# M13: checked it, here is the correction
+node scripts/self-memory.mjs suspects          # the read-repair worklist   
+node scripts/self-memory.mjs verify <id>       # checked it, still accurate  
+node scripts/self-memory.mjs supersede fix.json# checked it, here is the fix 
 node scripts/self-memory.mjs history <id>      # what we used to believe
 node scripts/self-memory.mjs stats
 ```
@@ -278,7 +292,7 @@ the skill that settles it: read the anchored files and the commits since, then
 either record a correction that supersedes the memory, or confirm it and clear
 the mark. Retrieval returns chain heads; nothing is deleted.
 
-Since M11 the script is only wiring — which repo, which globs, how output is
+The script is only wiring — which repo, which globs, how output is
 printed. The capture and retrieval it used to hand-roll live in
 `packages/capture` and `packages/episodic`.
 
@@ -288,19 +302,19 @@ printed. The capture and retrieval it used to hand-roll live in
 
 All packages are `@cognitive-memory/*`, TypeScript, ESM, `private: true`.
 
-| Package | What it does | Milestone |
-|---|---|---|
-| `core` | Shared types: `Experience`, `Anchor`, `Provenance`, `MemoryTier` + the `EmbeddingProvider` contract | M0, M15 |
-| `graph-store` | SQLite driver, migration runner, typed CRUD over experiences/events/tiers, the three search legs | M0 |
-| `capture` | Git-history mining (`captureGitHistory`, idempotent) + session distillation (`recordScoutReport`) + embedding backfill | M11 |
-| `episodic` | `queryByMeaning` — full-text + trigram + vector legs fused by weighted RRF; plus experience recording/query and supersede chains | M4, M11, M13 |
-| `context` | `buildContext` → `AgentContext`, with §17 size caps | M6 |
-| `pipeline` | `runPipeline` — by-meaning + read-time staleness + context in one entry point | M9, M11, M15 |
-| `staleness` | Text anchors + git-driven memory staleness | M12 |
-| `tiers` | Access-driven tier promotion, settled per session | M16 |
-| `gc` | §18 retention signal over memories (reported, not acted on) | M7, M16 |
+| Package | What it does |
+|---|---|
+| `core` | Shared types: `Experience`, `Anchor`, `Provenance`, `MemoryTier` + the `EmbeddingProvider` contract |
+| `graph-store` | SQLite driver, migration runner, typed CRUD over experiences/events/tiers, the three search legs |
+| `capture` | Git-history mining (`captureGitHistory`, idempotent) + session distillation (`recordScoutReport`) + embedding backfill |
+| `episodic` | `queryByMeaning` — full-text + trigram + vector legs fused by weighted RRF; plus experience recording/query and supersede chains |
+| `context` | `buildContext` → `AgentContext`, with §17 size caps |
+| `pipeline` | `runPipeline` — by-meaning + read-time staleness + context in one entry point |
+| `staleness` | Text anchors + git-driven memory staleness |
+| `tiers` | Access-driven tier promotion, settled per session |
+| `gc` | §18 retention signal over memories (reported, not acted on) |
 
-M15 removed five packages: `structural` (ts-morph), `structural-python`
+The decommission removed five packages: `structural` (ts-morph), `structural-python`
 (tree-sitter), `retrieval` (hybrid node search), `semantic` (edge promotion),
 `traversal` (reasoning-guided expansion). `spec.md` §24.7 records what each
 retired spec section's implementation was replaced by, and what was kept despite
@@ -312,14 +326,15 @@ Supporting directories:
 spec.md                   the contract — every design decision traces to a section
 ROADMAP.md                milestones, acceptance criteria, current status
 AGENT_HARNESS.md          how this repo builds itself, milestone by milestone
-BENCHMARKS.md             append-only measurement log (incl. the M14 go/no-go)
+BENCHMARKS.md             append-only measurement log (incl. the link-edge go/no-go)
 WHY_MEMORY_SPIKE.md       the 7.7 → 1.4 turns experiment
 E2E_BENCHMARK_*.md        the benchmarks that replaced the structural-graph premise
-migrations/               0001_init … 0008_decommission_structural
+migrations/               0001_baseline.sql (the only one; earlier migrations
+                          were collapsed into it by the SQLite port)
 scripts/self-memory.mjs   point the system at this repo
-eval/                     why-spike (knowledge retrieval), link-spike (M14
-                          go/no-go), tier-promotion (M16); e2e-benchmark keeps
-                          only its results/ JSON, cited by the reports above
+eval/                     why-spike (knowledge retrieval), link-spike (link-edge
+                          go/no-go), tier-promotion; e2e-benchmark keeps only
+                          its README and results/ JSON, cited by the reports above
 ```
 
 ---
@@ -333,10 +348,11 @@ real clone and a real SQLite database; none are mocked.
 |---|---|---|---|
 | E2E multi-repo (zod, lodash) | Does the structural graph beat grep at finding code? | **No**, in every regime | `E2E_BENCHMARK_MULTI_REPO.md` |
 | Why-spike | Does memory of *why* beat an agent with full git access? | **Yes** — 7.7 → 1.4 turns, −47% cost | `WHY_MEMORY_SPIKE.md` |
-| M11 re-measurement | Does by-meaning beat node-gated retrieval, through the shipped packages? | **Yes** — MRR 0.85 vs 0.00 | `BENCHMARKS.md` |
-| M14 link spike | Do memory-to-memory edges pay off where code edges did not? | **NO-GO** — real but underpowered, `follows_up` precision 0.00 | `BENCHMARKS.md` |
-| M15 gate (2×2 ablation) | Does anything still measurably depend on structural nodes? | **No** — 0.85/0.90 identical with 501 nodes and with none; node-gated 0.00 in both | `BENCHMARKS.md` |
-| M17 port gate | Does dropping Postgres for SQLite cost retrieval quality? | **No, and it moved up** — 0.85/0.90 → **0.883/0.933**, recall 0.90 → 1.00, from `ts_rank` → `bm25` | `BENCHMARKS.md` |
+| By-meaning re-measurement | Does by-meaning beat node-gated retrieval, through the shipped packages? | **Yes** — MRR 0.85 vs 0.00 | `BENCHMARKS.md` |
+| Knowledge-link spike | Do memory-to-memory edges pay off where code edges did not? | **NO-GO** — real but underpowered, `follows_up` precision 0.00 | `BENCHMARKS.md` |
+| Decommission gate (2×2 ablation) | Does anything still measurably depend on structural nodes? | **No** — 0.85/0.90 identical with 501 nodes and with none; node-gated 0.00 in both | `BENCHMARKS.md` |
+| SQLite port gate | Does dropping Postgres for SQLite cost retrieval quality? | **No, and it moved up** — 0.85/0.90 → **0.883/0.933**, recall 0.90 → 1.00, from `ts_rank` → `bm25` | `BENCHMARKS.md` |
+| Why-spike re-measurement (Sonnet, 2026-08-27) | Do the turn/cost savings hold with a stronger agent on SQLite? | **Yes, smaller** — 6.5 → 1.8 turns, −43% cost; no accuracy gap left (20/20 both) | `BENCHMARKS.md` |
 
 Reproducing the why-spike:
 
@@ -363,22 +379,29 @@ commits. These are trends, not statistics, and each document states so.
 
 `ROADMAP.md` is the source of truth; this is a snapshot.
 
-| | Milestone | Status |
-|---|---|---|
-| M0–M9 | Scaffolding, structural graph, hybrid retrieval, semantic + episodic memory, traversal, context, staleness/GC/eval, Python extraction, pipeline orchestration | ✅ shipped — the structural half later removed by M15 |
-| M10 | Structural extraction: variable-bound declarations | ⛔ superseded, never built — knowledge-first pivot (`spec.md` §24.3) |
-| M11 | Knowledge Layer as Product — by-meaning retrieval + capture shipped into `packages/` | ✅ shipped |
-| M12 | Text anchors & commit-triggered staleness (git replaces the AST for anchoring) | ✅ shipped |
-| M13 | Refine-memory skill — read-repair + `supersedes` chains | ✅ shipped |
-| M14 | Knowledge-link edges (measured spike) | ✅ measured → **NO-GO on integrating** |
-| M15 | Decommission the structural graph — 5 packages, 4 eval sets, 2 tables removed | ✅ shipped — gate passed on a 2×2 ablation |
-| M16 | Memory tiers — short/mid/long-term with access-driven promotion | ✅ shipped |
+| Milestone | Status |
+|---|---|
+| Scaffolding, structural graph, hybrid retrieval, semantic + episodic memory, traversal, context, staleness/GC/eval, Python extraction, pipeline orchestration | ✅ shipped — the structural half later removed |
+| Structural extraction: variable-bound declarations | ⛔ superseded, never built — knowledge-first pivot (`spec.md` §24.3) |
+| Knowledge Layer as Product — by-meaning retrieval + capture shipped into `packages/` | ✅ shipped |
+| Text Anchors & Commit-Triggered Staleness — git replaces the AST for anchoring | ✅ shipped |
+| Refine-Memory Skill — read-repair + `supersedes` chains | ✅ shipped |
+| Knowledge-Link Edges — measured spike | ✅ measured → **NO-GO on integrating** |
+| Decommission the Structural Graph — 5 packages, 4 eval sets, 2 tables removed | ✅ shipped — gate passed on a 2×2 ablation |
+| Memory Tiers — short/mid/long-term with access-driven promotion | ✅ shipped |
+| Storage Backend: Port to SQLite — Postgres, pgvector, pg_trgm and `DATABASE_URL` removed | ✅ shipped |
+| Memories as Markdown, Index as Projection — corpus becomes git-versioned `.md`, SQLite demoted to a derived index (`spec.md` §25.6) | ⬜ next, not started |
 
-M16 carries an open problem: access is not correctness. A plausible-but-wrong
-memory that keeps getting retrieved would climb tiers on raw hit counts.
-`spec.md` §24.5 lists three candidate signals (verification-gated promotion,
-task-outcome feedback, used-vs-ignored) and requires M16 to pick one with a
-measurement rather than an argument.
+Memory tiers carried one open problem: access is not correctness. A
+plausible-but-wrong memory that keeps getting retrieved would climb tiers on raw
+hit counts. `spec.md` §24.5 records the decision that settled it: promotion
+requires *useful* access, composed from two signals — a failed task settles
+every memory it retrieved `rejected` (negative, broad), and only memories the
+session names as used settle `confirmed` (positive, narrow). Everything else is
+neutral. Thresholds: short → mid at 1 confirmed distinct session, mid → long at
+2 more earned after reaching mid, inside a 90-day window. Crediting everything a
+*passing* task retrieved was measured and scored identically to raw access
+counting, which is why the composition is asymmetric.
 
 ---
 

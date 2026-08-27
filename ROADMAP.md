@@ -31,7 +31,13 @@ This checklist is the source of truth for what's done — see
 - [x] M15 — Decommission the Structural Graph (gate passed: by-meaning MRR **0.85** lexical / **0.90** with the stub embedder, *identical* with 501 structural nodes present and with none; node-gated arm **0.00** in both. See BENCHMARKS.md)
 - [x] M16 — Memory Tiers: short/mid/long-term with access-driven promotion (extends §7/§18)
 - [x] M17 — Storage Backend: Port to SQLite (removes Postgres+pgvector+pg_trgm; spec §25) — gate MOVED rather than held: MRR **0.883/0.933**, recall **1.00**, from `ts_rank` → `bm25()`; reported in spec §25.8, not re-baselined
-- [ ] M18 — Memories as Markdown, Index as Projection (spec §25.6) — gated on M17
+- ~~M18 — Memories as Markdown, Index as Projection (spec §25.6)~~ —
+  **deferred, not built** (human decision 2026-08-27, taken after the
+  implementation had been designed and started): the milestone's own gate is
+  "MRR unchanged", so it ships no measured retrieval gain, and this
+  repository's memories are mined commit bodies that git already stores and
+  `git log --grep` already greps. See the M18 section note below and spec
+  §25.6.1.
 
 Repo layout target:
 
@@ -759,7 +765,43 @@ is wrong.
 
 ---
 
-## M18 — Memories as Markdown, Index as Projection (spec §25.6)
+## M18 — Memories as Markdown, Index as Projection (spec §25.6) — DEFERRED
+
+> **Deferred 2026-08-27 by direct human decision — do not build without
+> re-deciding.** Not blocked and not refused: the cost/benefit came out negative
+> once it was actually priced, and the pricing is recorded here so the next cycle
+> does not re-derive it from an empty branch. Four findings, from a run that read
+> the whole write path and drafted the corpus module before stopping:
+>
+> 1. **The gate is "MRR unchanged" (§25.6, §25.7).** By its own acceptance
+>    criteria the milestone delivers no measured retrieval gain. Every other
+>    shipped milestone had a number that had to move, or to hold *under
+>    ablation*; this one only has a number that must not move.
+> 2. **On this corpus it stores the same text twice in the same repository.**
+>    All ~43 of this repo's memories are mined commit bodies
+>    (`captureGitHistory` over its own history), so "git-versioned, greppable,
+>    reviewable in a PR" is a property `git log --grep` already has for that
+>    class. The argument survives only for **scout reports** — the one class
+>    nothing can regenerate, and the one spec §25.5 decision 2 already gives a
+>    portable export.
+> 3. **The cost is permanent and on the write path.** Files as source of truth
+>    means a write-ordering rule in `recordExperience`, `supersedeExperience`,
+>    `markExperienceVerified` and `setExperienceWriterSession`; hand-edit
+>    semantics to decide (does an edited observation invalidate the embedding,
+>    and the `verified_at` that was claimed about the old text?); a prune guard
+>    that must refuse an empty corpus; and a whole-corpus supersede-cycle check,
+>    because the per-link one in `supersedeExperience` cannot see a cycle spread
+>    across three files that all arrive at once.
+> 4. **The measured ceiling was elsewhere.** The 2026-08-27 dogfood A/B
+>    (`BENCHMARKS.md`) found the live loss was `ask` truncating each memory to 14
+>    lines — 3 of 6 questions lost the deciding sentence. Five lines fixed it
+>    (a0f4045). Storage shape was not what cost turns.
+>
+> What would reopen it, named rather than left to taste: a corpus dominated by
+> memories that are NOT reproducible from the host repository's own history
+> (hand-authored knowledge, or scout reports outnumbering mined commits), or a
+> second consumer that must read the corpus without running this CLI. Text
+> preserved below for the record.
 
 **Goal:** make the memory corpus `.md` + YAML frontmatter — git-versioned,
 greppable, reviewable in a pull request — and demote SQLite to a derived,
@@ -814,6 +856,9 @@ Storage (spec §25): M17 is a behaviour-preserving port and depends on nothing
 except the shipped retrieval it must not change — its gate is the M11/M15 eval
 figure reproduced on the new engine. M18 is gated on M17 for the reason §25.6
 gives: held constant, the eval number distinguishes a port defect from a
-redesign defect; landed together, it cannot. Neither milestone may touch
+redesign defect; landed together, it cannot. That gating never came into play:
+M18 was deferred 2026-08-27 on cost/benefit (its section note above, spec
+§25.6.1), so M17's held-constant gate was the whole of §25's measurement.
+Neither milestone may touch
 `fuseLegs()` — a port that needs the fusion changed has found a defect to
 report, not a fix to apply.

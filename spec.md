@@ -1479,6 +1479,45 @@ not to markdown:
 - **Embeddings are 6144 bytes per memory**, which in frontmatter destroys the
   diffability that motivated markdown in the first place.
 
+#### 25.6.1 Priced, then deferred (2026-08-27)
+
+§25.6 above was written as "deferred, and here is the shape it would take". It is
+now deferred *with a price attached*, by direct human decision at the point where
+the port had landed and this milestone was next in line. The three obstacles
+listed above were all solvable — the run that priced this designed the file
+format, the write-ordering rule and the rebuild before stopping — and none of
+them is why it stopped.
+
+What stopped it is that the milestone has no failable number. §25.7 already
+disclaims a latency claim and a quality claim; ROADMAP.md M18's gate is "MRR
+unchanged". Set against that: on the corpus that actually exists, every memory is
+a mined commit body, so the git-versioned/greppable/PR-reviewable properties
+markdown buys are properties the host repository already has for that class —
+`git log --grep` reaches the same text without a second copy of it. The class
+where the argument does hold is the scout report, and §25.5 decision 2 already
+gives that class a portable export for exactly the reason it holds (nothing can
+regenerate one).
+
+The cost, by contrast, is permanent and sits on the write path: four writers
+would have to keep a file and a row in step, hand-edit semantics would have to be
+decided (whether an edited observation invalidates the embedding and the
+`verified_at` that was claimed about the old text — both yes, in the draft), and
+the rebuild would need a prune guard plus a whole-corpus cycle check that the
+per-link one in `supersedeExperience` cannot stand in for.
+
+So the decision recorded here is: **SQLite stays the only store, and the
+source-of-truth split waits for a corpus it would actually pay for.** Two
+triggers, named the way §25.7 names its scale ceiling rather than left to taste —
+a corpus dominated by memories that are *not* reproducible from the host
+repository's own history (hand-authored knowledge, or scout reports outnumbering
+mined commits), or a second consumer that must read the corpus without running
+this CLI. Neither exists today.
+
+Related, and the reason this was priced at all rather than built on schedule: the
+2026-08-27 dogfood A/B in `BENCHMARKS.md` had just located the measurable loss in
+retrieval *output* (`ask` printed only the first 14 lines of each memory, cutting
+the deciding sentence out of 3 of 6 answers), not in storage shape.
+
 ### 25.7 What this section does not claim
 
 - **No latency claim.** Postgres was never too slow. §25.1's figures show

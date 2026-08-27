@@ -200,6 +200,19 @@ against `git log`. Accuracy was 20/20 in both, so memory buys speed here, not
 correctness. The earlier haiku run (`WHY_MEMORY_SPIKE.md`) measured a larger gap,
 7.7 → 1.4 turns, because that baseline agent was weaker.
 
+**Fixing bugs, not just answering questions.** 5 seeded regressions in zod v4,
+worktree parked at the fix commit's parent so the answer is not in git history,
+graded by applying the real fix commit's tests:
+
+| | bare agent | with memory |
+|---|---|---|
+| Tasks passing | 4 / 5 | **5 / 5** |
+| Turns, all 5 tasks | 86 | **55** (−36%) |
+| Cost | $2.03 | **$1.49** (−26%) |
+
+The gain concentrates where a fix spans several branches (a tuple fix went 35 →
+13 turns); one-line fixes are neutral. n=5, one run per cell.
+
 **Retrieval quality.** MRR of the commit that actually answers each question:
 **0.88, recall 1.00** on a 165-commit corpus.
 

@@ -165,7 +165,12 @@ async function ask(question) {
       console.log(`> **${core.POSSIBLY_STALE_FLAG}** (${verdict.reason})`);
       console.log(`> ${core.REFINE_MEMORY_HINT} — \`/refine-memory ${k.id}\`\n`);
     }
-    console.log(`${k.observation.split("\n").slice(0, 14).join("\n")}\n`);
+    // Printed in full, deliberately. This used to cut every memory at 14 lines,
+    // and the 2026-08-27 dogfood A/B (BENCHMARKS.md) measured what that costs:
+    // for 3 of 6 questions the deciding sentence of an 8 KB commit body was
+    // below the cut, so the memory was retrieved correctly and then truncated
+    // away. A long memory is the product working, not a formatting problem.
+    console.log(`${k.observation}\n`);
   }
   await closeDb();
 }

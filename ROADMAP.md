@@ -38,6 +38,7 @@ This checklist is the source of truth for what's done — see
   repository's memories are mined commit bodies that git already stores and
   `git log --grep` already greps. See the M18 section note below and spec
   §25.6.1.
+- [ ] M19 — Distilled Memories (spec §26) — **built and measured 2026-08-28; the box stays unchecked because the measurement did not clear §26.5's bar.** Injected context −19% and turns on fired prompts 6.5 → 4.5, against a halved citation rate (4/19 → 2/19), +38% wall, still +43% cost over grep+git, and ~$8.4 of one-time spend. The blind judge's 11/6/2 → 4/14/1 flip is reported as uninterpretable: on the 7 prompts where the hook did not fire — configuration-identical arms — the judge picked the memory file 6/7, where the prior run's same control was a balanced 3/3/2, so the noise floor moved between runs. See spec §26.6 and BENCHMARKS.md.
 
 Repo layout target:
 

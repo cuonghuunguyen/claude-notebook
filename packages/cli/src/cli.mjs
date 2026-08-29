@@ -90,6 +90,31 @@ async function sync() {
   const mined = result.mined;
   const added = result.recorded;
 
+  // spec.md §26 / M19: rewrite each raw commit body into a short what/why/where
+  // digest, which is then what every retrieval leg searches and what `ask`
+  // renders. After capture, because a memory has to exist before it can be
+  // distilled; before the second embedding backfill, because
+  // `setExperienceDigest` nulls the embedding so the digest is what gets
+  // embedded. `captureGitHistory` already backfilled once at the top of this
+  // run, so the re-backfill below is what re-embeds the rows distilled here.
+  // Opt-in, not opt-out: §26.6 measured distillation as not clearing its own
+  // acceptance bar on the corpus it was tested against, so it does not spend a
+  // user's money by default. The column, the migration and the `coalesce`
+  // fallback stay because they cost nothing while every digest is NULL.
+  let distill = { distilled: 0, skipped: 0 };
+  if (process.env["CLAUDE_NOTEBOOK_DISTILL"] === "1") {
+    try {
+      distill = await capture.distillExperiences({ runner: capture.createClaudeCliRunner() });
+    } catch (err) {
+      if (err instanceof capture.ClaudeCliMissingError) {
+        console.error("distill: skipped — claude CLI not on PATH");
+      } else {
+        throw err;
+      }
+    }
+  }
+  const reembedded = await capture.backfillEmbeddings(embedder);
+
   // spec.md §24.2.3 / M12: now that history has been mined, flag the memories
   // that history has since overtaken. Runs after capture, not before: a commit
   // mined in this same pass must not flag the memory it just created (capture
@@ -102,6 +127,9 @@ async function sync() {
         repoId: REPO_ID,
         explanatoryCommits: mined,
         experiencesAdded: added,
+        distilled: distill.distilled,
+        distillSkipped: distill.skipped,
+        reembedded,
         knowledgeMs: Date.now() - t1,
         staleness: {
           changedPaths: suspect.changedPaths,
@@ -187,10 +215,13 @@ async function ask(question) {
       console.log(`> **${core.POSSIBLY_STALE_FLAG}** (${verdict.reason})`);
       console.log(`> ${core.REFINE_MEMORY_HINT} — \`/refine-memory ${k.id}\`\n`);
     }
-    const body = k.observation.length > budget
-      ? `${k.observation.slice(0, Math.max(budget, 0))}\n_(… ${k.observation.length - budget} more chars — \`claude-notebook show ${k.id}\`)_`
-      : k.observation;
-    budget = Math.max(budget - k.observation.length, 200);
+    // spec.md §26: the digest is what was retrieved, so the digest is what is
+    // shown. The raw body stays one `show` away.
+    const text = k.digest ?? k.observation;
+    const body = text.length > budget
+      ? `${text.slice(0, Math.max(budget, 0))}\n_(… ${text.length - budget} more chars — \`claude-notebook show ${k.id}\`)_`
+      : text;
+    budget = Math.max(budget - text.length, 200);
     console.log(`${body}\n`);
   }
   await closeDb();
@@ -348,6 +379,10 @@ async function show(id) {
         anchors: target.anchors,
         confidence: target.confidence,
         chain: chain.map((e) => e.id),
+        // Both, per spec.md §26: the digest is what retrieval matched on, the
+        // observation is the immutable source it was derived from, and a reader
+        // checking whether the digest lost something needs to see the pair.
+        digest: target.digest ?? null,
         observation: target.observation,
         lessons: target.lessons,
       },

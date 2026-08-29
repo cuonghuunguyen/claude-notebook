@@ -170,10 +170,14 @@ export async function backfillEmbeddings(
 }
 
 /**
- * What gets embedded for a memory: the same `task || ' ' || observation` text
- * migration 0004's lexical indexes are built over, so all three legs of
- * by-meaning retrieval search the same content.
+ * What gets embedded for a memory: the same text the lexical legs are built
+ * over, so all three legs of by-meaning retrieval search the same content.
+ *
+ * `digest ?? observation` per spec.md §26, matching `EXPERIENCE_TEXT`'s
+ * `coalesce(digest, observation)` exactly. `setExperienceDigest` nulls the
+ * embedding when it writes a digest, which is what makes the two agree without
+ * a separate re-embed pass: the ordinary backfill picks the row up again.
  */
 export function embeddedText(experience: Experience): string {
-  return `${experience.task} ${experience.observation}`;
+  return `${experience.task} ${experience.digest ?? experience.observation}`;
 }

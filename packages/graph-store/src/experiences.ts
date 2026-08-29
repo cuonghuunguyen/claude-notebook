@@ -20,6 +20,8 @@ interface ExperienceRow {
   id: string;
   task: string;
   observation: string;
+  /** spec.md §26. NULL until a distillation pass writes one; derived, never a rewrite of `observation`. */
+  digest: string | null;
   hypothesis: string | null;
   action: string | null;
   result: string | null;
@@ -54,6 +56,7 @@ function rowToExperience(row: ExperienceRow): Experience {
     id: row.id,
     task: row.task,
     observation: row.observation,
+    digest: row.digest ?? undefined,
     hypothesis: row.hypothesis ?? undefined,
     action: row.action ?? undefined,
     result: row.result ?? undefined,
@@ -75,7 +78,7 @@ function rowToExperience(row: ExperienceRow): Experience {
   };
 }
 
-const EXPERIENCE_COLUMNS = `id, task, observation, hypothesis, action, result, lessons, related_nodes, anchors, suspect, suspect_reason, superseded_by, superseded_at, verified_at, confidence, "timestamp", cold, tier`;
+const EXPERIENCE_COLUMNS = `id, task, observation, digest, hypothesis, action, result, lessons, related_nodes, anchors, suspect, suspect_reason, superseded_by, superseded_at, verified_at, confidence, "timestamp", cold, tier`;
 
 /**
  * The same column list qualified with the `e` alias, for the queries that join
@@ -243,8 +246,13 @@ export async function markExperienceCold(id: string): Promise<void> {
 // practice the flag is only set by an explicit `markExperienceCold` call.
 // ---------------------------------------------------------------------------
 
-/** The searched text: exactly what the FTS5 index and the trigram scan are built over. */
-const EXPERIENCE_TEXT = `(task || ' ' || observation)`;
+/**
+ * The searched text: exactly what the FTS5 index and the trigram scan are built
+ * over. `coalesce` per spec.md §26 — a distilled memory is searched by its
+ * digest, an undistilled one by its raw body, and migration 0003 keeps the FTS5
+ * generated column and its triggers on this same expression.
+ */
+const EXPERIENCE_TEXT = `(task || ' ' || coalesce(digest, observation))`;
 
 export interface ExperienceSearchHit {
   experience: Experience;
@@ -489,6 +497,41 @@ export async function listExperienceIdsMissingEmbedding(limit = 1000): Promise<s
     [limit]
   );
   return rows.map((row) => row.id);
+}
+
+/**
+ * Writes a memory's distilled digest (spec.md §26) and drops its embedding, so
+ * the existing `listExperienceIdsMissingEmbedding` backfill re-embeds it from
+ * the digest on the same sync. Two derived columns, one of which invalidates
+ * the other — expressed as a single statement rather than as a rule a caller
+ * has to remember.
+ *
+ * Consistent with §8's append-only rule for the same reason
+ * `upsertExperienceEmbedding` is: this adds derived search material for content
+ * that never changes, it does not correct what the memory says.
+ */
+export async function setExperienceDigest(id: string, digest: string): Promise<void> {
+  await getDb().query(`UPDATE experiences SET digest = $2, embedding = NULL WHERE id = $1`, [
+    id,
+    digest,
+  ]);
+}
+
+/**
+ * Memories with no digest yet, oldest first — the distillation worklist.
+ *
+ * Superseded rows are excluded: they are invisible to retrieval by default, so
+ * distilling one spends an LLM call on text nothing will ever search.
+ */
+export async function listExperiencesMissingDigest(limit = 200): Promise<Experience[]> {
+  const { rows } = await getDb().query<ExperienceRow>(
+    `SELECT ${EXPERIENCE_COLUMNS} FROM experiences
+      WHERE digest IS NULL AND superseded_by IS NULL
+      ORDER BY "timestamp"
+      LIMIT $1`,
+    [limit]
+  );
+  return rows.map(rowToExperience);
 }
 
 /** Full text of one experience, for computing its embedding. */

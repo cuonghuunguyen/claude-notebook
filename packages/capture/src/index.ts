@@ -1,4 +1,5 @@
 export * from "./corpus.js";
+export * from "./distill.js";
 export * from "./git.js";
 export * from "./scout.js";
 // `testing.js` is deliberately NOT re-exported here: it builds throwaway git

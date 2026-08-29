@@ -68,8 +68,27 @@ a body of at least 200 characters that says *why* — `because`, `instead`,
 `fix typo` is skipped, because its knowledge is re-derivable from the diff. Each
 kept commit becomes a memory anchored to the files that commit touched.
 
+`sync` can also **distill** each memory, and this is **off by default**. With
+`CLAUDE_NOTEBOOK_DISTILL=1`, one `claude -p --model haiku` call per memory
+rewrites the raw commit body into a ≤120-word `What:` / `Why:` / `Where:`
+summary, stored alongside the body in a `digest` column; retrieval then searches
+the digest and `ask` prints it. The original body is never modified and stays
+one `claude-notebook show <id>` away, so `UPDATE experiences SET digest = NULL`
+undoes the whole thing.
+
+It is off by default because it was measured and did not pay: on the corpus it
+was tested against it bought a 19% smaller injection but halved how often the
+context was actually cited, added 38% wall time, and still cost more than plain
+grep+git — see spec.md §26.6 and `BENCHMARKS.md`. It is the only part of the
+system that costs money (once per memory for its life, at most 200 memories per
+`sync`), and it is kept because that verdict is corpus-shaped: a history of long
+commit bodies has far more to win than the short ones it was tried on. Without
+the variable, or without `claude` on PATH, `sync` prints `distill: skipped` and
+retrieval uses the raw bodies.
+
 Re-run it after every merge. It is idempotent — already-recorded commits are
-skipped — and it also re-flags memories that newer commits have overtaken.
+skipped, already-distilled memories are not re-distilled — and it also re-flags
+memories that newer commits have overtaken.
 
 **What you get depends on your commit messages.** A history of `wip` and
 `fix stuff` produces almost nothing. Run `sync` first and read

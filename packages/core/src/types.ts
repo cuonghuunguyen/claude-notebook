@@ -58,6 +58,18 @@ export interface Experience {
   task: string;
 
   observation: string;
+
+  /**
+   * A short what/why/where summary of `observation`, written at sync time by
+   * `distillExperiences` (spec.md §26). Derived, like the embedding: it never
+   * replaces `observation` in storage, but it IS what retrieval searches and
+   * what `ask` renders when it exists.
+   *
+   * Optional because a corpus can be half-distilled — a distillation pass is
+   * resumable, and a run without an LLM runner leaves every digest NULL.
+   */
+  digest?: string;
+
   hypothesis?: string;
   action?: string;
   result?: string;

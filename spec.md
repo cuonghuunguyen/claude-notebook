@@ -1659,3 +1659,129 @@ clean machine.
 
 **The gate was re-measured after the fixes, not assumed:** 0.883 lexical-only
 and 0.933 with the stub embedder, recall 1.00 — identical to the numbers above.
+
+---
+
+## 26. Distilled Memories (extends §8, §24.2.1 — proposed via this experiment, 2026-08-28)
+
+### 26.1 The problem this addresses
+
+A mined memory is a raw git commit body, stored verbatim as
+`experiences.observation` (`packages/capture/src/git.ts`). That is the right
+*content* — `WHY_MEMORY_SPIKE.md` measured it cutting an agent from 7.7 turns to
+1.4 — in the wrong *shape*. A commit body is written for a reviewer who already
+has the diff open: it is long, it buries the decision in the middle, and it is
+full of terms that match a question's words without answering the question.
+
+The 2026-08-28 real-prompt replay (private `claude-notebook-benchmark`
+repo, BENCHMARKS.md) priced that
+shape. After the calibration pass cut the median injection from 8,970 to 3,922
+characters, the memory arm still lost the blind pairwise judge 11/6/2 and cost
+32% more than plain grep+git. Cutting the injected *size* moved cost by 1%,
+which says the problem is not volume. The hypothesis §26 tests is that it is
+shape: that a short summary written *for retrieval* both matches better and
+reads better than the body it was written from.
+
+### 26.2 The decision
+
+`experiences` gains a `digest` column (migration `0003`). After capture, `sync`
+sends each memory's `task`, `observation` and anchor paths to an LLM and stores
+a ≤120-word, three-line `What:` / `Why:` / `Where:` summary. Retrieval then
+searches `task || ' ' || coalesce(digest, observation)` on all three legs, and
+`ask` renders the digest.
+
+Four properties are load-bearing:
+
+1. **`observation` is never modified.** §8's append-only rule is unchanged.
+   `digest` is *derived*, in exactly the sense `embedding` is: reproducible from
+   the memory, and `UPDATE experiences SET digest = NULL` returns the system to
+   raw-body retrieval with nothing else to undo. The digest is a lossy view; the
+   commit body remains the record, one `show <id>` away.
+2. **`coalesce`, not a switch.** A half-distilled corpus is a valid corpus —
+   distilled rows are searched by digest, undistilled ones by body, in the same
+   query. That is what makes the pass resumable and what makes a missing `claude`
+   binary a degradation rather than a failure.
+3. **One derived column invalidates the other.** `setExperienceDigest` writes the
+   digest and nulls the embedding in one statement, so the existing
+   `listExperienceIdsMissingEmbedding` backfill re-embeds from the digest on the
+   same `sync`. Nothing new was built for that; the invariant is expressed where
+   it cannot be forgotten rather than as a rule a caller must follow.
+4. **The runner is injected.** `distillExperiences({ runner })` takes
+   `(prompt) => Promise<string>`; `createClaudeCliRunner` is the shipped default.
+   The pass is therefore testable without an LLM, and a caller who wants a
+   different model or a local one does not need a code change here.
+
+### 26.3 What is NOT decided here
+
+This does not reintroduce a per-language dependency (§24.2 point 7): the prompt
+carries text and paths, and `--allowedTools ""` keeps the runner from reading
+the repository at all. It does not change `fuseLegs`, the tier boost, or the
+§7 promotion thresholds. It does not make the digest authoritative — every
+consumer that needs the real text reads `observation`, and `show` prints both
+precisely so a reader can see what the summary dropped.
+
+### 26.4 Cost, stated plainly
+
+Distillation is the first thing in this system that costs money per memory.
+One Haiku call per memory, once for that memory's life, bounded per `sync` by
+`limit` (200 by default). On the 215-memory replay corpus that is a one-time
+spend measured in single-digit dollars; a 5,000-commit repository would be a
+different conversation, which is why §26.6 leaves the pass **off unless
+`CLAUDE_NOTEBOOK_DISTILL=1` is set** — a system that spends money per memory
+must be asked to, not asked to stop. A skipped memory (empty or
+oversized runner output, a timeout, a refusal) keeps a NULL digest and is
+retried by the next `sync`, which is the right failure mode for a transient
+error and costs one retry rather than a re-run of the corpus.
+
+### 26.5 The acceptance question
+
+This section is an experiment with a stated null hypothesis, and §26 records
+the verdict either way. Distillation pays only if the real-prompt replay —
+the same 19 prompts, the same clone, the same blind pairwise judge — moves
+against the calibrated-but-undistilled arm. It does not pay if the judge tally
+and the cost delta are flat, and a flat result is a reason to null the column,
+not a reason to look for a better prompt. See BENCHMARKS.md's 2026-08-28
+distillation row for what actually happened.
+
+### 26.6 The verdict (2026-08-28)
+
+**It did not clear the bar, and the column is retained un-defaulted rather than
+declared a win.** Measured on the same 19 prompts and the same clone:
+
+- Median injected context per fired prompt 3,922 → **3,167** chars (−19%).
+- Median turns over the 12 fired prompts 6.5 → **4.5** (baseline grep+git: 6.5).
+- Median cost over those prompts $0.256 → **$0.244**, still **+43%** over the
+  $0.171 baseline. Median wall 24.5 s → **33.7 s**, i.e. worse.
+- Answers citing an injected memory **4/19 → 2/19**. The digest is read less
+  often than the body it replaced, which is the opposite of §26.1's hypothesis.
+- One-time spend **~$8.4** for 215 memories, and a new per-memory dependency on
+  an LLM at capture time.
+
+The blind judge moved 11/6/2 to 4/14/1, and that number is **not** evidence.
+The methodological point is worth more than the experiment: on the 7 prompts
+where the hook did not fire, the two arms are configuration-identical, and the
+judge still picked the memory file 6 times, tied once, and the baseline zero.
+The calibrated run's identical control had been a balanced 3/3/2. So the noise
+floor itself moved between the two runs — the baseline `*-off.json` files are
+hours older than the distilled ones — and the 8/4 split on the 12 fired prompts
+sits inside that drift. **A reused baseline arm is only valid while its own
+null control stays balanced; this one did not, and the pairwise result is
+therefore uninterpretable rather than favourable.** Any future re-run of
+the replay must regenerate both arms together, or check this control
+before quoting a judge tally.
+
+What is kept and why: the column, the migration and the `coalesce` fallback
+stay, because they cost nothing when no digest exists and because the −19%
+injection and the 6.5 → 4.5 turn movement are real, reproducible, and worth
+re-testing on a corpus of long commit bodies. This one is not that corpus —
+its mean body is **937 characters** against a mean digest of **715**, so there
+was only ~24% of shape to win, and two digests came out *longer* than the body
+they summarise. §26.5's own rule says a flat result is a reason to null the
+column; M19 stays unchecked.
+
+**The default was then decided by a human (2026-08-29): distillation is OFF
+unless `CLAUDE_NOTEBOOK_DISTILL=1` is set.** A measured-negative feature does
+not get to spend a user's money by having to be switched off. What turning it
+on is for is worth stating so a later cycle does not re-derive it: a corpus
+whose commit bodies are long enough that a 120-word digest is a real reduction.
+This one, at a 937-character mean body, was not.

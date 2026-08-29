@@ -289,7 +289,14 @@ export function fuseLegs(
       // §24.5 requires: a capped multiplier can never lift a weak match to the
       // top over a genuinely better one, and it can never remove anything.
       // The unit tests pin both halves.
-      score: entry.score * tierBoost(entry.tier) * lengthPrior(entry.experience.observation.length),
+      // Length prior over the SEARCHED text (spec.md §26): a distilled memory
+      // is matched on its digest, so penalising it for the length of the raw
+      // body it was distilled away from would price a cost retrieval no longer
+      // pays.
+      score:
+        entry.score *
+        tierBoost(entry.tier) *
+        lengthPrior((entry.experience.digest ?? entry.experience.observation).length),
       contentScore: entry.score,
       tier: entry.tier,
       legs: entry.legs,

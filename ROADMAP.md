@@ -796,7 +796,7 @@ is wrong.
 > 4. **The measured ceiling was elsewhere.** The 2026-08-27 dogfood A/B
 >    (`BENCHMARKS.md`) found the live loss was `ask` truncating each memory to 14
 >    lines — 3 of 6 questions lost the deciding sentence. Five lines fixed it
->    (a0f4045). Storage shape was not what cost turns.
+>    (121baa2). Storage shape was not what cost turns.
 >
 > What would reopen it, named rather than left to taste: a corpus dominated by
 > memories that are NOT reproducible from the host repository's own history

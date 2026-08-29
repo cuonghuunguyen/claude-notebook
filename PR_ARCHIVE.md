@@ -6,7 +6,20 @@ its git history (2026-08-29). The GitHub PR numbers cited across `CHAIN_LOG.md`,
 `BENCHMARKS.md` and `spec.md` resolve here instead of to dead links.
 
 Commit SHAs below are the pre-rewrite ones. The history rewrite that accompanied
-the recreate changed every SHA from `27378f9` onward; earlier SHAs are unchanged.
+the recreate changed every SHA from `27378f9` onward; earlier SHAs are unchanged
+and still resolve. The three merge commits that moved:
+
+| PR | Old SHA | Current SHA |
+|---|---|---|
+| #22 | `4ae0906` | `7b0b975` |
+| #23 | `2257cd4` | `6ca980a` |
+| #24 | `ec0610e` | `088b5f8` |
+
+Two other rewritten commits were cited in prose and have been updated in place:
+`a0f4045` → `121baa2` (in `CHAIN_LOG.md` and `ROADMAP.md`). A third, the
+container-name redaction, no longer exists as its own commit — the rewrite
+removed the string from the commit that introduced it, which made the follow-up
+redaction empty.
 
 | PR | State | Merge commit | Title |
 |---|---|---|---|

@@ -37,12 +37,32 @@ export function createFakeEmbedder(dim = DEFAULT_DIM): EmbeddingProvider {
   };
 }
 
+/**
+ * Function words dropped before hashing. Same list `packages/episodic` drops
+ * before building its full-text query, and for the same reason: they carry no
+ * discriminating signal. Here they did worse than nothing — every prompt and
+ * every commit body share them, so before this filter the cosine between an
+ * unrelated question and the longest commit in a repository was ~0.6 (the
+ * 2026-08-28 real-prompt replay, `BENCHMARKS.md`), which made the vector leg a
+ * length detector rather than an overlap detector and left no score at which
+ * "nothing relevant" could be told from "relevant".
+ */
+export const EMBED_STOPWORDS: ReadonlySet<string> = new Set([
+  "the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "with", "is",
+  "are", "was", "were", "be", "been", "it", "its", "that", "this", "why",
+  "what", "how", "does", "do", "did", "when", "which", "who", "whom", "there",
+  "then", "than", "so", "as", "at", "by", "from", "into", "instead", "rather",
+  "not", "no", "any", "ever", "still", "just", "also", "would", "could",
+  "should", "can", "will", "happened", "happens", "used", "use", "we", "our",
+  "i", "you",
+]);
+
 function tokenize(text: string): string[] {
   return text
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .split(/[^a-zA-Z0-9]+/)
-    .filter(Boolean)
-    .map((s) => s.toLowerCase());
+    .split(/[^a-zA-Z0-9_]+/)
+    .map((s) => s.toLowerCase())
+    .filter((s) => s.length > 2 && !EMBED_STOPWORDS.has(s));
 }
 
 function fnv1a(str: string): number {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Experience, MemoryTier } from "@cognitive-memory/core";
 import type { ExperienceSearchHit } from "@cognitive-memory/graph-store";
 import { TIER_BOOST } from "@cognitive-memory/tiers";
-import { DEFAULT_LEG_WEIGHTS, fuseLegs, toExperienceTsQuery, type MeaningLeg } from "./byMeaning.js";
+import { DEFAULT_LEG_WEIGHTS, fuseLegs, lengthPrior, LENGTH_PRIOR_FREE_CHARS, toExperienceTsQuery, type MeaningLeg } from "./byMeaning.js";
 
 function experience(id: string, overrides: Partial<Experience> = {}): Experience {
   return {
@@ -145,6 +145,23 @@ describe("fuseLegs (spec.md §24.4 — §9's hybrid shape over experience conten
 
   it("returns nothing when every leg came back empty", () => {
     expect(fuseLegs([leg("text", []), leg("trigram", []), leg("vector", [])])).toEqual([]);
+  });
+});
+
+describe("length prior (2026-08-28 real-prompt calibration)", () => {
+  it("leaves bodies at or under the free size alone and damps a 21 KB body to ~0.3x", () => {
+    expect(lengthPrior(LENGTH_PRIOR_FREE_CHARS)).toBe(1);
+    expect(lengthPrior(21_751)).toBeCloseTo(1 / (1 + Math.log(21_751 / 2000)), 6);
+  });
+
+  it("drops a huge body below a short one at the same fused rank, and reports the undamped content score", () => {
+    const huge = { experience: experience("huge", { observation: "x".repeat(21_751) }), score: 1, tier: "short" as const };
+    const fused = fuseLegs([
+      { leg: "text", hits: [huge] },
+      { leg: "vector", hits: [{ experience: experience("short"), score: 1, tier: "short" }] },
+    ], { legWeights: { text: 1, vector: 1 } });
+    expect(fused.map((h) => h.experience.id)).toEqual(["short", "huge"]);
+    expect(fused[1]?.contentScore).toBeCloseTo(fused[0]?.contentScore ?? 0, 9);
   });
 });
 

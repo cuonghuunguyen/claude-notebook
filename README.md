@@ -82,7 +82,7 @@ claude-notebook ask "why was the base64 change reverted?"
 ```
 
 ```
-## Why / prior knowledge (4)
+## Why / prior knowledge (3)
 
 ### Revert "fix(v4): reject whitespace in z.base64() to close atob bypass"
 _commit 23edf484 · 2026-04-28 · hybrid_match (text+trigram+vector), score 0.0325_
@@ -98,6 +98,14 @@ Matching is by meaning, against the memory's own text: full-text (FTS5 + bm25),
 trigram for identifiers, and vector cosine, fused by weighted RRF. Not by file
 path, and not by whichever file you happen to be editing.
 
+A question the corpus does not answer returns `(0)` and, through the plugin
+hook, injects nothing: the top vector similarity has to clear a floor (0.2)
+before anything is printed. Bodies share a 3,000-character budget in rank
+order — the top hit is printed nearly whole, the rest are cut with a `show <id>`
+pointer. Both numbers come from the 2026-08-28 real-prompt replay in
+`BENCHMARKS.md`, where the uncut, unfloored version fired on every prompt
+(including "why is vscode not starting") and injected a median 9 KB.
+
 **`possibly-stale` is a warning, not a filter.** A memory is flagged when a
 *newer* commit touched a file it is anchored to. It is still returned, because a
 possibly-outdated reason beats no reason. To settle a flag instead of living
@@ -108,6 +116,9 @@ Nothing is ever deleted; `history <id>` shows what you used to believe.
 Expect a high flag rate: capture anchors a mined memory to every file its commit
 touched, so on this repo all 41 memories are flagged today, and a `sync` of zod
 flagged 164 of 177. A flag means a file changed, never that the memory is wrong.
+Once more than half the corpus is flagged, `ask` prints the base rate once
+(`210/215 memories are flagged possibly-stale …`) instead of a banner per hit —
+a warning on 98% of rows carries no information. `suspects` still lists them.
 
 ## Let agents write back what they worked out
 

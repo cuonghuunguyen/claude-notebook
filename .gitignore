@@ -10,3 +10,7 @@ coverage/
 .claude/memory.db-shm
 .serena/
 .claude/settings.local.json
+
+# Real-prompt benchmark harness — private project data.
+# Lives in cuonghuunguyen/claude-notebook-benchmark (private).
+eval/realworld/

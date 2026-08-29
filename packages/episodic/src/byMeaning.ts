@@ -31,6 +31,7 @@
  *     said. RRF only reads each leg's *rank order*, which is the part each leg
  *     is actually authoritative about.
  */
+import { EMBED_STOPWORDS } from "@cognitive-memory/core";
 import type { EmbeddingProvider, Experience, MemoryTier } from "@cognitive-memory/core";
 import {
   searchExperiencesByEmbedding,
@@ -155,18 +156,25 @@ export interface QueryByMeaningOptions {
   session?: string;
   legWeights?: Partial<Record<MeaningLeg, number>>;
   rrfK?: number;
+  /**
+   * Relevance floor: when the vector leg's best cosine is below this, the
+   * question has no answering memory and the call returns `[]`.
+   *
+   * RRF cannot do this itself — a fused score is a function of rank, so the
+   * top hit for "why vscode is not starting" scores the same as the top hit for
+   * a question the corpus actually answers. Cosine is the one leg score that is
+   * comparable across queries, so it is the gate. Default: no floor (every
+   * question returns its top `limit`), which is what every caller before
+   * 2026-08-28 got. The CLI sets 0.2, calibrated on the 19-prompt real-world
+   * replay in `BENCHMARKS.md`: the four off-repo prompts topped out at 0.196,
+   * every prompt whose answer was later cited scored ≥ 0.29. Ignored when there
+   * is no vector leg.
+   */
+  minVectorScore?: number;
 }
 
-/** Stopwords dropped before building the tsquery. Question words in particular: every "why does X" question contains them, so they carry no discriminating signal. */
-const STOPWORDS = new Set([
-  "the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "with", "is",
-  "are", "was", "were", "be", "been", "it", "its", "that", "this", "why",
-  "what", "how", "does", "do", "did", "when", "which", "who", "whom", "there",
-  "then", "than", "so", "as", "at", "by", "from", "into", "instead", "rather",
-  "not", "no", "any", "ever", "still", "just", "also", "would", "could",
-  "should", "can", "will", "happened", "happens", "used", "use", "we", "our",
-  "i", "you",
-]);
+/** Stopwords dropped before building the tsquery. Shared with the fake embedder (`EMBED_STOPWORDS`) so both legs read the same content words. */
+const STOPWORDS = EMBED_STOPWORDS;
 
 /**
  * Question -> OR-joined `tsquery` string.
@@ -192,6 +200,31 @@ export function toExperienceTsQuery(question: string): string {
       .filter((t) => t.length > 2 && !STOPWORDS.has(t))
   );
   return [...terms].join(" | ");
+}
+
+/**
+ * Length prior applied after fusion, next to the tier boost. Bodies up to
+ * `LENGTH_PRIOR_FREE_CHARS` are untouched (that is above the 90th percentile of
+ * a mined corpus — median commit body ~700-900 chars); longer ones are damped
+ * by 1/(1+ln(len/free)), so a 21 KB body scores ~0.3x.
+ *
+ * Why it exists: every leg rewards a long body. FTS5's bm25 sums over an
+ * OR-query's matched terms and a long body matches most of them; a long body
+ * has more trigram extents to match; and a long body's hashed bag of words
+ * overlaps more of any query. On the 2026-08-28 real-prompt replay one 21,751
+ * character merge commit — the longest in a 215-memory corpus, 25x the median
+ * — reached the top four for 8 of 19 unrelated prompts. With this prior it
+ * reaches the top three for none, and the top hit of every prompt whose memory
+ * was actually cited is unchanged (`BENCHMARKS.md`).
+ *
+ * Applied to the fused score, not inside a leg, for the same reason the tier
+ * boost is: a leg's rank order is what the leg is authoritative about.
+ */
+export const LENGTH_PRIOR_FREE_CHARS = 2000;
+export function lengthPrior(bodyChars: number): number {
+  return bodyChars > LENGTH_PRIOR_FREE_CHARS
+    ? 1 / (1 + Math.log(bodyChars / LENGTH_PRIOR_FREE_CHARS))
+    : 1;
 }
 
 const REASON_FOR_SINGLE_LEG: Record<MeaningLeg, MeaningReason> = {
@@ -256,7 +289,7 @@ export function fuseLegs(
       // §24.5 requires: a capped multiplier can never lift a weak match to the
       // top over a genuinely better one, and it can never remove anything.
       // The unit tests pin both halves.
-      score: entry.score * tierBoost(entry.tier),
+      score: entry.score * tierBoost(entry.tier) * lengthPrior(entry.experience.observation.length),
       contentScore: entry.score,
       tier: entry.tier,
       legs: entry.legs,
@@ -308,6 +341,11 @@ export async function queryByMeaning(
       embedding ? searchExperiencesByEmbedding(embedding, legLimit, searchOptions) : []
     ),
   ]);
+
+  if (options.minVectorScore !== undefined && vector.length > 0) {
+    const best = vector[0]?.score ?? 0;
+    if (best < options.minVectorScore) return [];
+  }
 
   const ranked = fuseLegs(
     [

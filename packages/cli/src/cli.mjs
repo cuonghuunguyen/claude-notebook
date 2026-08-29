@@ -116,6 +116,11 @@ async function sync() {
   await closeDb();
 }
 
+/** Relevance floor and render budget — both calibrated on the 2026-08-28 real-prompt replay (BENCHMARKS.md). */
+const MIN_VECTOR_SCORE = 0.2;
+const BODY_BUDGET_CHARS = 3000;
+const ASK_LIMIT = 3;
+
 /**
  * Ask the memory, through the shipped pipeline (spec.md §22).
  *
@@ -136,19 +141,37 @@ async function ask(question) {
 
   const { byMeaning: knowledge, staleness: verdicts } = await pipelineMod.runPipeline(question, {
     embedder: core.createFakeEmbedder(),
-    byMeaning: { limit: 4 },
-    maxExperiences: 4,
-    contextOptions: { maxExperiences: 4 },
+    byMeaning: { limit: ASK_LIMIT, minVectorScore: MIN_VECTOR_SCORE },
+    maxExperiences: ASK_LIMIT,
+    contextOptions: { maxExperiences: ASK_LIMIT },
     // spec.md §24.2.3 / M12: one git lookup, so a memory the history has
     // overtaken arrives tagged rather than silently trusted.
     stalenessRepoDir: REPO,
   });
   const verdictById = new Map(verdicts.map((v) => [v.experience.id, v]));
 
+  // A warning that fires on nearly every row is not a warning. Capture anchors a
+  // memory to every file its commit touched, so on a live repo the flag rate
+  // runs 90%+ (210/215 on the replay corpus). Above half, print the base rate
+  // once instead of a banner per hit; `suspects` still lists them.
+  const { rows: [rate] } = await getDb().query(
+    "SELECT sum(suspect) AS flagged, count(*) AS total FROM experiences WHERE superseded_by IS NULL"
+  );
+  const banners = (rate?.flagged ?? 0) * 2 <= (rate?.total ?? 0);
+
   console.log(`## Why / prior knowledge (${knowledge.length})\n`);
   if (knowledge.length === 0) {
     console.log("(nothing recorded for this — run `sync`, or the question may be new ground)");
+  } else if (!banners) {
+    console.log(
+      `_${rate.flagged}/${rate.total} memories are flagged possibly-stale (a newer commit touched an anchored file) — too many to flag individually; check any memory against the current code before trusting it._\n`
+    );
   }
+  // Total body budget across hits, top hit first. The 2026-08-27 A/B measured a
+  // 14-line cut losing the deciding sentence; the 2026-08-28 replay measured the
+  // uncut version injecting a median 9 KB (max 36 KB) that answers cited 4/19
+  // times. A budget shared in rank order keeps the top hit nearly whole.
+  let budget = BODY_BUDGET_CHARS;
   for (const hit of knowledge) {
     const k = hit.experience;
     const verdict = verdictById.get(k.id);
@@ -157,19 +180,18 @@ async function ask(question) {
         .toISOString()
         .slice(0, 10)} · ${hit.reason} (${hit.legs.join("+")}), score ${hit.score.toFixed(4)}_\n`
     );
-    if (verdict?.possiblyStale) {
+    if (banners && verdict?.possiblyStale) {
       // ROADMAP.md M13 (c): a flag with no next step is what made M12's 24-of-27
       // flag rate useless. Print the id and the skill that repairs it, so the
       // dogfooding loop exercises read-repair instead of just noticing rot.
       console.log(`> **${core.POSSIBLY_STALE_FLAG}** (${verdict.reason})`);
       console.log(`> ${core.REFINE_MEMORY_HINT} — \`/refine-memory ${k.id}\`\n`);
     }
-    // Printed in full, deliberately. This used to cut every memory at 14 lines,
-    // and the 2026-08-27 dogfood A/B (BENCHMARKS.md) measured what that costs:
-    // for 3 of 6 questions the deciding sentence of an 8 KB commit body was
-    // below the cut, so the memory was retrieved correctly and then truncated
-    // away. A long memory is the product working, not a formatting problem.
-    console.log(`${k.observation}\n`);
+    const body = k.observation.length > budget
+      ? `${k.observation.slice(0, Math.max(budget, 0))}\n_(… ${k.observation.length - budget} more chars — \`claude-notebook show ${k.id}\`)_`
+      : k.observation;
+    budget = Math.max(budget - k.observation.length, 200);
+    console.log(`${body}\n`);
   }
   await closeDb();
 }

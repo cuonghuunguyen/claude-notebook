@@ -1,8 +1,13 @@
 -- The vector leg moved from `createFakeEmbedder` (feature hashing, 1536-dim) to
--- `createLocalEmbedder` (all-MiniLM-L6-v2, 384-dim) on 2026-09-03, because a
--- hashed cosine separated on-topic from off-topic by 0.007 and a real one
--- separates them by 0.57 — see packages/core/src/embedding.ts and BENCHMARKS.md.
--- Vectors of a different width, from a different space, are not comparable with
--- query vectors from the new one, so drop them; the next `sync` re-embeds every
--- row with a NULL embedding (listExperienceIdsMissingEmbedding).
+-- `createLocalEmbedder` (all-MiniLM-L6-v2, 384-dim, chunked before embedding)
+-- on 2026-09-03. Two reasons, either of which alone invalidates a stored vector:
+--   * different model, different space, different width — a hashed 1536-dim
+--     vector is not comparable with a 384-dim query vector, and
+--     `cosineSimilarity` correctly refuses to compare them rather than scoring
+--     a shared prefix;
+--   * all-MiniLM truncates at 256 wordpiece tokens SILENTLY, so an unchunked
+--     vector describes only the opening of any memory over ~1,100 chars — 39%
+--     of a real corpus (see packages/core/src/embedding.ts, BENCHMARKS.md).
+-- Drop them; the next `sync` re-embeds every row whose embedding is NULL
+-- (listExperienceIdsMissingEmbedding -> backfillEmbeddings).
 UPDATE experiences SET embedding = NULL;

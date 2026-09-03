@@ -16,6 +16,15 @@
  * in scope for recall and out of scope for leakage — and a review found the
  * leaks lived exactly there. Keep them balanced.
  *
+ * THE RULE FOR OFF_REPO, fixed before looking at any result: the question must
+ * be about technology this corpus does not discuss. "postgres VACUUM FULL
+ * lock" was in this set and is NOT a valid off-repo question — the corpus is
+ * substantially ABOUT removing Postgres (pg_advisory_lock, the FOR UPDATE
+ * supersede lock, pg_trgm), so returning the storage-backend memory for it is
+ * correct behaviour, not waste. It is replaced below rather than re-scored,
+ * and BENCHMARKS.md reports the number both ways so the correction cannot be
+ * mistaken for the gate improving.
+ *
  * Run after `self-memory.mjs sync`:
  *   node scripts/relevance-gate-probe.mjs
  */
@@ -66,7 +75,7 @@ const OFF_REPO = [
   "pthread_mutex_lock",
   "nginx gzip_types",
   "webpack splitChunks cacheGroups",
-  "postgres VACUUM FULL lock",
+  "redis cluster hash slot migration",
   "react useEffect cleanup",
 ];
 

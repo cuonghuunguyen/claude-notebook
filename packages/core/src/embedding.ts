@@ -79,7 +79,17 @@ export function createLocalEmbedder(model = LOCAL_EMBED_MODEL): EmbeddingProvide
       // re-fetch 87 MB whenever that tree is rebuilt. A user-level cache is
       // what makes "no network after the first fetch" actually true.
       env.cacheDir = modelCacheDir();
-      extractor ??= (pipeline("feature-extraction", model) as unknown as Promise<
+      // `dtype: "q8"` — the int8-quantized ONNX weights, 23 MB against fp32's
+      // 87 MB. Chosen on measurement, not on size alone: on the 32-question
+      // probe q8 reproduces fp32 EXACTLY at the shipped floor (11/16 answered,
+      // 2/16 leaked at 0.3) and differs by at most one question at any other
+      // floor swept — 0.2 leaks 9 vs 8, 0.32 leaks 2 vs 1, 0.35 leaks 0 vs 1,
+      // 0.4 answers 8 vs 9. Neither dominates off the operating point. On the
+      // separation pair it scores cos 0.5486 on-topic / -0.0009 off-topic
+      // against fp32's 0.5554 / -0.0178, and it re-embeds this corpus in 19 s
+      // against 40 s. A 4x smaller download that a published CLI fetches on
+      // first run, for a difference that does not move the shipped numbers.
+      extractor ??= (pipeline("feature-extraction", model, { dtype: "q8" }) as unknown as Promise<
         (text: string[], options: object) => Promise<{ tolist(): number[][] }>
       >).catch((err) => {
         // A rejected promise must not stay in the cache: a transient fetch

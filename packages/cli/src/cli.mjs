@@ -168,8 +168,14 @@ const ASK_LIMIT = 3;
  * trigram without it, and `captureGitHistory` records memories with a NULL
  * embedding that a later `backfillEmbeddings` fills in. So a first run with no
  * network degrades to lexical-only retrieval instead of failing the command,
- * which is the difference between a slower answer and no answer at all. The
- * warning goes to stderr so it never lands in the context an agent is handed.
+ * which is the difference between a slower answer and no answer at all.
+ *
+ * The warning goes to stderr, which keeps it out of the JSON on stdout that
+ * every command's caller parses. It is NOT invisible to an agent:
+ * `.claude/hooks/scout-capture.sh` runs `scout` with `2>&1` and interpolates
+ * the result into its `systemMessage`, so on that path the warning is shown —
+ * which is the right outcome (the agent should know the vector leg is off)
+ * but is worth stating rather than claiming stderr is unreachable.
  */
 async function embedderOrNone() {
   const embedder = core.createLocalEmbedder();

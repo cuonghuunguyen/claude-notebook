@@ -32,7 +32,8 @@
   },
   "scripts": {
     "build": "esbuild src/cli.mjs --bundle --platform=node --format=esm --external:better-sqlite3 --external:@huggingface/transformers --external:onnxruntime-node --outfile=dist/cli.mjs && rm -rf dist/migrations && cp -r ../../migrations dist/migrations && cp ../../README.md . && chmod +x dist/cli.mjs",
-    "typecheck": "node --check src/cli.mjs"
+    "typecheck": "node --check src/cli.mjs",
+    "test": "node --test src/cli.smoke.test.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",

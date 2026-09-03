@@ -76,7 +76,7 @@ async function sync() {
   // contract (spec.md §24.2.1) — re-running after a merge only records commits
   // that are actually new.
   const t1 = Date.now();
-  const embedder = core.createFakeEmbedder();
+  const embedder = await embedderOrNone();
   // Whole repo, not just `packages/`: the commits that recorded this project's
   // biggest decisions (the spec.md §24 pivot, for instance) touch spec.md and
   // ROADMAP.md at the root, and a subtree-scoped mine cannot see them — which
@@ -113,7 +113,7 @@ async function sync() {
       }
     }
   }
-  const reembedded = await capture.backfillEmbeddings(embedder);
+  const reembedded = embedder ? await capture.backfillEmbeddings(embedder) : 0;
 
   // spec.md §24.2.3 / M12: now that history has been mined, flag the memories
   // that history has since overtaken. Runs after capture, not before: a commit
@@ -144,10 +144,46 @@ async function sync() {
   await closeDb();
 }
 
-/** Relevance floor and render budget — both calibrated on the 2026-08-28 real-prompt replay (BENCHMARKS.md). */
-const MIN_VECTOR_SCORE = 0.2;
+/**
+ * Relevance floor and render budget. The budget is the 2026-08-28 real-prompt
+ * replay's; the floor was re-measured 2026-09-03 against a REAL embedder
+ * (BENCHMARKS.md).
+ *
+ * 0.2 was calibrated against `createFakeEmbedder`, whose cosine tracks word
+ * rarity rather than topic. On this repo's corpus that floor answered 6 of 16
+ * on-repo questions and leaked 3 of 16 off-repo ones. With
+ * `createLocalEmbedder` the same 32 questions give 11/16 and 2/16 at 0.3 —
+ * better on BOTH axes. 0.32 measured marginally better still (11/16, 1/16) and
+ * was deliberately NOT taken: a two-decimal threshold tuned on 32 questions is
+ * how the 0.2 floor became untransferable in the first place.
+ */
+const MIN_VECTOR_SCORE = 0.3;
 const BODY_BUDGET_CHARS = 3000;
 const ASK_LIMIT = 3;
+
+/**
+ * The local embedder, or `undefined` when its model cannot be loaded.
+ *
+ * The vector leg is optional by contract — `queryByMeaning` runs full-text and
+ * trigram without it, and `captureGitHistory` records memories with a NULL
+ * embedding that a later `backfillEmbeddings` fills in. So a first run with no
+ * network degrades to lexical-only retrieval instead of failing the command,
+ * which is the difference between a slower answer and no answer at all. The
+ * warning goes to stderr so it never lands in the context an agent is handed.
+ */
+async function embedderOrNone() {
+  const embedder = core.createLocalEmbedder();
+  try {
+    await embedder.embed("warmup");
+    return embedder;
+  } catch (err) {
+    console.error(
+      `embeddings unavailable (${err instanceof Error ? err.message : String(err)}) — ` +
+        "answering from the full-text and trigram legs only; re-run with network to enable the vector leg"
+    );
+    return undefined;
+  }
+}
 
 /**
  * Ask the memory, through the shipped pipeline (spec.md §22).
@@ -168,7 +204,7 @@ async function ask(question) {
   if (!question) throw new Error('usage: self-memory.mjs ask "your question"');
 
   const { byMeaning: knowledge, staleness: verdicts } = await pipelineMod.runPipeline(question, {
-    embedder: core.createFakeEmbedder(),
+    embedder: await embedderOrNone(),
     byMeaning: { limit: ASK_LIMIT, minVectorScore: MIN_VECTOR_SCORE },
     maxExperiences: ASK_LIMIT,
     contextOptions: { maxExperiences: ASK_LIMIT },
@@ -281,7 +317,7 @@ async function scout(file) {
   const saved = await capture.recordScoutReport({
     ...input,
     anchors: (input.anchors ?? []).map(relAnchor),
-    embedder: core.createFakeEmbedder(),
+    embedder: await embedderOrNone(),
   });
   console.log(JSON.stringify({ id: saved.id, anchors: saved.relatedNodes.length }));
   await closeDb();
@@ -463,10 +499,16 @@ async function supersede(file) {
 
   // Same text shape capture embeds its mined memories with, so the vector leg
   // ranks a correction on the same footing as everything else in the corpus.
-  await graphStore.upsertExperienceEmbedding(
-    experience.id,
-    await core.createFakeEmbedder().embed(capture.embeddedText(experience))
-  );
+  // Skipped rather than fatal when the model is unavailable: the correction is
+  // already written at this point, and the next `sync` backfills the embedding
+  // — failing here would abort the command after a partial write.
+  const supersedeEmbedder = await embedderOrNone();
+  if (supersedeEmbedder) {
+    await graphStore.upsertExperienceEmbedding(
+      experience.id,
+      await supersedeEmbedder.embed(capture.embeddedText(experience))
+    );
+  }
 
   console.log(
     JSON.stringify(

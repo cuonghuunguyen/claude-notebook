@@ -206,10 +206,14 @@ re-sorts by recency; `staleness` carries a verdict per memory — key it by
 `experience.id`, never by position, since the two lists are ordered differently
 on purpose.
 
-The only embedder in the workspace is `createFakeEmbedder`, a feature-hashing
-stub. Everything works without it (the two lexical legs carry retrieval); pass a
-real one for the vector leg. That is also why vector and trigram are weighted
-0.5 against full-text's 1.0.
+The vector leg embeds with `createLocalEmbedder` — `all-MiniLM-L6-v2` run
+locally through ONNX, no API key, no daemon, and no network after the model is
+fetched once. Long memories are chunked before embedding, because the model
+truncates at 256 tokens and 39% of a real corpus is longer than that.
+`createFakeEmbedder`, the feature-hashing stub, is still there and is what every
+test uses: deterministic and offline. Everything works without any embedder at
+all (the two lexical legs carry retrieval, with a stderr warning), which is also
+why vector and trigram are weighted 0.5 against full-text's 1.0.
 
 ## What it does not do
 

@@ -100,7 +100,12 @@ export interface ScoredExperience {
  *  - `vector` is halved because the only embedder in the workspace today is
  *    `createFakeEmbedder`, a feature-hashing stub with no measured retrieval
  *    quality (spec.md §9 leaves the real provider to the application layer).
- *    Raise it to 1 once a real embedder has a number behind it.
+ *    Raising it to 1 was the stated next step once a real embedder had a number
+ * behind it. As of 2026-09-03 one does (`createLocalEmbedder`, BENCHMARKS.md),
+ * and the weight is DELIBERATELY still 0.5: changing a fuse weight moves every
+ * ranking, so it needs its own before/after against the by-meaning MRR eval
+ * rather than riding along with the embedder swap. One change, one
+ * measurement.
  *  - `trigram` is halved for the same reason in reverse: it is a deliberate
  *    complement for identifier fragments, not a general prose ranker.
  */
@@ -165,10 +170,21 @@ export interface QueryByMeaningOptions {
    * a question the corpus actually answers. Cosine is the one leg score that is
    * comparable across queries, so it is the gate. Default: no floor (every
    * question returns its top `limit`), which is what every caller before
-   * 2026-08-28 got. The CLI sets 0.2, calibrated on the 19-prompt real-world
-   * replay in `BENCHMARKS.md`: the four off-repo prompts topped out at 0.196,
-   * every prompt whose answer was later cited scored ≥ 0.29. Ignored when there
-   * is no vector leg.
+   * 2026-08-28 got. The CLI sets **0.3**, re-calibrated 2026-09-03 against a
+   * REAL embedder on 32 questions (`scripts/relevance-gate-probe.mjs`,
+   * BENCHMARKS.md): 11 of 16 on-repo questions answered, 2 of 16 off-repo
+   * leaked, better on both axes than the 0.2 this replaces.
+   *
+   * The 0.2 came from the 2026-08-28 replay, where the four off-repo prompts
+   * topped out at 0.196 and every later-cited prompt scored >= 0.29. Those
+   * numbers are `createFakeEmbedder`'s and DO NOT transfer: a hashed cosine
+   * tracks how rare a question's words are rather than its topic, so the same
+   * floor silenced 10 of 16 on-repo questions here. A floor is only meaningful
+   * against the embedder it was measured on.
+   *
+   * Ignored when there is no vector leg — which means it is also inert on a
+   * freshly migrated corpus, between the migration that nulls vectors and the
+   * `sync` that refills them.
    */
   minVectorScore?: number;
 }

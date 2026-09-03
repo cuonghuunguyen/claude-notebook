@@ -24,7 +24,15 @@ the source of truth, not this file's memory of past sessions).
   path*. Adding a parser back is not a "new dependency" decision, it is a
   reversal of a measured decision — flag it as such. Any other new
   dependency still needs the same explicit flag-and-wait this rule always
-  required.
+  required. **One has been through that gate:** `@huggingface/transformers`
+  (with its `onnxruntime-node`) was flagged and approved by a human on
+  2026-09-03, so the vector leg embeds with a real local model
+  (`createLocalEmbedder`) rather than the feature-hashing stub. It is not a
+  per-language dependency and does not touch §24.2 point 7; it runs offline
+  after one model fetch, needs no key and no daemon, and `ask` degrades to the
+  two lexical legs when it cannot load. `BENCHMARKS.md`'s 2026-09-03 row is
+  why: hashed cosine separated on-topic from off-topic by 0.007, a real
+  embedder by 0.57, which is what made the relevance floor tunable at all.
 - Never check a ROADMAP.md milestone box without having actually run its
   tests in this session and seen them pass. Since M17 there is nothing to
   configure and nothing that self-skips: `pnpm test` runs every suite,

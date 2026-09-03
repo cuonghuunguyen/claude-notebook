@@ -1373,6 +1373,16 @@ Measured 2026-08-21 against the live system, not estimated:
   `packages/episodic/src/byMeaning.ts`). `BENCHMARKS.md`: MRR 0.85
   lexical-only vs 0.90 with the stub. The single hardest Postgres dependency
   serves the weakest leg.
+
+  > **This bullet was overtaken on 2026-09-03; the rest of §25.1 stands.**
+  > The vector leg's embedder is no longer `createFakeEmbedder`:
+  > `createLocalEmbedder` (`Xenova/all-MiniLM-L6-v2`, q8 ONNX, 384-dim,
+  > `packages/core/src/embedding.ts`) runs locally, with a measured number
+  > behind it in `BENCHMARKS.md`. The measurement above is left as written
+  > because it is what §25's decision actually rested on in 2026-08-21, and
+  > the decision is unaffected — a real embedder is a WASM/native dependency,
+  > not a Postgres one, so the weakest-leg argument being overtaken does not
+  > return pgvector to contention. The RRF weight is still 0.5.
 - **Coupling is already narrow.** Exactly one file imports `pg`
   (`packages/graph-store/src/db.ts`). `capture`, `context`, `core`, `gc`,
   `pipeline`, `staleness` and `tiers` never name a client type.
